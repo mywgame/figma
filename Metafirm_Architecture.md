@@ -1,7 +1,7 @@
  # metafir_Architecture
+
 │   .env
 │   .env.example
-│   .env.local
 │   .gitignore
 │   CHANGELOG.md
 │   index.html
@@ -17,12 +17,10 @@
 │   tsconfig.json
 │   vite.config.ts
 │
-├───.vercel
-│       project.json
-│       README.txt
-│
 ├───assets
 │   ├───.aistudio
+│   │       .gitignore
+│   │
 │   ├───icons
 │   │       favicon.png
 │   │       favicon.svg
@@ -31,9 +29,17 @@
 │   ├───images
 │   │   ├───backgrounds
 │   │   │   ├───admin
+│   │   │   │       .gitkeep
+│   │   │   │
 │   │   │   ├───auth
+│   │   │   │       .gitkeep
+│   │   │   │
 │   │   │   ├───dashboard
+│   │   │   │       .gitkeep
+│   │   │   │
 │   │   │   └───landing
+│   │   │           .gitkeep
+│   │   │
 │   │   ├───branding
 │   │   │       logo-mark.png
 │   │   │       logo.png
@@ -43,10 +49,17 @@
 │   │   │       solar-farm-illustration.svg
 │   │   │
 │   │   └───placeholders
+│   │           .gitkeep
+│   │
 │   └───video
 │       ├───admin
+│       │       .gitkeep
+│       │
 │       ├───dashboard
+│       │       .gitkeep
+│       │
 │       └───landing
+│               .gitkeep
 │               hero-background.mp4
 │
 ├───client
@@ -90,17 +103,11 @@
 │   │   │
 │   │   ├───Dashboard
 │   │   │       Announcements.tsx
-│   │   │       BottomNav.tsx
 │   │   │       DailyClaimCard.tsx
 │   │   │       DashboardHome.tsx
-│   │   │       GradientOrbs.tsx
-│   │   │       HeroBalanceCard.tsx
-│   │   │       IncomeStatCard.tsx
 │   │   │       index.tsx
 │   │   │       MetaFirmAssetIcon.tsx
-│   │   │       MonthlyEarningsChart.tsx
 │   │   │       MyTeamView.tsx
-│   │   │       NetworkLevels.tsx
 │   │   │       PortfolioOverview.tsx
 │   │   │       ProfileView.tsx
 │   │   │       RecentActivity.tsx
@@ -114,10 +121,7 @@
 │   │   │
 │   │   └───ui
 │   │       │   index.ts
-│   │       │   RingProgress.tsx
 │   │       │   theme.ts
-│   │       │   ThemeSwitch.tsx
-│   │       │   themeTokens.ts
 │   │       │
 │   │       ├───Buttons
 │   │       │       index.tsx
@@ -145,17 +149,12 @@
 │   │
 │   ├───contexts
 │   │       AuthContext.tsx
-│   │       ThemeContext.tsx
 │   │
 │   ├───hooks
 │   │       useAuth.ts
-│   │       useTheme.ts
 │   │
 │   ├───layouts
 │   │       BaseLayout.tsx
-│   │
-│   ├───mocks
-│   │       dashboardMockData.ts
 │   │
 │   ├───services
 │   │       api.ts
@@ -175,8 +174,8 @@
 │   │
 │   └───assets
 │           favicon-DzAemdKg.png
-│           index-BetrEllA.css
-│           index-BIFoUUqb.js
+│           index-B9sThOT7.js
+│           index-CjrTn7mj.css
 │           logo-CPbukfqA.png
 │           logo-mark-CJjUW_hu.png
 │
@@ -200,13 +199,6 @@
 │       create-superadmin.ts
 │
 ├───server
-│   ├───cache
-│   │   │   redisClient.ts
-│   │   │   redisKeys.ts
-│   │   │
-│   │   └───services
-│   │           otpService.ts
-│   │
 │   ├───config
 │   │       index.ts
 │   │
@@ -280,7 +272,6 @@
 │   └───utils
 │           jwt.ts
 │           logger.ts
-│           otp.ts
 │           password.ts
 │           response.ts
 │           securityLogger.ts
@@ -297,10 +288,6 @@
 │           index.ts
 │
 └───src
-    │   App.tsx
-    │   index.css
-    │   main.tsx
-    │
     └───db
             achievements.ts
             activities.ts
@@ -325,4 +312,3 @@
             vip.ts
             wallets.ts
             withdrawals.ts
-

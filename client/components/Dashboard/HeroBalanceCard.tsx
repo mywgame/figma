@@ -4,8 +4,9 @@
  */
 
 import React from 'react';
-import { DollarSign, TrendingUp, ArrowUpRight } from 'lucide-react';
+import { TrendingUp, ArrowUpRight } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
+import usdtIcon from '../../../assets/icons/usdt-svg.svg';
 
 interface HeroBalanceCardProps {
   totalBalance: number;
@@ -43,14 +44,12 @@ export const HeroBalanceCard: React.FC<HeroBalanceCardProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-2">
             <div className={`p-2 rounded-xl ${t.isDark ? 'bg-cyan-500/20' : 'bg-cyan-500/15'}`}>
-              <DollarSign className="w-5 h-5 text-cyan-500" />
+              <img src={usdtIcon} alt="USDT" className="w-5 h-5 object-contain" />
             </div>
             <span className={`text-sm font-semibold uppercase tracking-widest ${t.textSub}`}>Total Balance</span>
           </div>
-          <p className={`text-5xl sm:text-6xl font-extrabold tracking-tight leading-none ${t.text}`}>
-            $<span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-              {totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </span>
+          <p className="text-5xl sm:text-6xl font-extrabold tracking-tight leading-none bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+            ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
           <p className={`text-sm mt-2 ${t.textSub}`}>USDT · MetaFirm Wallet</p>
         </div>

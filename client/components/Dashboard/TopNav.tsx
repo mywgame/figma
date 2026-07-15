@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Flame } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
+import { useAvatar } from '../../hooks/useAvatar.ts';
 import { ThemeSwitch } from '../ui/ThemeSwitch.tsx';
+import { AvatarPicker } from '../ui/AvatarPicker.tsx';
 import { MetaFirmAssetIcon } from './MetaFirmAssetIcon.tsx';
 import logoImg from '../../../assets/images/branding/logo.png';
 import logoMarkImg from '../../../assets/images/branding/logo-mark.png';
@@ -19,18 +21,27 @@ interface TopNavProps {
 /**
  * Dashboard header — pixel-matched to the figma reference: brand mark +
  * wordmark on the left, theme switch + single user-identity pill on the
- * right (rank-icon avatar with online dot, name, id, rank badge, streak).
+ * right (user avatar with online dot, name, id, rank badge, streak).
  * Purely presentational — every value arrives via the `identity` prop so
  * this component never needs to change when it's fed real API data later.
+ * The avatar itself is user-selectable (see `useAvatar` / `AvatarPicker`)
+ * and updates here instantly the moment it's changed anywhere else in the app.
  */
 export const TopNav: React.FC<TopNavProps> = ({ identity }) => {
   const { t } = useTheme();
+  const { avatarUrl } = useAvatar();
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   return (
     <header className="flex justify-between items-center gap-4 py-1" id="dashboard-header">
-      {/* Logo */}
+      {/* Logo: mobile shows the full wordmark, tablet/desktop keep mark + wordmark */}
       <div className="flex items-center gap-3">
-        <img src={logoMarkImg} alt="MetaFirm mark" className="w-9 h-9 object-contain" />
+        <img
+          src={logoImg}
+          alt="MetaFirm"
+          className={`h-7 object-contain sm:hidden ${t.isDark ? 'brightness-0 invert' : ''}`}
+        />
+        <img src={logoMarkImg} alt="MetaFirm mark" className="hidden sm:block w-9 h-9 object-contain" />
         <img
           src={logoImg}
           alt="MetaFirm"
@@ -43,13 +54,17 @@ export const TopNav: React.FC<TopNavProps> = ({ identity }) => {
         <ThemeSwitch />
 
         <div className={`flex items-center gap-3 backdrop-blur-xl border rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 transition-all duration-300 ${t.pill} ${t.pillHover}`}>
-          {/* Rank avatar */}
-          <div className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${identity.rankBg} border border-white/20 flex items-center justify-center text-base sm:text-lg shrink-0`}>
-            {identity.rankIcon}
+          {/* User avatar (selectable — click to change) */}
+          <button
+            onClick={() => setIsPickerOpen(true)}
+            title="Change avatar"
+            className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${identity.rankBg} border border-white/20 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden hover:brightness-110 transition-all`}
+          >
+            <img src={avatarUrl} alt={identity.name} className="w-full h-full object-cover" />
             {identity.online && (
               <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 sm:w-4 sm:h-4 bg-green-400 rounded-full border-2 ${t.isDark ? 'border-[#07091a]' : 'border-white'}`} />
             )}
-          </div>
+          </button>
 
           <div className="flex flex-col leading-tight min-w-0">
             <span className={`font-semibold text-xs sm:text-sm truncate max-w-[110px] sm:max-w-none ${t.text}`}>{identity.name}</span>
@@ -70,6 +85,8 @@ export const TopNav: React.FC<TopNavProps> = ({ identity }) => {
           </div>
         </div>
       </div>
+
+      <AvatarPicker isOpen={isPickerOpen} onClose={() => setIsPickerOpen(false)} />
     </header>
   );
 };

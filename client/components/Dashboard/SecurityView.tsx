@@ -5,28 +5,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth.ts';
-import { Card } from '../ui/Cards/index.tsx';
-import { Button } from '../ui/Buttons/index.tsx';
+import { useTheme } from '../../hooks/useTheme.ts';
 import { Input, PasswordInput } from '../ui/Inputs/index.tsx';
-import { Badge } from '../ui/Feedback/index.tsx';
-import { 
-  Lock, 
-  ShieldCheck, 
-  Key, 
-  Eye, 
-  HelpCircle, 
-  CheckCircle, 
-  XCircle, 
-  Smartphone, 
-  Laptop, 
-  Globe, 
-  Clock, 
-  User, 
-  Phone, 
-  Mail,
-  AlertTriangle,
-  RotateCw,
-  LogOut
+import {
+  Lock, ShieldCheck, Key, CheckCircle, XCircle, Smartphone, Laptop, Globe, Clock, Mail,
+  AlertTriangle, RotateCw, LogOut, Fingerprint, Wallet, Plus, Pencil, BadgeCheck, Clock3,
 } from 'lucide-react';
 
 interface UserSession {
@@ -47,18 +30,34 @@ interface SecuritySummary {
   lastLoginIp: string | null;
 }
 
+type WithdrawalNetwork = 'USDT_BEP20' | 'USDT_POLYGON' | 'USDT_TRC20';
+
+interface WithdrawalAddress {
+  network: WithdrawalNetwork;
+  address: string;
+  verified: boolean;
+}
+
+const NETWORK_META: Record<WithdrawalNetwork, { label: string; color: string }> = {
+  USDT_BEP20: { label: 'USDT · BEP20 (BNB Chain)', color: '#f0b90b' },
+  USDT_POLYGON: { label: 'USDT · Polygon', color: '#8247e5' },
+  USDT_TRC20: { label: 'USDT · TRC20 (Tron)', color: '#ef4444' },
+};
+
+// TODO(Phase 2 — backend integration): Withdrawal-address Add/Edit/Verify
+// below is a UI-only mock (`mockOtpStep`/`mockOtpCode`, in-memory address
+// list). Wire it to the real endpoints once available:
+//   POST /users/security/withdrawal-addresses            (add/edit address)
+//   POST /users/security/withdrawal-addresses/send-otp    (Email OTP via existing Redis OTP + EmailService)
+//   POST /users/security/withdrawal-addresses/verify-otp  (confirm)
+// No fake verification logic is performed server-side — this only simulates
+// the UX flow so the screen can ship ahead of that backend work.
+
 export const SecurityView: React.FC = () => {
   const { user, token, syncProfile } = useAuth();
-  
-  // Tab control
-  const [activeSubTab, setActiveSubTab] = useState<'profile' | 'password' | 'email' | 'sessions'>('profile');
+  const { t } = useTheme();
 
-  // Profile Form States
-  const [name, setName] = useState(user?.name || '');
-  const [phone, setPhone] = useState(user?.phone || '');
-  const [profileSuccess, setProfileSuccess] = useState('');
-  const [profileError, setProfileError] = useState('');
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<'password' | 'email' | 'sessions' | 'twoFactor' | 'withdrawal'>('password');
 
   // Password Form States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -82,9 +81,20 @@ export const SecurityView: React.FC = () => {
   const [sessionsSuccess, setSessionsSuccess] = useState('');
   const [sessionsError, setSessionsError] = useState('');
 
-  // Password strength checker helper
+  // Withdrawal Addresses — mock only (see TODO above)
+  const [withdrawAddresses, setWithdrawAddresses] = useState<WithdrawalAddress[]>([
+    { network: 'USDT_BEP20', address: '', verified: false },
+    { network: 'USDT_POLYGON', address: '', verified: false },
+    { network: 'USDT_TRC20', address: '', verified: false },
+  ]);
+  const [editingNetwork, setEditingNetwork] = useState<WithdrawalNetwork | null>(null);
+  const [draftAddress, setDraftAddress] = useState('');
+  const [otpStep, setOtpStep] = useState<'idle' | 'sent'>('idle');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpBusy, setOtpBusy] = useState(false);
+
   const getPasswordStrength = (pwd: string) => {
-    if (!pwd) return { score: 0, label: 'Empty', color: 'bg-gray-200', textColor: 'text-gray-400' };
+    if (!pwd) return { score: 0, label: 'Empty', color: 'bg-gray-400/40', textColor: t.textMuted };
     let score = 0;
     if (pwd.length >= 8) score += 1;
     if (/[A-Z]/.test(pwd)) score += 1;
@@ -99,7 +109,6 @@ export const SecurityView: React.FC = () => {
 
   const strength = getPasswordStrength(newPassword);
 
-  // Synchronize profile data and fetch sessions / summary on mount
   useEffect(() => {
     if (token) {
       fetchSecuritySummary();
@@ -107,25 +116,12 @@ export const SecurityView: React.FC = () => {
     }
   }, [token]);
 
-  useEffect(() => {
-    if (user) {
-      setName(user.name || '');
-      setPhone(user.phone || '');
-    }
-  }, [user]);
-
   const fetchSecuritySummary = async () => {
     try {
-      const res = await fetch('/api/v1/users/security/summary', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await fetch('/api/v1/users/security/summary', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const body = await res.json();
-        if (body.success) {
-          setSummary(body.data);
-        }
+        if (body.success) setSummary(body.data);
       }
     } catch (err) {
       console.error('Failed to load security summary:', err);
@@ -135,51 +131,15 @@ export const SecurityView: React.FC = () => {
   const fetchSessionsList = async () => {
     setSessionsLoading(true);
     try {
-      const res = await fetch('/api/v1/users/security/sessions', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await fetch('/api/v1/users/security/sessions', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const body = await res.json();
-        if (body.success) {
-          setSessions(body.data || []);
-        }
+        if (body.success) setSessions(body.data || []);
       }
     } catch (err) {
       console.error('Failed to load sessions:', err);
     } finally {
       setSessionsLoading(false);
-    }
-  };
-
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProfileLoading(true);
-    setProfileSuccess('');
-    setProfileError('');
-
-    try {
-      const res = await fetch('/api/v1/users/profile', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name, phone })
-      });
-
-      const body = await res.json();
-      if (!res.ok) {
-        throw new Error(body.error?.message || 'Failed to update profile information.');
-      }
-
-      setProfileSuccess('Profile information updated successfully.');
-      await syncProfile();
-    } catch (err: any) {
-      setProfileError(err.message || 'An error occurred.');
-    } finally {
-      setProfileLoading(false);
     }
   };
 
@@ -198,17 +158,12 @@ export const SecurityView: React.FC = () => {
     try {
       const res = await fetch('/api/v1/users/security/change-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
       });
 
       const body = await res.json();
-      if (!res.ok) {
-        throw new Error(body.error?.message || 'Failed to update credentials.');
-      }
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to update credentials.');
 
       setPwdSuccess('Your account password was updated successfully.');
       setCurrentPassword('');
@@ -232,17 +187,12 @@ export const SecurityView: React.FC = () => {
     try {
       const res = await fetch('/api/v1/users/security/change-email', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ currentPassword: emailPassword, newEmail })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword: emailPassword, newEmail }),
       });
 
       const body = await res.json();
-      if (!res.ok) {
-        throw new Error(body.error?.message || 'Failed to change email.');
-      }
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to change email.');
 
       setEmailSuccess('Your account email has been updated successfully.');
       setEmailPassword('');
@@ -263,17 +213,12 @@ export const SecurityView: React.FC = () => {
     try {
       const res = await fetch('/api/v1/users/security/sessions/logout-all-others', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ refreshToken: localStorage.getItem('metafirm_token') })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ refreshToken: localStorage.getItem('metafirm_token') }),
       });
 
       const body = await res.json();
-      if (!res.ok) {
-        throw new Error(body.error?.message || 'Failed to terminate sessions.');
-      }
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to terminate sessions.');
 
       setSessionsSuccess('All other active sessions have been invalidated successfully.');
       fetchSessionsList();
@@ -285,384 +230,222 @@ export const SecurityView: React.FC = () => {
     }
   };
 
+  // ---- Withdrawal address mock flow ----
+  const startEdit = (network: WithdrawalNetwork) => {
+    const existing = withdrawAddresses.find((w) => w.network === network);
+    setDraftAddress(existing?.address || '');
+    setEditingNetwork(network);
+    setOtpStep('idle');
+    setOtpCode('');
+  };
+
+  const sendMockOtp = () => {
+    if (!draftAddress.trim()) return;
+    setOtpBusy(true);
+    setTimeout(() => {
+      setOtpStep('sent');
+      setOtpBusy(false);
+    }, 900);
+  };
+
+  const verifyMockOtp = () => {
+    if (otpCode.trim().length !== 6 || !editingNetwork) return;
+    setOtpBusy(true);
+    setTimeout(() => {
+      setWithdrawAddresses((prev) =>
+        prev.map((w) => (w.network === editingNetwork ? { ...w, address: draftAddress.trim(), verified: true } : w)),
+      );
+      setEditingNetwork(null);
+      setOtpStep('idle');
+      setOtpCode('');
+      setOtpBusy(false);
+    }, 700);
+  };
+
+  const cancelEdit = () => {
+    setEditingNetwork(null);
+    setOtpStep('idle');
+    setOtpCode('');
+  };
+
+  const alertBox = (kind: 'success' | 'error', message: string) => (
+    <div
+      className={`p-3.5 rounded-xl text-xs font-semibold flex items-center border ${
+        kind === 'success'
+          ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-500'
+          : 'bg-red-500/10 border-red-500/25 text-red-400'
+      }`}
+    >
+      {kind === 'success' ? <CheckCircle className="w-4 h-4 mr-2 shrink-0" /> : <XCircle className="w-4 h-4 mr-2 shrink-0" />}
+      {message}
+    </div>
+  );
+
+  const tabs: { id: typeof activeSubTab; label: string; badge?: number }[] = [
+    { id: 'password', label: 'Change Password' },
+    { id: 'email', label: 'Update Email' },
+    { id: 'sessions', label: 'Active Sessions', badge: sessions.length > 1 ? sessions.length : undefined },
+    { id: 'twoFactor', label: 'Two-Factor Auth' },
+    { id: 'withdrawal', label: 'Withdrawal Addresses' },
+  ];
+
   return (
     <div className="space-y-6 text-left" id="security-view-tab">
-      
-      {/* 1. Header Banner & Audit Overview Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        
-        {/* Security Health Card */}
-        <Card className="p-4 flex flex-col justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest block">System Rating</span>
-            <h4 className="text-xl font-display font-extrabold text-gray-950 flex items-center">
-              <ShieldCheck className="w-5 h-5 text-emerald-500 mr-1.5 animate-pulse" />
-              A+ Secure
-            </h4>
-          </div>
-          <span className="text-[10px] text-emerald-600 font-mono font-bold mt-2 block">
-            Cryptographic Node Binded
-          </span>
-        </Card>
 
-        {/* Password Last Changed */}
-        <Card className="p-4 flex flex-col justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest block">Password Rotation</span>
-            <h4 className="text-xs font-bold text-gray-800">
-              {summary?.passwordChangedAt 
-                ? new Date(summary.passwordChangedAt).toLocaleString() 
-                : 'Never changed'}
-            </h4>
-          </div>
-          <span className="text-[10px] text-gray-400 font-sans mt-2 block">
-            Automatic expires every 90 days
-          </span>
-        </Card>
+      {/* 1. Header Overview Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`rounded-2xl border p-4 backdrop-blur-lg flex flex-col justify-between ${t.card}`}>
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${t.textMuted}`}>System Rating</span>
+          <h4 className={`text-lg font-extrabold flex items-center gap-1.5 mt-1 ${t.text}`}>
+            <ShieldCheck className="w-4 h-4 text-emerald-500" /> A+ Secure
+          </h4>
+        </div>
 
-        {/* Failed Login Attempts */}
-        <Card className="p-4 flex flex-col justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest block">Login Security</span>
-            <h4 className="text-base font-extrabold text-gray-950">
-              {summary?.failedLoginAttempts ?? 0} Attempts
-            </h4>
-          </div>
-          <span className={`text-[10px] font-bold font-mono mt-2 block ${summary?.accountLockStatus === 'LOCKED' ? 'text-red-500' : 'text-emerald-500'}`}>
-            Status: {summary?.accountLockStatus === 'LOCKED' ? '● LOCKED OUT' : '● ACTIVE / NORMAL'}
-          </span>
-        </Card>
+        <div className={`rounded-2xl border p-4 backdrop-blur-lg flex flex-col justify-between ${t.card}`}>
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${t.textMuted}`}>Password Rotation</span>
+          <h4 className={`text-xs font-bold mt-1 ${t.text}`}>
+            {summary?.passwordChangedAt ? new Date(summary.passwordChangedAt).toLocaleDateString() : 'Never changed'}
+          </h4>
+        </div>
 
-        {/* Current Node IP */}
-        <Card className="p-4 flex flex-col justify-between">
-          <div className="space-y-1">
-            <span className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest block">Last Login Node</span>
-            <h4 className="text-xs font-mono font-bold text-gray-800">
-              {summary?.lastLoginIp || 'Unknown Node'}
-            </h4>
-          </div>
-          <span className="text-[10px] text-gray-400 font-mono mt-2 block">
-            Time: {summary?.lastLoginTime ? new Date(summary.lastLoginTime).toLocaleTimeString() : 'N/A'}
-          </span>
-        </Card>
+        <div className={`rounded-2xl border p-4 backdrop-blur-lg flex flex-col justify-between ${t.card}`}>
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${t.textMuted}`}>Login Security</span>
+          <h4 className={`text-sm font-extrabold mt-1 ${summary?.accountLockStatus === 'LOCKED' ? 'text-red-500' : t.text}`}>
+            {summary?.failedLoginAttempts ?? 0} failed attempts
+          </h4>
+        </div>
 
+        <div className={`rounded-2xl border p-4 backdrop-blur-lg flex flex-col justify-between ${t.card}`}>
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${t.textMuted}`}>Last Login</span>
+          <h4 className={`text-xs font-mono font-bold mt-1 truncate ${t.text}`}>{summary?.lastLoginIp || 'Unknown'}</h4>
+        </div>
       </div>
 
       {/* 2. Sub-tab Navigation */}
-      <div className="flex border-b border-gray-100 gap-6">
-        <button
-          onClick={() => setActiveSubTab('profile')}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer ${activeSubTab === 'profile' ? 'border-blue-600 text-blue-600 font-extrabold' : 'border-transparent text-gray-400 hover:text-gray-800'}`}
-        >
-          General Settings
-        </button>
-        <button
-          onClick={() => setActiveSubTab('password')}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer ${activeSubTab === 'password' ? 'border-blue-600 text-blue-600 font-extrabold' : 'border-transparent text-gray-400 hover:text-gray-800'}`}
-        >
-          Change Password
-        </button>
-        <button
-          onClick={() => setActiveSubTab('email')}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer ${activeSubTab === 'email' ? 'border-blue-600 text-blue-600 font-extrabold' : 'border-transparent text-gray-400 hover:text-gray-800'}`}
-        >
-          Update Registered Email
-        </button>
-        <button
-          onClick={() => setActiveSubTab('sessions')}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer ${activeSubTab === 'sessions' ? 'border-blue-600 text-blue-600 font-extrabold' : 'border-transparent text-gray-400 hover:text-gray-800'} flex items-center`}
-        >
-          Active Sessions
-          {sessions.length > 1 && (
-            <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[9px] rounded-full font-black">
-              {sessions.length}
-            </span>
-          )}
-        </button>
+      <div className={`flex gap-5 overflow-x-auto border-b ${t.sep}`}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+            className={`pb-3 text-xs font-bold transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeSubTab === tab.id ? 'border-cyan-500 text-cyan-500' : `border-transparent ${t.textMuted} hover:${t.text}`
+            }`}
+          >
+            {tab.label}
+            {tab.badge && (
+              <span className="px-1.5 py-0.5 bg-cyan-500/15 text-cyan-500 text-[9px] rounded-full font-black">{tab.badge}</span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* 3. Render Sub-view Content */}
+      {/* 3. Content */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* Main interactive panel left */}
-        <div className="lg:col-span-8">
-          
-          {activeSubTab === 'profile' && (
-            <Card hoverEffect={true} className="space-y-6">
-              <div className="pb-4 border-b border-gray-100">
-                <h3 className="text-sm font-display font-extrabold text-gray-950">Operator Profile Information</h3>
-                <p className="text-xs text-gray-400 leading-relaxed font-sans mt-0.5">
-                  Update your contact details and display identity within the platform.
-                </p>
-              </div>
-
-              {profileSuccess && (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 font-semibold flex items-center">
-                  <CheckCircle className="w-4 h-4 mr-2 text-emerald-500 shrink-0" />
-                  {profileSuccess}
-                </div>
-              )}
-
-              {profileError && (
-                <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl text-xs text-red-800 font-semibold flex items-center">
-                  <XCircle className="w-4 h-4 mr-2 text-red-500 shrink-0" />
-                  {profileError}
-                </div>
-              )}
-
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input 
-                    label="Display Name / Institution" 
-                    placeholder="Enter name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    icon={<User className="w-4 h-4 text-gray-400" />}
-                  />
-                  <Input 
-                    label="Contact Phone Number" 
-                    placeholder="e.g. +1 555-0199"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    icon={<Phone className="w-4 h-4 text-gray-400" />}
-                  />
-                </div>
-
-                <div className="pt-2 flex justify-end">
-                  <Button type="submit" variant="primary" disabled={profileLoading}>
-                    {profileLoading ? 'Sealing Profile...' : 'Update Operator Profile'}
-                  </Button>
-                </div>
-              </form>
-            </Card>
-          )}
+        <div className="lg:col-span-8 space-y-6">
 
           {activeSubTab === 'password' && (
-            <Card hoverEffect={true} className="space-y-6">
-              <div className="pb-4 border-b border-gray-100">
-                <h3 className="text-sm font-display font-extrabold text-gray-950">Update Account Password</h3>
-                <p className="text-xs text-gray-400 leading-relaxed font-sans mt-0.5">
-                  Input your existing password and specify a strong uppercase-alphanumeric replacement key.
-                </p>
+            <div className={`rounded-2xl border p-6 backdrop-blur-lg space-y-5 ${t.card}`}>
+              <div className={`pb-4 border-b ${t.sep}`}>
+                <h3 className={`text-sm font-extrabold flex items-center gap-2 ${t.text}`}><Lock className="w-4 h-4 text-cyan-500" /> Update Account Password</h3>
+                <p className={`text-xs mt-1 ${t.textMuted}`}>Use a strong password you don't reuse elsewhere.</p>
               </div>
 
-              {pwdSuccess && (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 font-semibold flex items-center">
-                  <CheckCircle className="w-4 h-4 mr-2 text-emerald-500 shrink-0" />
-                  {pwdSuccess}
-                </div>
-              )}
-
-              {pwdError && (
-                <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl text-xs text-red-800 font-semibold flex items-center">
-                  <XCircle className="w-4 h-4 mr-2 text-red-500 shrink-0" />
-                  {pwdError}
-                </div>
-              )}
+              {pwdSuccess && alertBox('success', pwdSuccess)}
+              {pwdError && alertBox('error', pwdError)}
 
               <form onSubmit={handleChangePassword} className="space-y-4">
-                <PasswordInput 
-                  label="Current Password" 
-                  placeholder="••••••••••••"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required 
-                />
+                <PasswordInput label="Current Password" placeholder="••••••••••••" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-3">
-                    <PasswordInput 
-                      label="New Secure Password" 
-                      placeholder="••••••••••••"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required 
-                    />
-
-                    {/* Live Password Strength Indicator */}
+                    <PasswordInput label="New Password" placeholder="••••••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
                     {newPassword && (
-                      <div className="space-y-1.5 p-3.5 bg-gray-50 border border-gray-100 rounded-xl">
+                      <div className={`space-y-1.5 p-3.5 rounded-xl ${t.inset}`}>
                         <div className="flex justify-between items-center text-[10px] font-bold">
-                          <span className="text-gray-500 font-sans">Credential Strength:</span>
+                          <span className={t.textMuted}>Strength:</span>
                           <span className={strength.textColor}>{strength.label}</span>
                         </div>
-                        <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full transition-all duration-300 ${strength.color}`} 
-                            style={{ width: `${(strength.score / 5) * 100}%` }}
-                          />
-                        </div>
-                        <div className="text-[9px] text-gray-400 font-sans leading-relaxed space-y-0.5">
-                          <div className="flex items-center">
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${newPassword.length >= 8 ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                            At least 8 characters
-                          </div>
-                          <div className="flex items-center">
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${/[A-Z]/.test(newPassword) ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                            One uppercase letter
-                          </div>
-                          <div className="flex items-center">
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${/[a-z]/.test(newPassword) ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                            One lowercase letter
-                          </div>
-                          <div className="flex items-center">
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${/\d/.test(newPassword) ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                            One number
-                          </div>
-                          <div className="flex items-center">
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${/[@$!%*?&()_+\-=\[\]{};':"\\|,.<>\/?#^]/.test(newPassword) ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                            One special character
-                          </div>
+                        <div className={`h-1.5 w-full rounded-full overflow-hidden ${t.isDark ? 'bg-white/10' : 'bg-black/10'}`}>
+                          <div className={`h-full transition-all duration-300 ${strength.color}`} style={{ width: `${(strength.score / 5) * 100}%` }} />
                         </div>
                       </div>
                     )}
                   </div>
-
-                  <PasswordInput 
-                    label="Confirm New Password" 
-                    placeholder="••••••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required 
-                  />
+                  <PasswordInput label="Confirm New Password" placeholder="••••••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
                 </div>
 
                 <div className="pt-2 flex justify-end">
-                  <Button type="submit" variant="primary" disabled={pwdLoading || strength.score < 5}>
-                    {pwdLoading ? 'Encrypting Credentials...' : 'Seal New Password'}
-                  </Button>
+                  <button type="submit" disabled={pwdLoading || strength.score < 5} className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer">
+                    {pwdLoading ? 'Updating…' : 'Update Password'}
+                  </button>
                 </div>
               </form>
-            </Card>
+            </div>
           )}
 
           {activeSubTab === 'email' && (
-            <Card hoverEffect={true} className="space-y-6">
-              <div className="pb-4 border-b border-gray-100">
-                <h3 className="text-sm font-display font-extrabold text-gray-950">Update Registered Email Address</h3>
-                <p className="text-xs text-gray-400 leading-relaxed font-sans mt-0.5">
-                  Verify your current password to synchronize a different secure email inbox to this node.
-                </p>
+            <div className={`rounded-2xl border p-6 backdrop-blur-lg space-y-5 ${t.card}`}>
+              <div className={`pb-4 border-b ${t.sep}`}>
+                <h3 className={`text-sm font-extrabold flex items-center gap-2 ${t.text}`}><Mail className="w-4 h-4 text-cyan-500" /> Update Registered Email</h3>
+                <p className={`text-xs mt-1 ${t.textMuted}`}>Confirm your password to bind a new email to this account.</p>
               </div>
 
-              {emailSuccess && (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 font-semibold flex items-center">
-                  <CheckCircle className="w-4 h-4 mr-2 text-emerald-500 shrink-0" />
-                  {emailSuccess}
-                </div>
-              )}
-
-              {emailError && (
-                <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl text-xs text-red-800 font-semibold flex items-center">
-                  <XCircle className="w-4 h-4 mr-2 text-red-500 shrink-0" />
-                  {emailError}
-                </div>
-              )}
+              {emailSuccess && alertBox('success', emailSuccess)}
+              {emailError && alertBox('error', emailError)}
 
               <form onSubmit={handleChangeEmail} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <PasswordInput 
-                    label="Current Password" 
-                    placeholder="••••••••••••"
-                    value={emailPassword}
-                    onChange={(e) => setEmailPassword(e.target.value)}
-                    required 
-                  />
-                  <Input 
-                    label="New Email Address" 
-                    placeholder="operator@domain.com"
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    icon={<Mail className="w-4 h-4 text-gray-400" />}
-                    required 
-                  />
+                  <PasswordInput label="Current Password" placeholder="••••••••••••" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required />
+                  <Input label="New Email Address" placeholder="you@domain.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} icon={<Mail className="w-4 h-4 text-gray-400" />} required />
                 </div>
-
                 <div className="pt-2 flex justify-end">
-                  <Button type="submit" variant="primary" disabled={emailLoading || !newEmail || !emailPassword}>
-                    {emailLoading ? 'Re-binding Identity...' : 'Confirm Email Update'}
-                  </Button>
+                  <button type="submit" disabled={emailLoading || !newEmail || !emailPassword} className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer">
+                    {emailLoading ? 'Updating…' : 'Confirm Email Update'}
+                  </button>
                 </div>
               </form>
-            </Card>
+            </div>
           )}
 
           {activeSubTab === 'sessions' && (
-            <Card hoverEffect={true} className="space-y-6">
-              <div className="pb-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className={`rounded-2xl border p-6 backdrop-blur-lg space-y-5 ${t.card}`}>
+              <div className={`pb-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${t.sep}`}>
                 <div>
-                  <h3 className="text-sm font-display font-extrabold text-gray-950">Active Session Monitor</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed font-sans mt-0.5">
-                    View and manage other web terminals and locations currently connected to your profile.
-                  </p>
+                  <h3 className={`text-sm font-extrabold ${t.text}`}>Active Sessions</h3>
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Devices currently signed in to your account.</p>
                 </div>
                 {sessions.length > 1 && (
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    size="sm" 
-                    className="shrink-0 text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100/70 border-red-100"
-                    onClick={handleLogoutOthers}
-                    disabled={sessionsLoading}
-                  >
-                    <LogOut className="w-3.5 h-3.5 mr-1.5" />
-                    Terminate Other Sessions
-                  </Button>
+                  <button onClick={handleLogoutOthers} disabled={sessionsLoading} className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 transition-colors cursor-pointer disabled:opacity-50">
+                    <LogOut className="w-3.5 h-3.5" /> Terminate Others
+                  </button>
                 )}
               </div>
 
-              {sessionsSuccess && (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 font-semibold flex items-center">
-                  <CheckCircle className="w-4 h-4 mr-2 text-emerald-500 shrink-0" />
-                  {sessionsSuccess}
-                </div>
-              )}
-
-              {sessionsError && (
-                <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl text-xs text-red-800 font-semibold flex items-center">
-                  <XCircle className="w-4 h-4 mr-2 text-red-500 shrink-0" />
-                  {sessionsError}
-                </div>
-              )}
+              {sessionsSuccess && alertBox('success', sessionsSuccess)}
+              {sessionsError && alertBox('error', sessionsError)}
 
               {sessionsLoading && sessions.length === 0 ? (
-                <div className="py-8 text-center text-xs text-gray-400 font-mono animate-pulse flex items-center justify-center space-x-2">
-                  <RotateCw className="w-4 h-4 animate-spin text-gray-400" />
-                  <span>Loading active connections...</span>
+                <div className={`py-8 text-center text-xs font-mono flex items-center justify-center gap-2 ${t.textMuted}`}>
+                  <RotateCw className="w-4 h-4 animate-spin" /> Loading sessions…
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className={`divide-y ${t.sep}`}>
                   {sessions.map((session, index) => {
-                    // Match some icons
                     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(session.device || '');
-                    const isCurrent = index === 0; // Simple heuristic: first item returned is sorted desc by activity
-
+                    const isCurrent = index === 0;
                     return (
-                      <div key={session.id} className="py-4 flex items-start justify-between gap-4">
-                        <div className="flex items-start space-x-3.5">
-                          <div className={`p-2.5 rounded-xl border ${isCurrent ? 'bg-blue-50/50 border-blue-100 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
-                            {isMobile ? <Smartphone className="w-4 h-4" /> : <Laptop className="w-4 h-4" />}
+                      <div key={session.id} className="py-4 flex items-start gap-3.5">
+                        <div className={`p-2.5 rounded-xl border shrink-0 ${isCurrent ? 'bg-cyan-500/10 border-cyan-500/25 text-cyan-500' : `${t.inset} ${t.textMuted}`}`}>
+                          {isMobile ? <Smartphone className="w-4 h-4" /> : <Laptop className="w-4 h-4" />}
+                        </div>
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-xs font-bold ${t.text}`}>{session.browser || 'Unknown Browser'} on {session.device || 'Unknown System'}</span>
+                            {isCurrent && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-cyan-500/15 text-cyan-500">Current</span>}
                           </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2 flex-wrap">
-                              <span className="text-xs font-bold text-gray-950">
-                                {session.browser || 'Unknown Browser'} on {session.device || 'Unknown System'}
-                              </span>
-                              {isCurrent && (
-                                <Badge variant="primary" className="text-[9px] py-0 px-1.5 font-bold">Current Device</Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-4 text-[10px] text-gray-400 font-mono flex-wrap">
-                              <span className="flex items-center">
-                                <Globe className="w-3 h-3 mr-1" />
-                                IP: {session.ipAddress || '127.0.0.1'}
-                              </span>
-                              <span className="flex items-center">
-                                <Clock className="w-3 h-3 mr-1" />
-                                Registered: {new Date(session.createdAt).toLocaleString()}
-                              </span>
-                            </div>
+                          <div className={`flex items-center gap-4 text-[10px] font-mono flex-wrap ${t.textMuted}`}>
+                            <span className="flex items-center"><Globe className="w-3 h-3 mr-1" /> {session.ipAddress || '127.0.0.1'}</span>
+                            <span className="flex items-center"><Clock className="w-3 h-3 mr-1" /> {new Date(session.createdAt).toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
@@ -670,37 +453,134 @@ export const SecurityView: React.FC = () => {
                   })}
                 </div>
               )}
-            </Card>
+            </div>
           )}
 
+          {activeSubTab === 'twoFactor' && (
+            <div className={`rounded-2xl border p-8 backdrop-blur-lg text-center space-y-4 ${t.card}`}>
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center">
+                <Fingerprint className="w-7 h-7 text-cyan-500" />
+              </div>
+              <div>
+                <h3 className={`text-sm font-extrabold ${t.text}`}>Two-Factor Authentication</h3>
+                <p className={`text-xs mt-1 max-w-sm mx-auto ${t.textMuted}`}>
+                  App-based (TOTP) 2FA is on our roadmap to add an extra layer of protection to your account.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-500 border border-amber-500/25">
+                <Clock3 className="w-3 h-3" /> Coming Soon
+              </span>
+            </div>
+          )}
+
+          {activeSubTab === 'withdrawal' && (
+            <div className={`rounded-2xl border p-6 backdrop-blur-lg space-y-5 ${t.card}`}>
+              <div className={`pb-4 border-b ${t.sep}`}>
+                <h3 className={`text-sm font-extrabold flex items-center gap-2 ${t.text}`}><Wallet className="w-4 h-4 text-cyan-500" /> Withdrawal Wallet Addresses</h3>
+                <p className={`text-xs mt-1 ${t.textMuted}`}>Adding or changing an address requires Email OTP verification.</p>
+              </div>
+
+              <div className="space-y-3">
+                {withdrawAddresses.map((wa) => {
+                  const meta = NETWORK_META[wa.network];
+                  const isEditingThis = editingNetwork === wa.network;
+                  return (
+                    <div key={wa.network} className={`rounded-xl border p-4 ${t.inset}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: meta.color }} />
+                          <div className="min-w-0">
+                            <p className={`text-xs font-bold ${t.text}`}>{meta.label}</p>
+                            <p className={`text-[11px] font-mono truncate ${t.textMuted}`}>{wa.address || 'No address set'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {wa.address && (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full ${wa.verified ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'}`}>
+                              <BadgeCheck className="w-3 h-3" /> {wa.verified ? 'Verified' : 'Unverified'}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => startEdit(wa.network)}
+                            className={`p-2 rounded-lg border transition-colors cursor-pointer ${t.isDark ? 'border-white/15 hover:bg-white/10' : 'border-black/10 hover:bg-black/5'} ${t.text}`}
+                          >
+                            {wa.address ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {isEditingThis && (
+                        <div className={`mt-4 pt-4 border-t space-y-3 ${t.sep}`}>
+                          <Input
+                            label={`${meta.label} Address`}
+                            placeholder="Paste wallet address"
+                            value={draftAddress}
+                            onChange={(e) => setDraftAddress(e.target.value)}
+                            disabled={otpStep === 'sent'}
+                          />
+
+                          {otpStep === 'idle' ? (
+                            <div className="flex justify-end gap-2">
+                              <button onClick={cancelEdit} className={`px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer ${t.textMuted}`}>Cancel</button>
+                              <button
+                                onClick={sendMockOtp}
+                                disabled={!draftAddress.trim() || otpBusy}
+                                className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity"
+                              >
+                                {otpBusy ? 'Sending…' : 'Send Email OTP'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <p className={`text-[11px] ${t.textMuted}`}>
+                                A 6-digit verification code has been sent to <span className={t.text}>{user?.email}</span>.
+                              </p>
+                              <Input label="Enter OTP" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+                              <div className="flex justify-end gap-2">
+                                <button onClick={cancelEdit} className={`px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer ${t.textMuted}`}>Cancel</button>
+                                <button
+                                  onClick={verifyMockOtp}
+                                  disabled={otpCode.length !== 6 || otpBusy}
+                                  className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity"
+                                >
+                                  {otpBusy ? 'Verifying…' : 'Verify & Save'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Informative Side Info Card */}
+        {/* Side Info */}
         <div className="lg:col-span-4 space-y-4">
-          <Card hoverEffect={true} className="p-5 bg-blue-50/20 border border-blue-100/50 text-left space-y-3">
-            <div className="flex items-center space-x-2 text-blue-700">
+          <div className={`rounded-2xl border p-5 backdrop-blur-lg space-y-3 ${t.card}`}>
+            <div className="flex items-center gap-2 text-cyan-500">
               <Key className="w-4 h-4" />
-              <h5 className="text-xs font-bold font-display">Cryptographic Session Lock</h5>
+              <h5 className="text-xs font-bold">Session Encryption</h5>
             </div>
-            <p className="text-[11px] text-gray-500 leading-relaxed font-sans">
-              Your operator session is synced under strict, multi-device secure hashes. Password rotation and logout flags propagate instantly across our distributed node nodes.
+            <p className={`text-[11px] leading-relaxed ${t.textMuted}`}>
+              Your session is protected end-to-end. Password rotation and logouts propagate instantly across every signed-in device.
             </p>
-            <Badge variant="primary" className="font-mono text-[9px] uppercase">Active SHA-256 Auth</Badge>
-          </Card>
+          </div>
 
-          <Card hoverEffect={true} className="p-5 bg-amber-50/20 border border-amber-100/50 text-left space-y-3">
-            <div className="flex items-center space-x-2 text-amber-700">
+          <div className={`rounded-2xl border p-5 backdrop-blur-lg space-y-3 ${t.card}`}>
+            <div className="flex items-center gap-2 text-amber-500">
               <AlertTriangle className="w-4 h-4" />
-              <h5 className="text-xs font-bold font-display">Account Security Advice</h5>
+              <h5 className="text-xs font-bold">Security Advice</h5>
             </div>
-            <p className="text-[11px] text-gray-500 leading-relaxed font-sans">
-              Never share your credentials keys, passwords, or recovery codes with any third-party. The MetaFirm support team will never request your private security keys.
+            <p className={`text-[11px] leading-relaxed ${t.textMuted}`}>
+              Never share your password, OTP, or recovery codes with anyone. MetaFirm support will never ask for them.
             </p>
-          </Card>
+          </div>
         </div>
-
       </div>
-
     </div>
   );
 };

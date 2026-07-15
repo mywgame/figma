@@ -22,27 +22,44 @@ export const MonthlyEarningsChart: React.FC<MonthlyEarningsChartProps> = ({ data
   const { t } = useTheme();
 
   return (
-    <div className={`backdrop-blur-lg rounded-2xl p-5 border transition-all duration-300 lg:col-span-2 ${t.card}`}>
-      <h3 className={`text-base font-semibold mb-4 ${t.text}`}>Monthly Earnings</h3>
-      <ResponsiveContainer width="100%" height={240}>
-        <AreaChart data={data}>
-          <defs>
-            <linearGradient id="earningsGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.5} />
-              <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={t.chartGrid} />
-          <XAxis dataKey="date" stroke={t.chartAxis} tick={{ fill: t.chartTick, fontSize: 12 }} />
-          <YAxis stroke={t.chartAxis} tick={{ fill: t.chartTick, fontSize: 12 }} />
-          <Tooltip
-            contentStyle={{ backgroundColor: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, borderRadius: 10 }}
-            labelStyle={{ color: t.isDark ? '#e5e7eb' : '#111827' }}
-            itemStyle={{ color: '#06b6d4' }}
-          />
-          <Area type="monotone" dataKey="earnings" stroke="#06b6d4" strokeWidth={2} fillOpacity={1} fill="url(#earningsGrad)" />
-        </AreaChart>
-      </ResponsiveContainer>
+    <div className={`backdrop-blur-lg rounded-2xl p-5 border transition-all duration-300 lg:col-span-2 flex flex-col ${t.card}`}>
+      <h3 className={`text-base font-semibold mb-2 shrink-0 ${t.text}`}>Monthly Earnings</h3>
+      <div className="flex-1 min-h-[260px] -ml-4 -mr-2">
+        <ResponsiveContainer width="100%" height="100%" minHeight={260}>
+          <AreaChart data={data} margin={{ top: 14, right: 12, left: 4, bottom: 0 }}>
+            <defs>
+              <linearGradient id="earningsGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={t.chartGrid} vertical={false} />
+            <XAxis
+              dataKey="date"
+              stroke={t.chartAxis}
+              tick={{ fill: t.chartTick, fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              dy={-16}
+            />
+            <YAxis
+              stroke={t.chartAxis}
+              tick={{ fill: t.chartTick, fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              width={46}
+              dx={28}
+              tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+            />
+            <Tooltip
+              contentStyle={{ backgroundColor: t.tooltipBg, border: `1px solid ${t.tooltipBorder}`, borderRadius: 10 }}
+              labelStyle={{ color: t.isDark ? '#e5e7eb' : '#111827' }}
+              itemStyle={{ color: '#06b6d4' }}
+            />
+            <Area type="monotone" dataKey="earnings" stroke="#06b6d4" strokeWidth={2.5} fillOpacity={1} fill="url(#earningsGrad)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 };

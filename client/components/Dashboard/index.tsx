@@ -145,13 +145,13 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       case 'dashboard':
         return <DashboardHome onQuickAction={handleQuickAction} />;
       case 'profile':
-        return wrapLegacyView(<ProfileView />);
+        return <ProfileView />;
       case 'team':
         return wrapLegacyView(<MyTeamView />);
       case 'transactions':
         return wrapLegacyView(<TransactionsView />);
       case 'security':
-        return wrapLegacyView(<SecurityView />);
+        return <SecurityView />;
       case 'settings':
         return wrapLegacyView(<SettingsView />);
       case 'support':
