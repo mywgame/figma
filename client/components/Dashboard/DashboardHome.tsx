@@ -41,38 +41,37 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ onQuickAction }) =
         totalBalance={data.wallet.totalBalance}
         totalEarned={data.wallet.totalEarned}
         totalWithdrawn={data.wallet.totalWithdrawn}
-        pendingRewards={data.wallet.pendingRewards}
       />
 
-      {/* 2. Quick Action Buttons — rectangle style, shared source of truth with mobile BottomNav */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" id="action-buttons-container">
+      {/* 2. Quick Action Buttons — always one row (mobile shrinks size, desktop untouched) */}
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-3" id="action-buttons-container">
         <button
           onClick={() => onQuickAction?.('deposit')}
-          className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-sans font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-emerald-900/10 active:scale-[0.98] cursor-pointer"
+          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-emerald-900/10 active:scale-[0.98] cursor-pointer"
         >
-          <ArrowDownToLine className="w-4 h-4" />
-          <span>Deposit</span>
+          <ArrowDownToLine className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">Deposit</span>
         </button>
         <button
           onClick={() => onQuickAction?.('withdraw')}
-          className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-gradient-to-r from-rose-500 to-red-500 hover:opacity-90 text-white font-sans font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-rose-900/10 active:scale-[0.98] cursor-pointer"
+          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-rose-500 to-red-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-rose-900/10 active:scale-[0.98] cursor-pointer"
         >
-          <ArrowUpFromLine className="w-4 h-4" />
-          <span>Withdraw</span>
+          <ArrowUpFromLine className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">Withdraw</span>
         </button>
         <button
           onClick={() => onQuickAction?.('claim')}
-          className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-white font-sans font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-blue-900/10 active:scale-[0.98] cursor-pointer"
+          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-blue-900/10 active:scale-[0.98] cursor-pointer"
         >
-          <Gift className="w-4 h-4" />
-          <span>Claim</span>
+          <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">Claim</span>
         </button>
         <button
           onClick={() => onQuickAction?.('invite')}
-          className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white font-sans font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-purple-900/10 active:scale-[0.98] cursor-pointer"
+          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-purple-900/10 active:scale-[0.98] cursor-pointer"
         >
-          <DollarSign className="w-4 h-4" />
-          <span>Invite</span>
+          <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">Invite</span>
         </button>
       </div>
 

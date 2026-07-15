@@ -4,27 +4,23 @@
  */
 
 import React from 'react';
-import { LayoutDashboard, Users, History, HelpCircle, Menu, ArrowDownToLine, ArrowUpFromLine, Gift, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Users, History, HelpCircle, Menu } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { DashboardTab } from './Sidebar.tsx';
-
-export type QuickActionType = 'deposit' | 'withdraw' | 'claim' | 'invite';
 
 interface BottomNavProps {
   activeTab: DashboardTab;
   setActiveTab: (tab: DashboardTab) => void;
   onMoreClick: () => void;
-  onQuickAction: (actionType: QuickActionType) => void;
 }
 
 /**
- * Mobile-only fixed bottom shell: a slim Quick Actions strip (Deposit /
- * Withdraw / Claim / Invite — reuses the same handler as the desktop
- * DashboardHome buttons, so there's a single source of truth for the
- * behavior) stacked above a minimal one-handed tab bar. Desktop continues
- * to use the persistent Sidebar (hidden here via md:hidden).
+ * Mobile-only fixed bottom tab bar — minimal, one-handed navigation.
+ * (Quick Actions — Deposit/Withdraw/Claim/Invite — live only in the
+ * Dashboard Home content row now, not duplicated here.)
+ * Desktop continues to use the persistent Sidebar (hidden here via md:hidden).
  */
-export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab, onMoreClick, onQuickAction }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab, onMoreClick }) => {
   const { t } = useTheme();
 
   const tabs: { id: DashboardTab; label: string; icon: React.ElementType }[] = [
@@ -32,13 +28,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab, o
     { id: 'team', label: 'Team', icon: Users },
     { id: 'transactions', label: 'History', icon: History },
     { id: 'support', label: 'Support', icon: HelpCircle },
-  ];
-
-  const quickActions: { id: QuickActionType; label: string; icon: React.ElementType; grad: string }[] = [
-    { id: 'deposit', label: 'Deposit', icon: ArrowDownToLine, grad: 'from-emerald-500 to-teal-500' },
-    { id: 'withdraw', label: 'Withdraw', icon: ArrowUpFromLine, grad: 'from-rose-500 to-red-500' },
-    { id: 'claim', label: 'Claim', icon: Gift, grad: 'from-cyan-500 to-blue-500' },
-    { id: 'invite', label: 'Invite', icon: UserPlus, grad: 'from-purple-500 to-pink-500' },
   ];
 
   // "More" is treated as its own pseudo-tab: active when the user is on a view
@@ -50,27 +39,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab, o
       id="mobile-bottom-nav"
       className={`md:hidden fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl border-t pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] transition-colors duration-300 ${t.navBg} ${t.navBorder}`}
     >
-      {/* Quick Actions strip — one-handed reach, top row of the fixed shell */}
-      <div className={`flex items-center justify-around px-3 pt-2.5 pb-2 border-b ${t.sep}`}>
-        {quickActions.map((action) => {
-          const Icon = action.icon;
-          return (
-            <button
-              key={action.id}
-              onClick={() => onQuickAction(action.id)}
-              className="flex flex-col items-center gap-1 cursor-pointer focus:outline-none group"
-            >
-              <span
-                className={`flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br ${action.grad} text-white shadow-md transition-transform group-active:scale-90`}
-              >
-                <Icon className="w-4 h-4" />
-              </span>
-              <span className={`text-[8.5px] font-bold tracking-wide ${t.textMuted}`}>{action.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* Primary Tab Bar */}
       <div className="grid grid-cols-5 h-[62px] max-w-lg mx-auto">
         {tabs.map((item) => {

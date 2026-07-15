@@ -4,14 +4,13 @@
  */
 
 import React from 'react';
-import { DollarSign, TrendingUp, ArrowUpRight, Award } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowUpRight } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 
 interface HeroBalanceCardProps {
   totalBalance: number;
   totalEarned: number;
   totalWithdrawn: number;
-  pendingRewards: number;
 }
 
 const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
@@ -25,14 +24,12 @@ export const HeroBalanceCard: React.FC<HeroBalanceCardProps> = ({
   totalBalance,
   totalEarned,
   totalWithdrawn,
-  pendingRewards,
 }) => {
   const { t } = useTheme();
 
   const subStats = [
     { label: 'Total Earned', value: fmt(totalEarned), color: 'text-emerald-500', Icon: TrendingUp },
     { label: 'Total Withdrawn', value: fmt(totalWithdrawn), color: 'text-red-400', Icon: ArrowUpRight },
-    { label: 'Pending Rewards', value: fmt(pendingRewards), color: 'text-amber-500', Icon: Award },
   ];
 
   return (
@@ -60,7 +57,7 @@ export const HeroBalanceCard: React.FC<HeroBalanceCardProps> = ({
 
         {/* Right: sub-stats card */}
         <div className={`flex-shrink-0 w-full sm:w-auto rounded-2xl border px-5 py-4 backdrop-blur-sm transition-all duration-300 ${t.isDark ? 'bg-white/5 border-white/10' : 'bg-black/4 border-black/8'}`}>
-          <div className="grid grid-cols-3 gap-0">
+          <div className="grid grid-cols-2 gap-0">
             {subStats.map(({ label, value, color, Icon }, i) => (
               <div key={label} className={`flex flex-col items-center text-center px-4 ${i > 0 ? `border-l ${t.sep}` : ''}`}>
                 <div className={`p-1.5 rounded-lg mb-2 ${t.isDark ? 'bg-white/8' : 'bg-black/6'}`}>

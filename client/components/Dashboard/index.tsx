@@ -209,7 +209,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onMoreClick={() => setIsMobileSidebarOpen(true)}
-        onQuickAction={handleQuickAction}
       />
 
       {/* 3. Popups/Modals Overlays for Quick Actions */}
