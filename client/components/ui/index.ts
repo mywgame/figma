@@ -29,3 +29,9 @@ export * from './Navigation/index.tsx';
 
 // Overlays, Modals & Dialogs
 export * from './Overlays/index.tsx';
+
+// RingProgress, ThemeSwitch & AvatarPicker
+export * from './RingProgress.tsx';
+export * from './ThemeSwitch.tsx';
+export * from './AvatarPicker.tsx';
+

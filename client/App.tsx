@@ -632,7 +632,9 @@ function MainAppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <MainAppContent />
+      <ThemeProvider>
+        <MainAppContent />
+      </ThemeProvider>
     </AuthProvider>
   );
 }

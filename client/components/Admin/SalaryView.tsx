@@ -4,136 +4,226 @@
  */
 
 import React, { useState } from 'react';
-import { Coins, CheckCircle2, DollarSign, Send, ShieldCheck } from 'lucide-react';
-import { Card, TableContainer } from '../ui/Cards/index.tsx';
-import { Button } from '../ui/Buttons/index.tsx';
+import {
+  DollarSign,
+  Users,
+  Award,
+  CheckCircle,
+  Calendar,
+  X,
+  Edit,
+  ShieldAlert
+} from 'lucide-react';
+import { Card, Button, Input, Badge } from '../ui/index.ts';
+import { ThemeTokens } from '../ui/themeTokens.ts';
+import { Toast } from '../ui/Feedback/index.tsx';
+import { SALARY_SLABS_MOCK } from './mockData.ts';
 
 interface SalaryViewProps {
-  onAuditLog: (action: string, module: 'SYSTEM_CONFIG' | 'SETTLEMENT') => void;
+  t: ThemeTokens;
+  isDark: boolean;
 }
 
-export const SalaryView: React.FC<SalaryViewProps> = ({ onAuditLog }) => {
-  const [clearing, setClearing] = useState(false);
-  const [clearingSuccess, setClearingSuccess] = useState(false);
+export const SalaryView: React.FC<SalaryViewProps> = ({ t, isDark }) => {
+  const [slabs, setSlabs] = useState(SALARY_SLABS_MOCK);
+  const [editingSlab, setEditingSlab] = useState<typeof SALARY_SLABS_MOCK[0] | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const handleClearPayroll = () => {
-    setClearing(true);
-    setClearingSuccess(false);
-
-    setTimeout(() => {
-      setClearing(false);
-      setClearingSuccess(true);
-      onAuditLog('Dispatched monthly staff payroll payouts totaling $245,500.00 USD across authorized whitelisted addresses', 'SETTLEMENT');
-      setTimeout(() => setClearingSuccess(false), 3000);
-    }, 1200);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const staffList = [
-    { name: 'Dr. Michael Chen', role: 'Head of Quantitative Systems', address: '0x819a...32fe', monthlySalary: '$45,000.00', status: 'Whitelisted' },
-    { name: 'Sarah Jenkins', role: 'VP Financial Security Operations', address: '0x72da...18fa', monthlySalary: '$35,000.00', status: 'Whitelisted' },
-    { name: 'Alex Khasanov', role: 'Staff Cryptographic Infrastructure Engineer', address: '0x99ea...2041', monthlySalary: '$32,500.00', status: 'Whitelisted' },
-    { name: 'Elena Rostova', role: 'General Counsel & Compliance Chief', address: '0x11ab...662e', monthlySalary: '$28,000.00', status: 'Whitelisted' },
-  ];
+  // Handle Edit Salary
+  const handleEditSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSlab) return;
+
+    // TODO: Replace with real API call
+    setSlabs(prev => prev.map(s => (s.rank === editingSlab.rank ? editingSlab : s)));
+    setEditingSlab(null);
+    showToast(`Salary slab for ${editingSlab.rank} updated successfully.`);
+  };
+
+  // Handle Process Monthly Payouts
+  const triggerPayoutProcess = () => {
+    setIsProcessing(true);
+    // TODO: Replace with real API call
+    setTimeout(() => {
+      setIsProcessing(false);
+      showToast('Salary payouts successfully transmitted and processed for all ranks!');
+    }, 1500);
+  };
 
   return (
-    <div className="space-y-6 text-left max-w-4xl">
-      
-      {/* Head stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Card className="p-5 space-y-2">
-          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest block">PAYROLL BUDGET CAP</span>
-          <h3 className="font-display font-extrabold text-gray-950 text-xl">$500,000.00</h3>
-          <p className="text-[10px] font-mono text-gray-400">QUARTERLY ALLOCATION</p>
+    <div className="space-y-6 text-left">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Leader Salary Settings</h2>
+          <p className={`text-xs mt-1 ${t.textSub}`}>Configure default monthly payouts, referral benchmarks, and execute payouts across member classes.</p>
+        </div>
+        <Button
+          onClick={triggerPayoutProcess}
+          loading={isProcessing}
+          className="bg-emerald-600 hover:bg-emerald-700 hover:shadow-emerald-500/10 border-none shrink-0"
+          leftIcon={<CheckCircle className="w-4 h-4" />}
+        >
+          Process Monthly Payouts
+        </Button>
+      </div>
+
+      {/* Grid of cards showing summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-4 flex items-center gap-4 text-left">
+          <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-500">
+            <DollarSign className="w-5 h-5" />
+          </div>
+          <div>
+            <p className={`text-[10px] font-mono font-bold uppercase tracking-wider ${t.textMuted}`}>Estimated Monthly Salary Pool</p>
+            <p className="text-lg font-extrabold mt-0.5">$318,400</p>
+          </div>
         </Card>
 
-        <Card className="p-5 space-y-2">
-          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest block">MONTHLY STAFF SALARY COMMITTED</span>
-          <h3 className="font-display font-extrabold text-gray-950 text-xl">$140,500.00</h3>
-          <p className="text-[10px] font-mono text-emerald-600 font-bold">4 REGISTERED OPERATORS</p>
+        <Card className="p-4 flex items-center gap-4 text-left">
+          <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <p className={`text-[10px] font-mono font-bold uppercase tracking-wider ${t.textMuted}`}>Qualifying Rank Leaders</p>
+            <p className="text-lg font-extrabold mt-0.5">3,116 accounts</p>
+          </div>
         </Card>
 
-        <Card className="p-5 space-y-2">
-          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest block">SETTLEMENT METHOD</span>
-          <h3 className="font-display font-extrabold text-gray-950 text-xl">USDC-ERC20 Multichain</h3>
-          <p className="text-[10px] font-mono text-gray-400">AUTOMATIC HARDWARE DISPATCH</p>
+        <Card className="p-4 flex items-center gap-4 text-left">
+          <div className="p-3 rounded-2xl bg-purple-500/10 text-purple-500">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <p className={`text-[10px] font-mono font-bold uppercase tracking-wider ${t.textMuted}`}>Next Scheduled Process Date</p>
+            <p className="text-lg font-extrabold mt-0.5">Aug 1, 2024</p>
+          </div>
         </Card>
       </div>
 
-      {/* Staff lists table */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-        
-        {/* Clearing form details */}
-        <div className="md:col-span-4 bg-white border border-gray-100 p-5 rounded-2xl shadow-sm space-y-4 flex flex-col justify-between">
-          <div className="space-y-3">
-            <div>
-              <h3 className="text-sm font-display font-black text-gray-950 uppercase tracking-tight">
-                Corporate Payroll Controller
+      {/* Salary Slab Table */}
+      <Card className="overflow-hidden">
+        <div className={`p-4 border-b ${t.sep}`}>
+          <h3 className="font-display font-bold text-sm flex items-center gap-2">
+            <Award className="w-4 h-4 text-blue-500" />
+            <span>Monthly Rank Slabs & Rules</span>
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className={`border-b ${t.sep} ${isDark ? 'bg-white/2' : 'bg-gray-50'}`}>
+                {['Rank Class', 'Qualifying members', 'Monthly Salary payout', 'Direct referrals requirement', 'Payout Schedule', 'Configure Slab'].map((header) => (
+                  <th key={header} className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100/10">
+              {slabs.map((slab) => (
+                <tr key={slab.rank} className={`transition-colors ${t.cardInner}`}>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg select-none">
+                        {slab.rank === 'Bronze' ? '🥉' : slab.rank === 'Silver' ? '🥈' : slab.rank === 'Gold' ? '🥇' : slab.rank === 'Diamond' ? '💎' : '👑'}
+                      </span>
+                      <span className="font-bold">{slab.rank} Level</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 font-bold text-gray-900 dark:text-white">{slab.members.toLocaleString()} members</td>
+                  <td className="px-5 py-4">
+                    <Badge variant={slab.salary === '$0' ? 'neutral' : 'emerald'}>
+                      {slab.salary} / month
+                    </Badge>
+                  </td>
+                  <td className={`px-5 py-4 font-medium ${t.textSub}`}>{slab.requirement}</td>
+                  <td className={`px-5 py-4 font-mono font-bold ${t.textMuted}`}>{slab.nextPayout}</td>
+                  <td className="px-5 py-4">
+                    <button
+                      onClick={() => setEditingSlab(slab)}
+                      className="p-1.5 rounded-xl text-blue-500 hover:bg-blue-500/10 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      Adjust
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Note warning card */}
+      <div className="rounded-2xl p-4 border border-amber-500/20 bg-amber-500/5 flex items-start gap-3">
+        <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+        <div className="space-y-1 text-xs text-left">
+          <p className="font-bold">Manual Payout Process Safety Warning</p>
+          <p className={`${t.textSub} leading-relaxed text-[11px]`}>
+            Executing manual payouts triggers ledger deductions immediately across all users matching rank parameters. Be extremely cautious. Verify ledger balances before processing transactions.
+          </p>
+        </div>
+      </div>
+
+      {/* Edit Slab Modal Overlay */}
+      {editingSlab && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0" onClick={() => setEditingSlab(null)} />
+          <div className={`rounded-3xl border p-6 shadow-2xl max-w-sm w-full relative z-10 text-left space-y-5 backdrop-blur-xl ${
+            isDark ? 'bg-[#0f112e]' : 'bg-white'
+          } ${t.sep}`}>
+            <div className={`flex items-center justify-between pb-3 border-b ${t.sep}`}>
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-emerald-500" />
+                <span>Configure {editingSlab.rank} Payout</span>
               </h3>
-              <p className="text-[10px] text-gray-400 font-mono block mt-0.5">
-                DISPATCH MONTHLY STAFF SALARIES
-              </p>
+              <button onClick={() => setEditingSlab(null)} className={`p-1 rounded-lg hover:bg-black/5 cursor-pointer ${t.textMuted}`}>
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <p className="text-xs text-gray-500 leading-relaxed font-sans">
-              Clicking release runs checking mechanisms across all registered staff addresses, validates active key-shares via dual authentication HSM enclaves, and processes instant payouts in USDC.
-            </p>
-          </div>
+            <form onSubmit={handleEditSave} className="space-y-4">
+              <Input
+                label="Monthly Salary Credit Amount"
+                value={editingSlab.salary}
+                onChange={e => setEditingSlab(prev => prev ? ({ ...prev, salary: e.target.value }) : null)}
+                required
+              />
+              <Input
+                label="Qualifying Downline Rule Description"
+                value={editingSlab.requirement}
+                onChange={e => setEditingSlab(prev => prev ? ({ ...prev, requirement: e.target.value }) : null)}
+                required
+              />
 
-          <div className="pt-2">
-            {clearingSuccess && (
-              <span className="text-xs font-bold text-emerald-600 font-mono flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl mb-3">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                Staff payroll processed successfully!
-              </span>
-            )}
-            <Button
-              onClick={handleClearPayroll}
-              isLoading={clearing}
-              className="w-full text-xs font-bold py-3 rounded-2xl"
-              leftIcon={<Send className="w-3.5 h-3.5" />}
-            >
-              Clear Corporate Payroll
-            </Button>
+              <div className="flex gap-3 pt-3">
+                <Button type="button" variant="secondary" onClick={() => setEditingSlab(null)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" className="flex-1">
+                  Save Changes
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
+      )}
 
-        {/* Staff accounts table */}
-        <div className="md:col-span-8 bg-white border border-gray-100 p-5 rounded-2xl shadow-sm space-y-4">
-          <div>
-            <h3 className="text-sm font-display font-black text-gray-950 uppercase tracking-tight">
-              Registered Operator Accounts
-            </h3>
-            <p className="text-[10px] text-gray-400 font-mono block mt-0.5">
-              WHITELISTED RECIPIENTS LEDGER
-            </p>
-          </div>
-
-          <TableContainer>
-            <table className="w-full text-left border-collapse font-sans text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="py-2.5 px-4 font-bold text-gray-400 font-mono text-[9px] uppercase">Recipient Name</th>
-                  <th className="py-2.5 px-4 font-bold text-gray-400 font-mono text-[9px] uppercase">Corporate Role</th>
-                  <th className="py-2.5 px-4 font-bold text-gray-400 font-mono text-[9px] uppercase">Settlement Address</th>
-                  <th className="py-2.5 px-4 font-bold text-gray-400 font-mono text-[9px] uppercase text-right">Committed Value</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {staffList.map((s, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-3 px-4 text-gray-900 font-bold font-display">{s.name}</td>
-                    <td className="py-3 px-4 text-gray-500 font-semibold">{s.role}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-gray-400 select-all">{s.address}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-gray-900 text-right">{s.monthlySalary}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableContainer>
-        </div>
-
-      </div>
-
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          variant="success"
+          onClose={() => setToastMessage(null)}
+        />
+      )}
     </div>
   );
 };
+export default SalaryView;

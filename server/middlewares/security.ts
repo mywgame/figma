@@ -11,14 +11,25 @@ import { ApiError } from './errorHandler.ts';
  * Adds secure response headers to mitigate clickjacking, MIME sniffing, and XSS.
  */
 export const helmetMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: referrer;"
-  );
+  if (process.env.NODE_ENV !== 'production') {
+    // In development/preview, we must allow embedding in the AI Studio iframe workspace.
+    // Omit 'X-Frame-Options' entirely and set 'frame-ancestors *' in CSP.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob: android-asset: referrer; frame-ancestors *;"
+    );
+  } else {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: referrer;"
+    );
+  }
   next();
 };
 

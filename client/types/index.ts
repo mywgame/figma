@@ -53,6 +53,7 @@ export interface DashboardData {
     claimId: string | null;
     amount: string;
     windowClose: string | null;
+    status: string;
   };
   recentTransactions: any[];
   recentActivities: any[];

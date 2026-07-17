@@ -16,6 +16,17 @@ import { api } from '../../services/api.ts';
 import { DashboardData } from '../../types/index.ts';
 import { mockIdentity } from '../../mocks/dashboardMockData.ts';
 
+const VIP_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  VIP1: { label: 'VIP1', color: '#94a3b8', bg: 'from-slate-400/30 to-slate-500/30', icon: '🥈' },
+  VIP2: { label: 'VIP2', color: '#f59e0b', bg: 'from-yellow-500/30 to-orange-500/30', icon: '🥇' },
+  VIP3: { label: 'VIP3', color: '#38bdf8', bg: 'from-cyan-500/30 to-blue-500/30', icon: '💎' },
+  VIP4: { label: 'VIP4', color: '#a855f7', bg: 'from-purple-500/30 to-indigo-500/30', icon: '👑' },
+  VIP5: { label: 'VIP5', color: '#ec4899', bg: 'from-pink-500/30 to-rose-500/30', icon: '🌟' },
+  VIP6: { label: 'VIP6', color: '#f43f5e', bg: 'from-rose-500/30 to-red-500/30', icon: '⚡' },
+  VIP7: { label: 'VIP7', color: '#10b981', bg: 'from-emerald-500/30 to-teal-500/30', icon: '🔥' },
+  VIP8: { label: 'VIP8', color: '#3b82f6', bg: 'from-blue-500/30 to-cyan-500/30', icon: '🚀' },
+};
+
 // Tab Views
 import { DashboardHome } from './DashboardHome.tsx';
 import { MyTeamView } from './MyTeamView.tsx';
@@ -25,8 +36,15 @@ import { SettingsView } from './SettingsView.tsx';
 import { SupportView } from './SupportView.tsx';
 import { TransactionsView } from './TransactionsView.tsx';
 
+// Dedicated Sub-pages
+import { DashboardLayout } from './Layout/DashboardLayout.tsx';
+import { DepositView } from './Deposit/DepositView.tsx';
+import { WithdrawalView } from './Withdrawal/WithdrawalView.tsx';
+import { RewardsView } from './Rewards/RewardsView.tsx';
+import { TaskView } from './Task/TaskView.tsx';
+
 // Overlay
-import { ArrowLeft, Check, Copy, Wallet, X } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Toast } from '../ui/Feedback/index.tsx';
 
 interface UserDashboardProps {
@@ -36,6 +54,7 @@ interface UserDashboardProps {
 export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding }) => {
   const { user, logout } = useAuth();
   const { t } = useTheme();
+
   const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -44,16 +63,23 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Quick Actions Overlays
-  const [activeModal, setActiveModal] = useState<'none' | 'deposit' | 'withdraw'>('none');
+  // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [copiedAddress, setCopiedAddress] = useState(false);
 
-  // Form Fields
-  const [depositAmount, setDepositAmount] = useState('1000');
-  const [depositNetwork, setDepositNetwork] = useState('USDT_BEP20');
-  const [withdrawAmount, setWithdrawAmount] = useState('500');
-  const [withdrawAddress, setWithdrawAddress] = useState('0x72a9df28c9e120...f82e');
+  // Derive current VIP tier and identity properties after variables have been initialized
+  const vipTier = dashboardData?.vip?.tier || user?.vipTier || 'VIP1';
+  const currentVip = VIP_CONFIG[vipTier] || VIP_CONFIG['VIP1'];
+
+  const realIdentity = {
+    name: user?.name || user?.email?.split('@')[0] || 'User',
+    id: user?.userId || 'MF-N/A',
+    rankLabel: currentVip.label,
+    rankColor: currentVip.color,
+    rankBg: currentVip.bg,
+    rankIcon: currentVip.icon,
+    streakDays: dashboardData?.team?.totalReferralCount > 0 ? 7 : 0,
+    online: true,
+  };
 
   const showToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -87,47 +113,16 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
 
   const handleQuickAction = (actionType: 'deposit' | 'withdraw' | 'claim' | 'team' | 'invite') => {
     if (actionType === 'deposit') {
-      setActiveModal('deposit');
+      setActiveTab('deposit');
     } else if (actionType === 'withdraw') {
-      setActiveModal('withdraw');
+      setActiveTab('withdrawal');
     } else if (actionType === 'claim') {
-      setActiveTab('dashboard');
-      showToast('Centered on Daily Yield Claim widget');
+      setActiveTab('rewards');
     } else if (actionType === 'team') {
       setActiveTab('team');
     } else if (actionType === 'invite') {
-      const code = user?.referralCode;
-      if (code) {
-        navigator.clipboard.writeText(`https://metafirm.app/ref/${code}`);
-        showToast('Referral link copied to clipboard!');
-      } else {
-        showToast('Referral code unavailable — sync your profile and try again.');
-      }
+      setActiveTab('task');
     }
-  };
-
-  const triggerMockDeposit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setActiveModal('none');
-    showToast(`Inbound request of $${depositAmount} USD transmitted. Waiting for ledger verification...`);
-  };
-
-  const triggerMockWithdraw = (e: React.FormEvent) => {
-    e.preventDefault();
-    setActiveModal('none');
-    showToast(`Debit transfer of $${withdrawAmount} USD initiated. Check Security Logs...`);
-  };
-
-  const getDepositAddress = () => {
-    if (!dashboardData || !dashboardData.depositAddresses) return '0x9821c9e2b45a90d1f43a8b32d541';
-    const found = dashboardData.depositAddresses.find(da => da.network === depositNetwork);
-    return found ? found.address : '0x9821c9e2b45a90d1f43a8b32d541';
-  };
-
-  const handleCopyWalletAddress = () => {
-    navigator.clipboard.writeText(getDepositAddress());
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2000);
   };
 
   // Note: Team/Profile/Security/Settings/Support/Transactions still use their
@@ -143,7 +138,11 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
   const renderActiveView = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardHome onQuickAction={handleQuickAction} />;
+        return (
+          <DashboardLayout variant="blank">
+            <DashboardHome dashboardData={dashboardData} onRefresh={fetchDashboard} onQuickAction={handleQuickAction} />
+          </DashboardLayout>
+        );
       case 'profile':
         return <ProfileView />;
       case 'team':
@@ -156,8 +155,39 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
         return wrapLegacyView(<SettingsView />);
       case 'support':
         return wrapLegacyView(<SupportView />);
+      case 'deposit':
+        return (
+          <DepositView
+            dashboardData={dashboardData}
+            showToast={showToast}
+            onBack={() => setActiveTab('dashboard')}
+          />
+        );
+      case 'withdrawal':
+        return (
+          <WithdrawalView
+            showToast={showToast}
+            onBack={() => setActiveTab('dashboard')}
+          />
+        );
+      case 'rewards':
+        return (
+          <RewardsView
+            onBack={() => setActiveTab('dashboard')}
+          />
+        );
+      case 'task':
+        return (
+          <TaskView
+            onBack={() => setActiveTab('dashboard')}
+          />
+        );
       default:
-        return <DashboardHome onQuickAction={handleQuickAction} />;
+        return (
+          <DashboardLayout variant="blank">
+            <DashboardHome dashboardData={dashboardData} onRefresh={fetchDashboard} onQuickAction={handleQuickAction} />
+          </DashboardLayout>
+        );
     }
   };
 
@@ -182,7 +212,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       <div className="relative z-10 flex-grow flex flex-col min-w-0">
 
         {/* 2.1 Top Bar Navigation */}
-        <TopNav identity={mockIdentity} />
+        <TopNav identity={realIdentity} />
 
         {/* 2.2 Scrollable Content Canvas Container */}
         <main className="flex-grow p-4 sm:p-6 md:p-8 overflow-y-auto space-y-6 max-w-7xl w-full mx-auto pb-[calc(122px+env(safe-area-inset-bottom)+1.5rem)] md:pb-8">
@@ -210,114 +240,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
         setActiveTab={setActiveTab}
         onMoreClick={() => setIsMobileSidebarOpen(true)}
       />
-
-      {/* 3. Popups/Modals Overlays for Quick Actions */}
-      {activeModal === 'deposit' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0" onClick={() => setActiveModal('none')} />
-          <div className={`rounded-3xl border p-6 shadow-2xl max-w-md w-full relative z-10 text-left space-y-5 backdrop-blur-xl ${t.isDark ? 'bg-[#0e1230]' : 'bg-white'} ${t.sep}`}>
-            <div className={`flex items-center justify-between pb-3 border-b ${t.sep}`}>
-              <div className="flex items-center space-x-2 text-cyan-500">
-                <Wallet className="w-5 h-5" />
-                <h3 className={`font-display font-extrabold text-sm sm:text-base ${t.text}`}>Inbound Deposit Gateway</h3>
-              </div>
-              <button onClick={() => setActiveModal('none')} className={`p-1 rounded-lg cursor-pointer ${t.textMuted} hover:text-cyan-500`}>
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className={`text-xs leading-relaxed font-sans ${t.textSub}`}>
-              To credit your balance sheets instantly, transmit USDT (ERC20) to your dedicated multi-sig account address below.
-            </p>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <span className={`text-[9px] font-mono font-bold uppercase block ${t.textMuted}`}>Select Blockchain Network</span>
-                <div className="grid grid-cols-3 gap-2">
-                  {['USDT_BEP20', 'USDT_POLYGON', 'USDT_TRC20'].map((net) => (
-                    <button
-                      key={net}
-                      type="button"
-                      onClick={() => setDepositNetwork(net)}
-                      className={`py-1.5 px-2 rounded-xl text-[10px] font-mono border transition-all cursor-pointer text-center ${
-                        depositNetwork === net
-                          ? 'bg-cyan-500/15 text-cyan-500 border-cyan-500/30 font-bold'
-                          : `${t.cardInner} ${t.textSub} border-transparent`
-                      }`}
-                    >
-                      {net.replace('USDT_', '')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className={`text-[9px] font-mono font-bold uppercase block ${t.textMuted}`}>Your Destination Address ({depositNetwork.replace('USDT_', '')})</span>
-                <div className={`p-3 rounded-2xl flex items-center justify-between font-mono text-xs select-all ${t.inset} ${t.text}`}>
-                  <span className="truncate">{getDepositAddress()}</span>
-                  <button onClick={handleCopyWalletAddress} className={`p-1.5 rounded-lg cursor-pointer ${t.pill} ${t.textSub} hover:text-cyan-500`}>
-                    {copiedAddress ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              <form onSubmit={triggerMockDeposit} className="space-y-4">
-                <Input
-                  label="Expected Value Amount (USD equivalent)"
-                  type="number"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  required
-                />
-                <Button type="submit" className="w-full">
-                  Transmit Inbound Notice
-                </Button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeModal === 'withdraw' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0" onClick={() => setActiveModal('none')} />
-          <div className={`rounded-3xl border p-6 shadow-2xl max-w-md w-full relative z-10 text-left space-y-5 backdrop-blur-xl ${t.isDark ? 'bg-[#0e1230]' : 'bg-white'} ${t.sep}`}>
-            <div className={`flex items-center justify-between pb-3 border-b ${t.sep}`}>
-              <div className="flex items-center space-x-2 text-amber-500">
-                <Wallet className="w-5 h-5" />
-                <h3 className={`font-display font-extrabold text-sm sm:text-base ${t.text}`}>Outbound Withdrawal Gateway</h3>
-              </div>
-              <button onClick={() => setActiveModal('none')} className={`p-1 rounded-lg cursor-pointer ${t.textMuted} hover:text-cyan-500`}>
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className={`text-xs leading-relaxed font-sans ${t.textSub}`}>
-              Initiate a debit from your ledger balances. Transmissions are finalized after passing zero-trust dual-factor validation.
-            </p>
-
-            <form onSubmit={triggerMockWithdraw} className="space-y-4">
-              <Input
-                label="Destination Wallet Address"
-                value={withdrawAddress}
-                onChange={(e) => setWithdrawAddress(e.target.value)}
-                required
-                className="font-mono text-xs"
-              />
-              <Input
-                label="Withdrawal Amount (USD)"
-                type="number"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                required
-              />
-              <Button type="submit" variant="primary" className="w-full bg-amber-600 hover:bg-amber-700 hover:shadow-amber-500/10 border-none">
-                Submit Outbound Request
-              </Button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Toast Feedbacks */}
       {toastMessage && (

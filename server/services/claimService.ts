@@ -57,9 +57,9 @@ export class ClaimService {
     const closeTime = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999));
 
     // Check if a claim already exists for this user inside this window
-    const activeClaims = await claimRepository.findActiveClaimsInWindow(userId, date);
-    if (activeClaims.length > 0) {
-      return activeClaims[0]; // Already generated
+    const existingClaims = await claimRepository.findAnyClaimInWindow(userId, date);
+    if (existingClaims.length > 0) {
+      return existingClaims[0]; // Already generated (could be PENDING, CLAIMED, etc.)
     }
 
     const claim = await claimRepository.createClaim({

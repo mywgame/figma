@@ -139,6 +139,28 @@ export class ClaimRepository {
   }
 
   /**
+   * Find any daily claim record in today's window regardless of its status (PENDING, CLAIMED, etc.)
+   */
+  async findAnyClaimInWindow(userId: string, date: Date) {
+    try {
+      const result = await db
+        .select()
+        .from(claims)
+        .where(
+          and(
+            eq(claims.userId, userId),
+            lte(claims.claimWindowOpenTime, date),
+            gte(claims.claimWindowCloseTime, date)
+          )
+        );
+      return result;
+    } catch (error) {
+      console.error('Database query (findAnyClaimInWindow) failed:', error);
+      throw new Error('Failed to look up any claims in the current window.');
+    }
+  }
+
+  /**
    * Find any currently active pending claim(s) where the current time falls inside the window
    */
   async findActiveClaimsInWindow(userId: string, date: Date) {

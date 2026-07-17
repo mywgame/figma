@@ -4,166 +4,242 @@
  */
 
 import React, { useState } from 'react';
-import { ShieldAlert, ShieldCheck, Key, Shield, Eye, Settings, Terminal, Activity } from 'lucide-react';
-import { Card } from '../ui/Cards/index.tsx';
-import { Button } from '../ui/Buttons/index.tsx';
+import {
+  ShieldAlert,
+  ToggleLeft,
+  ToggleRight,
+  UserX,
+  Lock,
+  Unlock,
+  Key,
+  Laptop,
+  Globe,
+  Bell,
+  RefreshCw,
+  AlertTriangle
+} from 'lucide-react';
+import { Card, Button, Badge } from '../ui/index.ts';
+import { ThemeTokens } from '../ui/themeTokens.ts';
+import { Toast } from '../ui/Feedback/index.tsx';
+import { SESSIONS_MOCK, ALERTS_MOCK } from './mockData.ts';
 
 interface SecurityViewProps {
-  onAuditLog: (action: string, module: 'SECURITY') => void;
+  t: ThemeTokens;
+  isDark: boolean;
 }
 
-export const SecurityView: React.FC<SecurityViewProps> = ({ onAuditLog }) => {
-  const [ipWhitelist, setIpWhitelist] = useState('192.168.1.0/24, 10.0.0.0/8, 127.0.0.1');
-  const [enforceTwoFactor, setEnforceTwoFactor] = useState(true);
-  const [hsmState, setHsmState] = useState<'NOMINAL' | 'LOCKED' | 'SYNCING'>('NOMINAL');
-  const [updating, setUpdating] = useState(false);
-  const [success, setSuccess] = useState(false);
+export const SecurityView: React.FC<SecurityViewProps> = ({ t, isDark }) => {
+  const [sessions, setSessions] = useState(SESSIONS_MOCK);
+  const [alerts, setAlerts] = useState(ALERTS_MOCK);
+  
+  // Security Switches
+  const [freezeWithdrawals, setFreezeWithdrawals] = useState(false);
+  const [freezeRegistrations, setFreezeRegistrations] = useState(false);
+  const [enforce2FA, setEnforce2FA] = useState(true);
 
-  const handleUpdateSecurity = (e: React.FormEvent) => {
-    e.preventDefault();
-    setUpdating(true);
-    setSuccess(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-    setTimeout(() => {
-      setUpdating(false);
-      setSuccess(true);
-      onAuditLog(`Synchronized zero-trust security settings. Whitelisted IPs: [${ipWhitelist}]. 2FA Enforced: ${enforceTwoFactor}`, 'SECURITY');
-      setTimeout(() => setSuccess(false), 3000);
-    }, 1000);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const securityIncidents = [
-    { event: 'Root Access Token Issued', level: 'INFO', ip: '192.168.1.45', time: '2026-06-28 15:42:10 UTC' },
-    { event: 'HSM Cryptographic Key Synced', level: 'INFO', ip: 'Local Host', time: '2026-06-28 12:00:00 UTC' },
-    { event: 'Unauthorized Access Blocked', level: 'WARNING', ip: '45.120.44.2', time: '2026-06-27 22:15:34 UTC' },
-  ];
+  // Toggle global lock
+  const handleToggleFreezeWithdrawals = () => {
+    const nextState = !freezeWithdrawals;
+    setFreezeWithdrawals(nextState);
+    showToast(`Withdrawals freeze set to ${nextState ? 'ACTIVE (All outgoing paused)' : 'INACTIVE (Standard withdrawals)'}`);
+  };
+
+  const handleToggleFreezeRegistrations = () => {
+    const nextState = !freezeRegistrations;
+    setFreezeRegistrations(nextState);
+    showToast(`New registrations set to ${nextState ? 'BLOCKED' : 'ALLOWED'}`);
+  };
+
+  const handleToggle2FA = () => {
+    const nextState = !enforce2FA;
+    setEnforce2FA(nextState);
+    showToast(`Mandatory admin 2FA set to ${nextState ? 'ENABLED' : 'DISABLED (Warning!)'}`);
+  };
+
+  // Revoke session
+  const revokeSession = (adminName: string) => {
+    // TODO: Replace with real API call
+    setSessions(prev => prev.map(s => (s.admin === adminName ? { ...s, active: false } : s)));
+    showToast(`Session for auditor account ${adminName} has been revoked.`);
+  };
+
+  // Clear alerts feed
+  const clearAlerts = () => {
+    setAlerts([]);
+    showToast('Alerts threat logs feed cleared.');
+  };
 
   return (
-    <div className="space-y-6 text-left max-w-4xl">
-      
-      {/* Risk Metrics banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        
-        <Card className="p-5 space-y-2">
-          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest block">HSM KEYSTORE CHASSIS</span>
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <h3 className="font-display font-extrabold text-gray-950 text-base">NOMINAL (SECURE)</h3>
-          </div>
-          <p className="text-[10px] font-mono text-gray-400">HARDWARE ENCLAVE SYNCED</p>
-        </Card>
-
-        <Card className="p-5 space-y-2">
-          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest block">SSL / TLS CRYPTO STACK</span>
-          <h3 className="font-display font-extrabold text-gray-950 text-base">SHA-256 GCM 2048bit</h3>
-          <p className="text-[10px] font-mono text-emerald-600 font-bold">100% TRANSIT COVERAGE</p>
-        </Card>
-
-        <Card className="p-5 space-y-2">
-          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest block">ZERO-TRUST AUDITING</span>
-          <h3 className="font-display font-extrabold text-gray-950 text-base">Enabled</h3>
-          <p className="text-[10px] font-mono text-gray-400">ALL DISPATCHES LOGGED</p>
-        </Card>
-
+    <div className="space-y-6 text-left">
+      {/* Header Banner */}
+      <div>
+        <h2 className="text-xl font-bold tracking-tight">Security Command</h2>
+        <p className={`text-xs mt-1 ${t.textSub}`}>Monitor administrator sessions, deploy emergency circuit breakers, and review security threat logs.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-        
-        {/* Security configuration editor */}
-        <form onSubmit={handleUpdateSecurity} className="md:col-span-5 bg-white border border-gray-100 p-5 rounded-2xl shadow-sm space-y-4 flex flex-col justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-gray-50">
-              <Shield className="w-4 h-4 text-blue-500" />
-              <h3 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">FIREWALL CONTROLLER</h3>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left: Global Emergency Breaks & Switches */}
+        <div className="lg:col-span-5 space-y-5">
+          <Card className="p-6 space-y-5">
+            <h3 className="font-display font-bold text-sm border-b pb-2 flex items-center gap-2">
+              <Lock className="w-4 h-4 text-red-500" />
+              <span>Platform Security Switches</span>
+            </h3>
 
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-700 tracking-wide">
-                Whitelisted Administrator IP Ranges
-              </label>
-              <textarea
-                rows={3}
-                value={ipWhitelist}
-                onChange={(e) => setIpWhitelist(e.target.value)}
-                className="w-full px-3.5 py-2 text-xs border border-gray-200 focus:border-blue-500 rounded-xl focus:outline-none bg-gray-50/20 font-mono resize-none"
-                required
-              />
-              <span className="text-[9px] text-gray-400 font-sans block">
-                Committed values must be valid IPv4 addresses or CIDR blocks separated by commas.
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between py-2 border-t border-gray-50 mt-2">
-              <div className="space-y-0.5">
-                <span className="text-xs font-bold text-gray-950 font-display">Enforce Multi-sig 2FA Checks</span>
-                <p className="text-[9px] text-gray-400 font-sans">Mandatory for withdrawal approvals.</p>
+            <div className="space-y-4">
+              {/* Switch 1: Withdrawals block */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold block">Freeze All Withdrawals</span>
+                  <p className={`text-[10px] leading-relaxed ${t.textMuted}`}>Emergency break. Halts all outbound payouts immediately.</p>
+                </div>
+                <button onClick={handleToggleFreezeWithdrawals} className="cursor-pointer shrink-0 transition-all text-red-500">
+                  {freezeWithdrawals ? <ToggleRight className="w-10 h-10" /> : <ToggleLeft className="w-10 h-10 text-gray-400" />}
+                </button>
               </div>
-              <input
-                type="checkbox"
-                checked={enforceTwoFactor}
-                onChange={() => setEnforceTwoFactor(!enforceTwoFactor)}
-                className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 bg-gray-50 cursor-pointer"
-              />
+
+              {/* Switch 2: Registrations freeze */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold block">Freeze Registrations</span>
+                  <p className={`text-[10px] leading-relaxed ${t.textMuted}`}>Blocks new users from creating credentials temporarily.</p>
+                </div>
+                <button onClick={handleToggleFreezeRegistrations} className="cursor-pointer shrink-0 transition-all text-amber-500">
+                  {freezeRegistrations ? <ToggleRight className="w-10 h-10" /> : <ToggleLeft className="w-10 h-10 text-gray-400" />}
+                </button>
+              </div>
+
+              {/* Switch 3: 2FA Enforce */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold block">Mandatory Auditor 2FA</span>
+                  <p className={`text-[10px] leading-relaxed ${t.textMuted}`}>Forces secure token authentication for all admin levels.</p>
+                </div>
+                <button onClick={handleToggle2FA} className="cursor-pointer shrink-0 transition-all text-emerald-500">
+                  {enforce2FA ? <ToggleRight className="w-10 h-10" /> : <ToggleLeft className="w-10 h-10 text-gray-400" />}
+                </button>
+              </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="pt-2">
-            {success && (
-              <span className="text-xs font-bold text-emerald-600 font-mono flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-xl mb-3">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                Security Policies Sync Succeeded
-              </span>
-            )}
-            <Button
-              type="submit"
-              isLoading={updating}
-              className="w-full text-xs font-bold py-3 rounded-2xl"
-              leftIcon={<Key className="w-3.5 h-3.5" />}
-            >
-              Commit Firewalls & Keys
-            </Button>
-          </div>
-        </form>
-
-        {/* Real-time incident logs list */}
-        <div className="md:col-span-7 bg-white border border-gray-100 p-5 rounded-2xl shadow-sm space-y-4 flex flex-col justify-between">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-gray-50">
-              <Terminal className="w-4 h-4 text-rose-500" />
-              <h3 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">REAL-TIME ACCESS FEED</h3>
+          {/* Security alerts Feed bento */}
+          <Card className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-display font-bold text-xs flex items-center gap-2 text-red-400 uppercase tracking-wider">
+                <Bell className="w-4 h-4" />
+                <span>Threat Alerts Feed</span>
+              </h4>
+              {alerts.length > 0 && (
+                <button
+                  onClick={clearAlerts}
+                  className={`text-[9px] font-mono font-bold uppercase transition-all hover:underline cursor-pointer ${t.textMuted}`}
+                >
+                  Dismiss Feed
+                </button>
+              )}
             </div>
 
-            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-              {securityIncidents.map((inc, idx) => (
-                <div key={idx} className="p-2.5 bg-gray-50 border border-gray-100 rounded-xl flex items-start gap-2.5 text-left text-xs font-mono">
-                  {inc.level === 'WARNING' ? (
-                    <ShieldAlert className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="space-y-0.5 flex-grow">
-                    <div className="flex justify-between text-[10px]">
-                      <span className={`font-bold ${inc.level === 'WARNING' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                        [{inc.level}]
-                      </span>
-                      <span className="text-gray-400 font-semibold">{inc.time}</span>
+            <div className="space-y-3">
+              {alerts.length > 0 ? (
+                alerts.map((al, idx) => (
+                  <div
+                    key={idx}
+                    className={`rounded-xl p-3 border text-left flex items-start gap-3 ${
+                      al.level === 'High' ? 'border-red-500/20 bg-red-500/5' : 'border-amber-500/20 bg-amber-500/5'
+                    }`}
+                  >
+                    <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${al.level === 'High' ? 'text-red-500' : 'text-amber-500'}`} />
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-xs font-bold truncate leading-tight">{al.msg}</p>
+                      <p className={`text-[9px] font-mono font-medium ${t.textMuted}`}>{al.time}</p>
                     </div>
-                    <p className="text-gray-800 font-bold font-sans mt-0.5">{inc.event}</p>
-                    <span className="text-[10px] text-gray-400 font-bold block">IP Origin: {inc.ip}</span>
                   </div>
+                ))
+              ) : (
+                <div className={`p-4 text-center font-medium text-xs ${t.textMuted}`}>
+                  No active security threats registered.
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Right: Active auditor sessions */}
+        <Card className="lg:col-span-7 p-0 overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className={`p-4 border-b ${t.sep}`}>
+              <h3 className="font-display font-bold text-sm flex items-center gap-2">
+                <Key className="w-4 h-4 text-purple-500" />
+                <span>Active Administrator Sessions</span>
+              </h3>
+            </div>
+
+            <div className="divide-y divide-gray-100/10">
+              {sessions.map((sess, idx) => (
+                <div key={idx} className={`p-4 flex items-center justify-between gap-4 text-xs transition-colors ${t.cardInner}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                      sess.active ? 'bg-emerald-500/15 text-emerald-500' : 'bg-gray-500/15 text-gray-500'
+                    }`}>
+                      {sess.admin[0].toUpperCase()}
+                    </div>
+                    <div className="text-left">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold">{sess.admin}</span>
+                        <Badge variant={sess.active ? 'emerald' : 'neutral'}>
+                          {sess.active ? 'Active Now' : 'Closed'}
+                        </Badge>
+                      </div>
+                      <div className={`flex items-center gap-3 text-[10px] font-medium mt-1 ${t.textMuted}`}>
+                        <span className="flex items-center gap-1">
+                          <Globe className="w-3.5 h-3.5" />
+                          {sess.location} ({sess.ip})
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Laptop className="w-3.5 h-3.5" />
+                          {sess.device}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {sess.active ? (
+                    <button
+                      onClick={() => revokeSession(sess.admin)}
+                      className="p-1.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                      title="Revoke session credentials"
+                    >
+                      <UserX className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <span className={`text-[10px] font-mono font-bold uppercase shrink-0 ${t.textMuted}`}>Expired</span>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="pt-3 border-t border-gray-50 text-center flex items-center justify-center gap-1 text-[9px] font-mono text-gray-400 font-bold">
-            <Activity className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
-            SECURE REPLICATED NETWORKING LOGS ACTIVE
+          <div className={`p-4 border-t bg-black/5 text-center text-[10px] font-medium ${t.sep} ${t.textMuted}`}>
+            Zero-Trust access policies are enforced. Sessions terminate automatically after 15 minutes of inactivity.
           </div>
-        </div>
-
+        </Card>
       </div>
 
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          variant="success"
+          onClose={() => setToastMessage(null)}
+        />
+      )}
     </div>
   );
 };
+export default SecurityView;

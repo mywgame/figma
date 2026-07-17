@@ -143,10 +143,11 @@ export class DashboardService {
         teamTotalValidCount: levelAValidCount + levelBcdValidCount,
       },
       dailyClaim: {
-        available: dailyClaimAvailable,
+        available: dailyClaimAvailable && (pendingClaim ? pendingClaim.claimStatus === 'PENDING' : false),
         claimId: pendingClaim ? pendingClaim.id : null,
         amount: pendingClaim ? pendingClaim.rewardAmount : '0.00000000',
         windowClose: pendingClaim ? pendingClaim.claimWindowCloseTime : null,
+        status: pendingClaim ? pendingClaim.claimStatus : 'PENDING',
       },
       recentTransactions,
       recentActivities,

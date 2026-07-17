@@ -21,8 +21,10 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Shield
+  Shield,
+  Sparkles
 } from 'lucide-react';
+import { useTheme } from '../../hooks/useTheme.ts';
 
 export type AdminTab = 
   | 'dashboard'
@@ -37,7 +39,8 @@ export type AdminTab =
   | 'announcements'
   | 'audit'
   | 'security'
-  | 'settings';
+  | 'settings'
+  | 'trial_fund';
 
 interface AdminSidebarProps {
   activeTab: AdminTab;
@@ -55,12 +58,12 @@ const ROLE_PERMISSIONS: Record<string, AdminTab[]> = {
   admin: [
     'dashboard', 'users', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
-    'audit', 'security', 'settings'
+    'audit', 'security', 'settings', 'trial_fund'
   ],
   superadmin: [
     'dashboard', 'users', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
-    'audit', 'security', 'settings'
+    'audit', 'security', 'settings', 'trial_fund'
   ],
   operator: [
     'dashboard', 'users', 'deposits', 'withdrawals', 'announcements', 'audit', 'security'
@@ -87,6 +90,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onLogout,
   userRole = 'user'
 }) => {
+  const { t, isDark } = useTheme();
+
   interface MenuItem {
     id: AdminTab;
     label: string;
@@ -100,9 +105,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { id: 'deposits', label: 'Deposits', icon: ArrowDownLeft, color: 'text-emerald-500' },
     { id: 'withdrawals', label: 'Withdrawals', icon: ArrowUpRight, color: 'text-amber-500' },
     { id: 'vip', label: 'VIP Management', icon: Award, color: 'text-purple-500' },
-    { id: 'income', label: 'Income Engine', icon: TrendingUp, color: 'text-blue-500' },
+    { id: 'income', label: 'Team Commission Engine', icon: TrendingUp, color: 'text-blue-500' },
     { id: 'rewards', label: 'Rewards Pool', icon: Gift, color: 'text-rose-500' },
     { id: 'salary', label: 'Corporate Salary', icon: Coins, color: 'text-indigo-500' },
+    { id: 'trial_fund', label: 'Trial Fund', icon: Sparkles, color: 'text-amber-400' },
     { id: 'support', label: 'Support Tickets', icon: LifeBuoy },
     { id: 'announcements', label: 'Announcements', icon: Megaphone },
     { id: 'audit', label: 'Audit Logs', icon: FileText },
@@ -121,20 +127,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   };
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white border-r border-gray-100">
+    <div className={`flex flex-col h-full border-r ${isDark ? 'bg-[#0a0d26]' : 'bg-white'} ${t.sep}`}>
       {/* Brand Logo Header */}
-      <div className={`p-5 flex items-center justify-between border-b border-gray-50/80 ${isCollapsed ? 'justify-center' : ''}`}>
+      <div className={`p-5 flex items-center justify-between border-b ${t.sep} ${isCollapsed ? 'justify-center' : ''}`}>
         {!isCollapsed ? (
           <div className="flex items-center space-x-2.5 text-left">
             <div className="bg-blue-600 text-white p-1.5 rounded-lg flex items-center justify-center shadow-sm">
               <Shield className="w-4.5 h-4.5 text-amber-300" />
             </div>
             <div>
-              <span className="font-display font-extrabold text-sm tracking-tight text-gray-950 block">
+              <span className={`font-display font-extrabold text-sm tracking-tight block ${t.text}`}>
                 MetaFirm Admin
               </span>
-              <span className="text-[9px] font-mono text-blue-600 uppercase tracking-widest block font-bold leading-none">
-                OPS TERMINAL
+              <span className={`text-[9px] font-mono uppercase tracking-widest block font-bold leading-none ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                Admin Panel
               </span>
             </div>
           </div>
@@ -147,7 +153,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         {/* Collapsible Trigger button for Desktop */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hidden md:flex p-1 rounded-lg hover:bg-gray-50 text-gray-400 hover:text-gray-600 border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+          className={`hidden md:flex p-1 rounded-lg border border-transparent hover:border-gray-100/10 transition-all cursor-pointer ${
+            isDark ? 'hover:bg-white/10 text-gray-400 hover:text-white' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-900'
+          }`}
           title={isCollapsed ? "Expand panel" : "Collapse panel"}
         >
           {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -163,14 +171,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               key={item.id}
               onClick={() => handleTabClick(item.id)}
-              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-blue-50 text-blue-600 border border-blue-100/50'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
+                  ? isDark
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    : 'bg-blue-50 text-blue-600 border border-blue-100/50'
+                  : isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
               } ${isCollapsed ? 'justify-center px-0' : ''}`}
               title={isCollapsed ? item.label : undefined}
             >
-              <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-blue-600' : item.color || 'text-gray-400'}`} />
+              <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? (isDark ? 'text-white' : 'text-blue-600') : item.color || 'text-gray-400'}`} />
               {!isCollapsed && <span className="truncate">{item.label}</span>}
             </button>
           );
@@ -178,16 +190,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </nav>
 
       {/* Sidebar Footer block */}
-      <div className="p-3 border-t border-gray-50 bg-gray-50/30">
+      <div className={`p-3 border-t bg-black/10 ${t.sep}`}>
         <button
           onClick={onLogout}
-          className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer ${
-            isCollapsed ? 'justify-center px-0' : ''
-          }`}
+          className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+            isDark
+              ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300'
+              : 'text-red-600 hover:bg-red-50 hover:text-red-700'
+          } ${isCollapsed ? 'justify-center px-0' : ''}`}
           title={isCollapsed ? "Logout Session" : undefined}
         >
           <LogOut className="w-4 h-4 flex-shrink-0" />
-          {!isCollapsed && <span className="truncate">Sign Out Console</span>}
+          {!isCollapsed && <span className="truncate">Sign Out</span>}
         </button>
       </div>
     </div>
@@ -214,7 +228,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           />
           
           {/* Drawer container body */}
-          <div className="relative flex flex-col w-64 max-w-xs h-full bg-white transform transition-transform duration-300">
+          <div className={`relative flex flex-col w-64 max-w-xs h-full transform transition-transform duration-300 ${isDark ? 'bg-[#0a0d26]' : 'bg-white'}`}>
             {sidebarContent}
           </div>
         </div>

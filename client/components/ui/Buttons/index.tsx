@@ -43,10 +43,10 @@ export const Button: React.FC<ButtonProps> = ({
   // Color & layout variations based on design tokens
   const variantClasses = {
     primary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/10 focus-visible:ring-blue-600 hover:scale-[1.02] hover:-translate-y-0.5',
-    secondary: 'bg-white hover:bg-gray-50 text-gray-800 border border-gray-200 shadow-xs focus-visible:ring-blue-600 hover:scale-[1.02] hover:-translate-y-0.5',
+    secondary: 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-white/10 shadow-xs focus-visible:ring-blue-600 hover:scale-[1.02] hover:-translate-y-0.5',
     danger: 'bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/10 focus-visible:ring-red-500 hover:scale-[1.02] hover:-translate-y-0.5',
-    ghost: 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 focus-visible:ring-blue-600',
-    icon: 'p-2.5 rounded-2xl bg-white border border-gray-100 text-gray-600 shadow-xs hover:text-blue-600 hover:border-blue-100 focus-visible:ring-blue-600',
+    ghost: 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5 focus-visible:ring-blue-600',
+    icon: 'p-2.5 rounded-2xl bg-white dark:bg-white/10 border border-gray-100 dark:border-white/10 text-gray-600 dark:text-gray-300 shadow-xs hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-100 dark:hover:border-blue-900 focus-visible:ring-blue-600',
   };
 
   // Override specific classes if it's an icon-only button without children

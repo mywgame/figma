@@ -10,8 +10,15 @@ import { RingProgress } from '../ui/RingProgress.tsx';
 import { MockDailyClaim } from '../../mocks/dashboardMockData.ts';
 
 interface DailyClaimCardProps {
-  dailyClaim: MockDailyClaim;
-  onClaim?: () => void;
+  dailyClaim: {
+    percent: number;
+    secondsRemaining: number;
+    rewardAmount: number;
+    lastStatus: 'success' | 'failed' | 'none';
+    streakDays: number;
+    status?: string;
+  };
+  onClaim?: () => Promise<any>;
 }
 
 /**
@@ -26,7 +33,12 @@ export const DailyClaimCard: React.FC<DailyClaimCardProps> = ({ dailyClaim, onCl
   const { t } = useTheme();
   const [secondsLeft, setSecondsLeft] = useState(dailyClaim.secondsRemaining);
   const [claiming, setClaiming] = useState(false);
-  const [claimed, setClaimed] = useState(false);
+  const [claimed, setClaimed] = useState(dailyClaim.status === 'CLAIMED');
+
+  useEffect(() => {
+    setSecondsLeft(dailyClaim.secondsRemaining);
+    setClaimed(dailyClaim.status === 'CLAIMED');
+  }, [dailyClaim]);
 
   useEffect(() => {
     const interval = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
@@ -38,16 +50,19 @@ export const DailyClaimCard: React.FC<DailyClaimCardProps> = ({ dailyClaim, onCl
   const m = Math.floor((secondsLeft % 3600) / 60);
   const s = secondsLeft % 60;
 
-  const handleClaim = () => {
+  const handleClaim = async () => {
     if (claiming || claimed || !claimReady) return;
     setClaiming(true);
-    onClaim?.();
-    // Mock-only optimistic transition — Phase 2 replaces this with the real
-    // API call result instead of a fixed timeout.
-    setTimeout(() => {
+    try {
+      if (onClaim) {
+        await onClaim();
+        setClaimed(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+    } finally {
       setClaiming(false);
-      setClaimed(true);
-    }, 2000);
+    }
   };
 
   return (

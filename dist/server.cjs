@@ -8,11 +8,11 @@ var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
-var __copyProps = (to, from, except, desc12) => {
+var __copyProps = (to, from, except, desc16) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
       if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc12 = __getOwnPropDesc(from, key)) || desc12.enumerable });
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc16 = __getOwnPropDesc(from, key)) || desc16.enumerable });
   }
   return to;
 };
@@ -26,7 +26,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // server.ts
-var import_express5 = __toESM(require("express"), 1);
+var import_express6 = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_cookie_parser = __toESM(require("cookie-parser"), 1);
 var import_vite = require("vite");
@@ -138,14 +138,23 @@ var errorHandler = (err, req, res, next) => {
 
 // server/middlewares/security.ts
 var helmetMiddleware = (req, res, next) => {
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: referrer;"
-  );
+  if (process.env.NODE_ENV !== "production") {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob: android-asset: referrer; frame-ancestors *;"
+    );
+  } else {
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: referrer;"
+    );
+  }
   next();
 };
 var corsMiddleware = (req, res, next) => {
@@ -189,10 +198,10 @@ var rateLimiter = (windowMs = 15 * 60 * 1e3, maxRequests = 100) => {
 };
 
 // server/routes/index.ts
-var import_express4 = require("express");
+var import_express5 = require("express");
 
 // server/routes/v1/index.ts
-var import_express3 = require("express");
+var import_express4 = require("express");
 
 // server/routes/v1/userRoutes.ts
 var import_express = require("express");
@@ -3012,6 +3021,24 @@ var ClaimRepository = class {
     }
   }
   /**
+   * Find any daily claim record in today's window regardless of its status (PENDING, CLAIMED, etc.)
+   */
+  async findAnyClaimInWindow(userId, date) {
+    try {
+      const result = await db.select().from(claims).where(
+        (0, import_drizzle_orm26.and)(
+          (0, import_drizzle_orm26.eq)(claims.userId, userId),
+          (0, import_drizzle_orm26.lte)(claims.claimWindowOpenTime, date),
+          (0, import_drizzle_orm26.gte)(claims.claimWindowCloseTime, date)
+        )
+      );
+      return result;
+    } catch (error) {
+      console.error("Database query (findAnyClaimInWindow) failed:", error);
+      throw new Error("Failed to look up any claims in the current window.");
+    }
+  }
+  /**
    * Find any currently active pending claim(s) where the current time falls inside the window
    */
   async findActiveClaimsInWindow(userId, date) {
@@ -3074,9 +3101,9 @@ var ClaimService = class {
     }
     const openTime = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
     const closeTime = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999));
-    const activeClaims = await claimRepository.findActiveClaimsInWindow(userId, date);
-    if (activeClaims.length > 0) {
-      return activeClaims[0];
+    const existingClaims = await claimRepository.findAnyClaimInWindow(userId, date);
+    if (existingClaims.length > 0) {
+      return existingClaims[0];
     }
     const claim = await claimRepository.createClaim({
       userId,
@@ -3292,10 +3319,11 @@ var DashboardService = class {
         teamTotalValidCount: levelAValidCount + levelBcdValidCount
       },
       dailyClaim: {
-        available: dailyClaimAvailable,
+        available: dailyClaimAvailable && (pendingClaim ? pendingClaim.claimStatus === "PENDING" : false),
         claimId: pendingClaim ? pendingClaim.id : null,
         amount: pendingClaim ? pendingClaim.rewardAmount : "0.00000000",
-        windowClose: pendingClaim ? pendingClaim.claimWindowCloseTime : null
+        windowClose: pendingClaim ? pendingClaim.claimWindowCloseTime : null,
+        status: pendingClaim ? pendingClaim.claimStatus : "PENDING"
       },
       recentTransactions,
       recentActivities,
@@ -3979,20 +4007,23 @@ var otpService = new OtpService();
 var import_resend = require("resend");
 var ResendProvider = class {
   constructor(apiKey = config2.email.resendApiKey, fromAddress = config2.email.fromAddress) {
-    if (!apiKey) {
-      throw new Error(
-        "RESEND_API_KEY is not configured. Set RESEND_API_KEY in your environment before using ResendProvider."
-      );
+    this.client = null;
+    this.fromAddress = fromAddress;
+    if (apiKey) {
+      this.client = new import_resend.Resend(apiKey);
+    } else {
+      console.warn("RESEND_API_KEY is not configured in the environment. Email sending will be disabled.");
     }
     if (!fromAddress) {
-      throw new Error(
-        'EMAIL_FROM is not configured. Set EMAIL_FROM in your environment before using ResendProvider (e.g. EMAIL_FROM="MetaFirm <noreply@metafirm.app>").'
-      );
+      console.warn("EMAIL_FROM is not configured in the environment. Email sending will be disabled.");
     }
-    this.client = new import_resend.Resend(apiKey);
-    this.fromAddress = fromAddress;
   }
   async send({ to, subject, html }) {
+    if (!this.client || !this.fromAddress) {
+      throw new Error(
+        "Email provider is not configured. Please set RESEND_API_KEY and EMAIL_FROM in your environment variables to use email services."
+      );
+    }
     const { error } = await this.client.emails.send({
       from: this.fromAddress,
       to,
@@ -4805,34 +4836,1504 @@ router2.post("/reset-password", validateRequest(ResetPasswordSchema), authContro
 router2.get("/me", requireAuth, authController.me);
 var authRoutes_default = router2;
 
-// server/routes/v1/index.ts
+// server/routes/v1/adminRoutes.ts
+var import_express3 = require("express");
+
+// server/repositories/supportRepository.ts
+var import_drizzle_orm28 = require("drizzle-orm");
+var SupportRepository = class {
+  /**
+   * Find a support ticket by its unique sequential database ID
+   */
+  async findById(id) {
+    try {
+      const result = await db.select().from(supportTickets).where((0, import_drizzle_orm28.eq)(supportTickets.id, id));
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database query (findById) failed:", error);
+      throw new Error("Failed to retrieve support ticket.");
+    }
+  }
+  /**
+   * Find a support ticket by its human-readable unique code
+   */
+  async findByTicketNumber(ticketNumber) {
+    try {
+      const result = await db.select().from(supportTickets).where((0, import_drizzle_orm28.eq)(supportTickets.ticketNumber, ticketNumber));
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database query (findByTicketNumber) failed:", error);
+      throw new Error("Failed to retrieve support ticket by code.");
+    }
+  }
+  /**
+   * Retrieve support tickets for a user with pagination and optional status filter
+   */
+  async findByUserId(userId, options) {
+    try {
+      const limit = options?.limit ?? 50;
+      const offset = options?.offset ?? 0;
+      const status = options?.status;
+      let query = db.select().from(supportTickets).$dynamic();
+      const conditions = [(0, import_drizzle_orm28.eq)(supportTickets.userId, userId)];
+      if (status) {
+        conditions.push((0, import_drizzle_orm28.eq)(supportTickets.status, status));
+      }
+      const result = await query.where((0, import_drizzle_orm28.and)(...conditions)).orderBy((0, import_drizzle_orm28.desc)(supportTickets.createdAt)).limit(limit).offset(offset);
+      return result;
+    } catch (error) {
+      console.error("Database query (findByUserId) failed:", error);
+      throw new Error("Failed to query user support tickets.");
+    }
+  }
+  /**
+   * Create a new support ticket
+   */
+  async createTicket(data) {
+    try {
+      const result = await db.insert(supportTickets).values({
+        userId: data.userId,
+        ticketNumber: data.ticketNumber,
+        category: data.category,
+        subject: data.subject,
+        description: data.description,
+        priority: data.priority || "LOW",
+        status: "OPEN"
+      }).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Database insertion (createTicket) failed:", error);
+      throw new Error("Failed to submit new support ticket.");
+    }
+  }
+  /**
+   * Update support ticket status, priority, or assignee
+   */
+  async updateTicket(id, updates) {
+    try {
+      const result = await db.update(supportTickets).set({
+        ...updates,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where((0, import_drizzle_orm28.eq)(supportTickets.id, id)).returning();
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database update (updateTicket) failed:", error);
+      throw new Error("Failed to update support ticket.");
+    }
+  }
+  /**
+   * Find all support tickets (admin audit panel view)
+   */
+  async findAll(options) {
+    try {
+      const limit = options?.limit ?? 50;
+      const offset = options?.offset ?? 0;
+      const status = options?.status;
+      const priority = options?.priority;
+      let query = db.select().from(supportTickets).$dynamic();
+      const conditions = [];
+      if (status) {
+        conditions.push((0, import_drizzle_orm28.eq)(supportTickets.status, status));
+      }
+      if (priority) {
+        conditions.push((0, import_drizzle_orm28.eq)(supportTickets.priority, priority));
+      }
+      if (conditions.length > 0) {
+        query = query.where((0, import_drizzle_orm28.and)(...conditions));
+      }
+      const result = await query.orderBy((0, import_drizzle_orm28.desc)(supportTickets.updatedAt)).limit(limit).offset(offset);
+      return result;
+    } catch (error) {
+      console.error("Database query (findAll) failed:", error);
+      throw new Error("Failed to retrieve system support tickets ledger.");
+    }
+  }
+  /**
+   * Create a support message / reply under a specific ticket
+   */
+  async createMessage(data) {
+    try {
+      const result = await db.insert(supportMessages).values({
+        ticketId: data.ticketId,
+        senderId: data.senderId || null,
+        senderType: data.senderType,
+        message: data.message
+      }).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Database insertion (createMessage) failed:", error);
+      throw new Error("Failed to save support thread reply.");
+    }
+  }
+  /**
+   * Get messages / replies under a support ticket to display conversations
+   */
+  async findMessagesByTicketId(ticketId, options) {
+    try {
+      const limit = options?.limit ?? 100;
+      const offset = options?.offset ?? 0;
+      const result = await db.select().from(supportMessages).where((0, import_drizzle_orm28.eq)(supportMessages.ticketId, ticketId)).orderBy((0, import_drizzle_orm28.desc)(supportMessages.createdAt)).limit(limit).offset(offset);
+      return result;
+    } catch (error) {
+      console.error("Database query (findMessagesByTicketId) failed:", error);
+      throw new Error("Failed to retrieve support ticket conversation.");
+    }
+  }
+};
+var supportRepository = new SupportRepository();
+
+// server/repositories/depositRepository.ts
+var import_drizzle_orm29 = require("drizzle-orm");
+var DepositRepository = class {
+  /**
+   * Find a deposit by its unique sequential database ID
+   */
+  async findById(id) {
+    try {
+      const result = await db.select().from(deposits).where((0, import_drizzle_orm29.eq)(deposits.id, id));
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database query (findById) failed:", error);
+      throw new Error("Failed to retrieve deposit from database.");
+    }
+  }
+  /**
+   * Find a deposit by its unique human-readable reference number
+   */
+  async findByReference(referenceNumber) {
+    try {
+      const result = await db.select().from(deposits).where((0, import_drizzle_orm29.eq)(deposits.referenceNumber, referenceNumber));
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database query (findByReference) failed:", error);
+      throw new Error("Failed to retrieve deposit from database.");
+    }
+  }
+  /**
+   * Find a deposit by its unique blockchain transaction hash to prevent double credits
+   */
+  async findByTxHash(txHash) {
+    try {
+      const result = await db.select().from(deposits).where((0, import_drizzle_orm29.eq)(deposits.txHash, txHash));
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database query (findByTxHash) failed:", error);
+      throw new Error("Failed to retrieve deposit from database.");
+    }
+  }
+  /**
+   * Get deposits for a specific user with pagination and optional status filter
+   */
+  async findByUserId(userId, options) {
+    try {
+      const limit = options?.limit ?? 20;
+      const offset = options?.offset ?? 0;
+      const status = options?.status;
+      let query = db.select().from(deposits).$dynamic();
+      const conditions = [(0, import_drizzle_orm29.eq)(deposits.userId, userId)];
+      if (status) {
+        conditions.push((0, import_drizzle_orm29.eq)(deposits.status, status));
+      }
+      const result = await query.where((0, import_drizzle_orm29.and)(...conditions)).orderBy((0, import_drizzle_orm29.desc)(deposits.createdAt)).limit(limit).offset(offset);
+      return result;
+    } catch (error) {
+      console.error("Database query (findByUserId) failed:", error);
+      throw new Error("Failed to query user deposits.");
+    }
+  }
+  /**
+   * Create a new deposit record
+   */
+  async createDeposit(data) {
+    try {
+      const result = await db.insert(deposits).values({
+        userId: data.userId,
+        walletId: data.walletId,
+        referenceNumber: data.referenceNumber,
+        amount: data.amount,
+        status: data.status || "PENDING",
+        txHash: data.txHash || null,
+        network: data.network,
+        depositAddress: data.depositAddress,
+        adminNotes: data.adminNotes || null
+      }).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Database insertion (createDeposit) failed:", error);
+      throw new Error("Failed to record deposit in database.");
+    }
+  }
+  /**
+   * Update deposit status
+   */
+  async updateStatus(id, status, updates) {
+    try {
+      const result = await db.update(deposits).set({
+        status,
+        ...updates,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where((0, import_drizzle_orm29.eq)(deposits.id, id)).returning();
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database update (updateStatus) failed:", error);
+      throw new Error("Failed to update deposit status.");
+    }
+  }
+  /**
+   * Get all deposits (with filters and pagination) for administrative panel
+   */
+  async findAll(options) {
+    try {
+      const limit = options?.limit ?? 50;
+      const offset = options?.offset ?? 0;
+      const status = options?.status;
+      let query = db.select().from(deposits).$dynamic();
+      if (status) {
+        query = query.where((0, import_drizzle_orm29.eq)(deposits.status, status));
+      }
+      const result = await query.orderBy((0, import_drizzle_orm29.desc)(deposits.createdAt)).limit(limit).offset(offset);
+      return result;
+    } catch (error) {
+      console.error("Database query (findAll) failed:", error);
+      throw new Error("Failed to retrieve deposits ledger.");
+    }
+  }
+};
+var depositRepository = new DepositRepository();
+
+// server/repositories/withdrawalRepository.ts
+var import_drizzle_orm30 = require("drizzle-orm");
+var WithdrawalRepository = class {
+  /**
+   * Find a withdrawal by its unique sequential database ID
+   */
+  async findById(id) {
+    try {
+      const result = await db.select().from(withdrawals).where((0, import_drizzle_orm30.eq)(withdrawals.id, id));
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database query (findById) failed:", error);
+      throw new Error("Failed to retrieve withdrawal from database.");
+    }
+  }
+  /**
+   * Find a withdrawal by its unique human-readable reference trace code
+   */
+  async findByReference(reference) {
+    try {
+      const result = await db.select().from(withdrawals).where((0, import_drizzle_orm30.eq)(withdrawals.reference, reference));
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database query (findByReference) failed:", error);
+      throw new Error("Failed to retrieve withdrawal from database.");
+    }
+  }
+  /**
+   * Get withdrawals for a specific user with pagination and optional status filter
+   */
+  async findByUserId(userId, options) {
+    try {
+      const limit = options?.limit ?? 20;
+      const offset = options?.offset ?? 0;
+      const status = options?.status;
+      let query = db.select().from(withdrawals).$dynamic();
+      const conditions = [(0, import_drizzle_orm30.eq)(withdrawals.userId, userId)];
+      if (status) {
+        conditions.push((0, import_drizzle_orm30.eq)(withdrawals.status, status));
+      }
+      const result = await query.where((0, import_drizzle_orm30.and)(...conditions)).orderBy((0, import_drizzle_orm30.desc)(withdrawals.createdAt)).limit(limit).offset(offset);
+      return result;
+    } catch (error) {
+      console.error("Database query (findByUserId) failed:", error);
+      throw new Error("Failed to query user withdrawals.");
+    }
+  }
+  /**
+   * Create a new withdrawal record
+   */
+  async createWithdrawal(data) {
+    try {
+      const result = await db.insert(withdrawals).values({
+        userId: data.userId,
+        walletId: data.walletId,
+        amount: data.amount,
+        fee: data.fee,
+        netAmount: data.netAmount,
+        walletAddress: data.walletAddress,
+        network: data.network,
+        reference: data.reference,
+        status: data.status || "PENDING",
+        adminApprovalStatus: data.adminApprovalStatus || "PENDING",
+        adminNotes: data.adminNotes || null
+      }).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Database insertion (createWithdrawal) failed:", error);
+      throw new Error("Failed to record withdrawal in database.");
+    }
+  }
+  /**
+   * Update withdrawal status, admin approvals, or transaction hashes
+   */
+  async updateStatus(id, status, updates) {
+    try {
+      const result = await db.update(withdrawals).set({
+        status,
+        ...updates,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where((0, import_drizzle_orm30.eq)(withdrawals.id, id)).returning();
+      return result[0] || null;
+    } catch (error) {
+      console.error("Database update (updateStatus) failed:", error);
+      throw new Error("Failed to update withdrawal status.");
+    }
+  }
+  /**
+   * Find all withdrawals (with filters and pagination) for administrative dashboard
+   */
+  async findAll(options) {
+    try {
+      const limit = options?.limit ?? 50;
+      const offset = options?.offset ?? 0;
+      const status = options?.status;
+      const adminApprovalStatus = options?.adminApprovalStatus;
+      let query = db.select().from(withdrawals).$dynamic();
+      const conditions = [];
+      if (status) {
+        conditions.push((0, import_drizzle_orm30.eq)(withdrawals.status, status));
+      }
+      if (adminApprovalStatus) {
+        conditions.push((0, import_drizzle_orm30.eq)(withdrawals.adminApprovalStatus, adminApprovalStatus));
+      }
+      if (conditions.length > 0) {
+        query = query.where((0, import_drizzle_orm30.and)(...conditions));
+      }
+      const result = await query.orderBy((0, import_drizzle_orm30.desc)(withdrawals.createdAt)).limit(limit).offset(offset);
+      return result;
+    } catch (error) {
+      console.error("Database query (findAll) failed:", error);
+      throw new Error("Failed to retrieve withdrawals ledger.");
+    }
+  }
+};
+var withdrawalRepository = new WithdrawalRepository();
+
+// server/services/vipService.ts
+var VipService = class {
+  /**
+   * Helper to fetch a list of VIP thresholds and info
+   */
+  getVipMatrix() {
+    return [
+      { tier: "VIP1", minBalance: 10, levelA: 0, levelBCD: 0, teamTotal: 0, dpy: 6e-3 },
+      { tier: "VIP2", minBalance: 50, levelA: 2, levelBCD: 0, teamTotal: 2, dpy: 8e-3 },
+      { tier: "VIP3", minBalance: 100, levelA: 3, levelBCD: 6, teamTotal: 9, dpy: 0.01 },
+      { tier: "VIP4", minBalance: 500, levelA: 6, levelBCD: 20, teamTotal: 26, dpy: 0.012 },
+      { tier: "VIP5", minBalance: 1e3, levelA: 7, levelBCD: 35, teamTotal: 42, dpy: 0.013 },
+      { tier: "VIP6", minBalance: 3e3, levelA: 8, levelBCD: 50, teamTotal: 58, dpy: 0.015 },
+      { tier: "VIP7", minBalance: 5e3, levelA: 15, levelBCD: 70, teamTotal: 85, dpy: 0.02 },
+      { tier: "VIP8", minBalance: 1e4, levelA: 30, levelBCD: 200, teamTotal: 230, dpy: 0.025 }
+    ];
+  }
+  /**
+   * Calculate valid team counts for levels 1 to 4 under a user
+   */
+  async calculateTeamCounts(userId) {
+    const descendants = await referralService.getDownlineDescendants(userId);
+    let levelAValidCount = 0;
+    let levelBcdValidCount = 0;
+    const childWallets = await Promise.all(
+      descendants.map(async (d) => {
+        const wallet = await walletRepository.findByUserId(d.childId);
+        return {
+          referralLevel: d.referralLevel,
+          wallet
+        };
+      })
+    );
+    for (const cw of childWallets) {
+      if (!cw.wallet) continue;
+      const totalBalance = parseFloat(cw.wallet.availableBalance) + parseFloat(cw.wallet.lockedBalance);
+      if (totalBalance >= 50) {
+        if (cw.referralLevel === 1) {
+          levelAValidCount++;
+        } else if (cw.referralLevel >= 2 && cw.referralLevel <= 4) {
+          levelBcdValidCount++;
+        }
+      }
+    }
+    return {
+      levelAValidCount,
+      levelBcdValidCount,
+      teamTotalCount: levelAValidCount + levelBcdValidCount
+    };
+  }
+  /**
+   * Recalculates and updates a user's active VIP tier based on wallet balances and team qualification
+   */
+  async recalculateVip(userId) {
+    const vip = await vipRepository.findByUserId(userId);
+    if (!vip) return null;
+    const wallet = await walletRepository.findByUserId(userId);
+    if (!wallet) return null;
+    const walletBalance = parseFloat(wallet.availableBalance) + parseFloat(wallet.lockedBalance);
+    const { levelAValidCount, levelBcdValidCount, teamTotalCount } = await this.calculateTeamCounts(userId);
+    const calculatedTier = this.determineEligibleVip(walletBalance, levelAValidCount, levelBcdValidCount);
+    const previousTier = vip.tier;
+    const currentPoints = parseFloat(wallet.totalDeposited);
+    const updatedVip = await vipRepository.updateVipStatus(vip.id, {
+      tier: calculatedTier,
+      points: currentPoints.toFixed(8),
+      levelAValidCount,
+      levelBcdValidCount,
+      teamTotalCount
+    });
+    if (calculatedTier !== previousTier) {
+      await vipRepository.createVipHistoryEntry({
+        userId,
+        previousTier,
+        newTier: calculatedTier,
+        reason: `Auto VIP recalculation based on wallet balance (${walletBalance.toFixed(2)} USDT) and team qualification (A:${levelAValidCount}, BCD:${levelBcdValidCount}).`
+      });
+      await notificationRepository.createNotification({
+        userId,
+        message: `Your VIP membership has been updated from ${previousTier} to ${calculatedTier}.`,
+        priority: "HIGH"
+      });
+      await auditRepository.createAuditLog({
+        actorUid: "SYSTEM",
+        userId,
+        action: "VIP_TIER_CHANGE",
+        resource: `vip_status/${vip.id}`,
+        oldValue: previousTier,
+        newValue: calculatedTier
+      });
+      const parentRel = await referralRepository.findRelationshipByChildId(userId);
+      if (parentRel && parentRel.referralLevel === 1) {
+        await this.recalculateVip(parentRel.parentId);
+      }
+    }
+    return updatedVip;
+  }
+  determineEligibleVip(walletBalance, levelA, levelBCD) {
+    const teamTotal = levelA + levelBCD;
+    if (walletBalance >= 1e4 && levelA >= 30 && levelBCD >= 200 && teamTotal >= 230) {
+      return "VIP8";
+    }
+    if (walletBalance >= 5e3 && levelA >= 15 && levelBCD >= 70 && teamTotal >= 85) {
+      return "VIP7";
+    }
+    if (walletBalance >= 3e3 && levelA >= 8 && levelBCD >= 50 && teamTotal >= 58) {
+      return "VIP6";
+    }
+    if (walletBalance >= 1e3 && levelA >= 7 && levelBCD >= 35 && teamTotal >= 42) {
+      return "VIP5";
+    }
+    if (walletBalance >= 500 && levelA >= 6 && levelBCD >= 20 && teamTotal >= 26) {
+      return "VIP4";
+    }
+    if (walletBalance >= 100 && levelA >= 3 && levelBCD >= 6 && teamTotal >= 9) {
+      return "VIP3";
+    }
+    if (walletBalance >= 50 && levelA >= 2 && teamTotal >= 2) {
+      return "VIP2";
+    }
+    return "VIP1";
+  }
+};
+var vipService = new VipService();
+
+// server/services/withdrawalService.ts
+var WithdrawalService = class {
+  /**
+   * Request / Initiate a new pending withdrawal
+   */
+  async createWithdrawal(userId, amountStr, walletAddress, network) {
+    const wallet = await walletRepository.findByUserId(userId);
+    if (!wallet) {
+      throw new Error(`Wallet not found for user: ${userId}`);
+    }
+    const amount = parseFloat(amountStr);
+    if (amount <= 0) {
+      throw new Error("Withdrawal amount must be strictly positive.");
+    }
+    const minConfig = await settingsRepository.findSystemSettingByKey("MIN_WITHDRAWAL_LIMIT");
+    const minLimit = minConfig ? parseFloat(minConfig.value) : 10;
+    if (amount < minLimit) {
+      throw new Error(`Minimum withdrawal limit is ${minLimit} USDT.`);
+    }
+    const availableBalance = parseFloat(wallet.availableBalance);
+    if (availableBalance < amount) {
+      throw new Error(`Insufficient funds. Available: ${wallet.availableBalance} USDT, Requested: ${amountStr} USDT.`);
+    }
+    const feeConfig = await settingsRepository.findSystemSettingByKey("WITHDRAWAL_FEE_PERCENTAGE");
+    const feeRate = feeConfig ? parseFloat(feeConfig.value) : 0.1;
+    const fee = amount * feeRate;
+    const netAmount = amount - fee;
+    const randomDigits = Math.floor(1e7 + Math.random() * 9e7).toString();
+    const reference = `WTH${randomDigits}`;
+    await walletRepository.incrementBalances(wallet.id, {
+      availableBalance: (-amount).toFixed(8),
+      lockedBalance: amount.toFixed(8)
+    });
+    const withdrawal = await withdrawalRepository.createWithdrawal({
+      userId,
+      walletId: wallet.id,
+      amount: amount.toFixed(8),
+      fee: fee.toFixed(8),
+      netAmount: netAmount.toFixed(8),
+      walletAddress,
+      network,
+      reference,
+      status: "PENDING",
+      adminApprovalStatus: "PENDING"
+    });
+    await auditRepository.createAuditLog({
+      actorUid: userId,
+      userId,
+      action: "WITHDRAWAL_REQUESTED",
+      resource: `withdrawals/${withdrawal.id}`,
+      newValue: JSON.stringify({ amount: amount.toFixed(8), fee: fee.toFixed(8), netAmount: netAmount.toFixed(8), network })
+    });
+    return withdrawal;
+  }
+  /**
+   * Approve and complete a pending withdrawal
+   */
+  async approveWithdrawal(withdrawalId, txHash, adminUid) {
+    const withdrawal = await withdrawalRepository.findById(withdrawalId);
+    if (!withdrawal) {
+      throw new Error(`Withdrawal not found for ID: ${withdrawalId}`);
+    }
+    if (withdrawal.status !== "PENDING") {
+      throw new Error(`Withdrawal is already completed/rejected with status: ${withdrawal.status}`);
+    }
+    const userId = withdrawal.userId;
+    const wallet = await walletRepository.findByUserId(userId);
+    if (!wallet) {
+      throw new Error(`Wallet not found for user ID: ${userId}`);
+    }
+    const updatedWithdrawal = await withdrawalRepository.updateStatus(withdrawalId, "COMPLETED", {
+      txHash,
+      adminApprovalStatus: "APPROVED",
+      adminNotes: `Approved by administrator: ${adminUid}`
+    });
+    const amount = parseFloat(withdrawal.amount);
+    await walletRepository.incrementBalances(wallet.id, {
+      lockedBalance: (-amount).toFixed(8),
+      totalWithdrawn: amount.toFixed(8)
+    });
+    const balanceBefore = parseFloat(wallet.availableBalance) + amount;
+    const balanceAfter = parseFloat(wallet.availableBalance);
+    await transactionRepository.createTransaction({
+      userId,
+      walletId: wallet.id,
+      type: "WITHDRAWAL",
+      referenceId: withdrawal.id,
+      status: "COMPLETED",
+      description: `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}.`,
+      amount: withdrawal.amount,
+      balanceBefore: balanceBefore.toFixed(8),
+      balanceAfter: balanceAfter.toFixed(8),
+      createdBy: adminUid
+    });
+    await notificationRepository.createNotification({
+      userId,
+      message: `Your withdrawal request of ${withdrawal.amount} USDT has been completed successfully.`,
+      priority: "HIGH"
+    });
+    await vipService.recalculateVip(userId);
+    return updatedWithdrawal;
+  }
+  /**
+   * Reject and refund a pending withdrawal
+   */
+  async rejectWithdrawal(withdrawalId, reason, adminUid) {
+    const withdrawal = await withdrawalRepository.findById(withdrawalId);
+    if (!withdrawal) {
+      throw new Error(`Withdrawal not found for ID: ${withdrawalId}`);
+    }
+    if (withdrawal.status !== "PENDING") {
+      throw new Error(`Withdrawal has already been processed with status: ${withdrawal.status}`);
+    }
+    const userId = withdrawal.userId;
+    const wallet = await walletRepository.findByUserId(userId);
+    if (!wallet) {
+      throw new Error(`Wallet not found for user ID: ${userId}`);
+    }
+    const updatedWithdrawal = await withdrawalRepository.updateStatus(withdrawalId, "REJECTED", {
+      adminApprovalStatus: "REJECTED",
+      adminNotes: `Rejected by administrator ${adminUid}. Reason: ${reason}`
+    });
+    const amount = parseFloat(withdrawal.amount);
+    await walletRepository.incrementBalances(wallet.id, {
+      lockedBalance: (-amount).toFixed(8),
+      availableBalance: amount.toFixed(8)
+    });
+    await notificationRepository.createNotification({
+      userId,
+      message: `Your withdrawal request of ${withdrawal.amount} USDT was rejected. Reason: ${reason}. Funds have been refunded to your available balance.`,
+      priority: "HIGH"
+    });
+    return updatedWithdrawal;
+  }
+};
+var withdrawalService = new WithdrawalService();
+
+// server/services/adminService.ts
+var import_drizzle_orm31 = require("drizzle-orm");
+var AdminService = class {
+  /**
+   * Fetch paginated, filtered and sorted list of admin users
+   */
+  async getAdminUsersPaginated(options) {
+    const conditions = [];
+    if (options.search) {
+      const pattern = `%${options.search}%`;
+      conditions.push(
+        (0, import_drizzle_orm31.or)(
+          (0, import_drizzle_orm31.like)(users.name, pattern),
+          (0, import_drizzle_orm31.like)(users.email, pattern),
+          (0, import_drizzle_orm31.like)(users.phone, pattern),
+          (0, import_drizzle_orm31.like)(users.userId, pattern),
+          (0, import_drizzle_orm31.like)(users.uid, pattern)
+        )
+      );
+    }
+    if (options.filter && options.filter !== "All") {
+      if (options.filter === "Active") {
+        conditions.push((0, import_drizzle_orm31.eq)(users.status, "ACTIVE"));
+      } else if (options.filter === "Suspended") {
+        conditions.push((0, import_drizzle_orm31.eq)(users.status, "SUSPENDED"));
+      } else if (options.filter.startsWith("VIP")) {
+        conditions.push((0, import_drizzle_orm31.eq)(vipStatus.tier, options.filter));
+      }
+    }
+    let orderByClause;
+    switch (options.sortBy) {
+      case "HighestBalance":
+        orderByClause = (0, import_drizzle_orm31.desc)(wallets.availableBalance);
+        break;
+      case "LowestBalance":
+        orderByClause = (0, import_drizzle_orm31.asc)(wallets.availableBalance);
+        break;
+      case "HighestReferrals":
+        orderByClause = (0, import_drizzle_orm31.desc)(vipStatus.levelAValidCount);
+        break;
+      case "HighestTeamSize":
+        orderByClause = (0, import_drizzle_orm31.desc)(vipStatus.teamTotalCount);
+        break;
+      case "Newest":
+        orderByClause = (0, import_drizzle_orm31.desc)(users.createdAt);
+        break;
+      case "Oldest":
+        orderByClause = (0, import_drizzle_orm31.asc)(users.createdAt);
+        break;
+      default:
+        orderByClause = (0, import_drizzle_orm31.desc)(users.createdAt);
+    }
+    const whereClause = conditions.length > 0 ? (0, import_drizzle_orm31.and)(...conditions) : void 0;
+    const countResult = await db.select({ count: import_drizzle_orm31.sql`count(${users.id})::int` }).from(users).leftJoin(vipStatus, (0, import_drizzle_orm31.eq)(vipStatus.userId, users.id)).where(whereClause);
+    const totalCount = countResult[0]?.count || 0;
+    const results = await db.select({
+      user: users,
+      wallet: wallets,
+      vip: vipStatus
+    }).from(users).leftJoin(wallets, (0, import_drizzle_orm31.eq)(wallets.userId, users.id)).leftJoin(vipStatus, (0, import_drizzle_orm31.eq)(vipStatus.userId, users.id)).where(whereClause).orderBy(orderByClause).limit(options.limit).offset(options.offset);
+    const mappedUsers = [];
+    for (const r of results) {
+      const u = r.user;
+      const wallet = r.wallet;
+      const vip = r.vip;
+      const descendants = await referralService.getDownlineDescendants(u.id);
+      const levelA = descendants.filter((d) => d.referralLevel === 1).length;
+      const levelB = descendants.filter((d) => d.referralLevel === 2).length;
+      const levelC = descendants.filter((d) => d.referralLevel === 3).length;
+      const levelD = descendants.filter((d) => d.referralLevel === 4).length;
+      mappedUsers.push({
+        id: u.uid,
+        // mapped to uid so frontend actions target uid
+        userId: u.userId,
+        name: u.name || "",
+        email: u.email,
+        mobile: u.phone || "",
+        rank: vip?.tier || "VIP1",
+        balance: wallet ? `$${parseFloat(wallet.availableBalance).toFixed(2)}` : "$0.00",
+        levelA,
+        levelB,
+        levelC,
+        levelD,
+        status: u.status === "ACTIVE" ? "Active" : "Suspended",
+        joined: new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        adminNotes: u.name ? `Administrative profile for ${u.name}.` : "No administrative notes."
+      });
+    }
+    return {
+      users: mappedUsers,
+      pagination: {
+        total: totalCount,
+        page: Math.floor(options.offset / options.limit) + 1,
+        limit: options.limit
+      }
+    };
+  }
+  /**
+   * Get complete details of a single user
+   */
+  async getUserProfileDetail(targetUid) {
+    const user = await userRepository.findByUid(targetUid);
+    if (!user) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const wallet = await walletRepository.findByUserId(user.id);
+    const vip = await db.select().from(vipStatus).where((0, import_drizzle_orm31.eq)(vipStatus.userId, user.id));
+    const descendants = await referralService.getDownlineDescendants(user.id);
+    return {
+      id: user.uid,
+      userId: user.userId,
+      name: user.name || "",
+      email: user.email,
+      mobile: user.phone || "",
+      rank: vip[0]?.tier || "VIP1",
+      balance: wallet ? `$${parseFloat(wallet.availableBalance).toFixed(2)}` : "$0.00",
+      status: user.status === "ACTIVE" ? "Active" : "Suspended",
+      joined: new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      walletDetails: wallet ? {
+        availableBalance: parseFloat(wallet.availableBalance),
+        lockedBalance: parseFloat(wallet.lockedBalance),
+        principalBalance: parseFloat(wallet.principalBalance),
+        trialBalance: parseFloat(wallet.trialBalance),
+        referralIncome: parseFloat(wallet.referralIncome),
+        dailyYield: parseFloat(wallet.dailyYield),
+        teamIncome: parseFloat(wallet.teamIncome),
+        incentiveIncome: parseFloat(wallet.incentiveIncome)
+      } : null,
+      teamCounts: {
+        levelA: descendants.filter((d) => d.referralLevel === 1).length,
+        levelB: descendants.filter((d) => d.referralLevel === 2).length,
+        levelC: descendants.filter((d) => d.referralLevel === 3).length,
+        levelD: descendants.filter((d) => d.referralLevel === 4).length,
+        total: descendants.length
+      }
+    };
+  }
+  /**
+   * Update editable fields of user's profile
+   */
+  async updateAdminUserProfile(adminUid, targetUid, fields, ipAddress, userAgent) {
+    const targetUser = await userRepository.findByUid(targetUid);
+    if (!targetUser) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const updates = { updatedAt: /* @__PURE__ */ new Date() };
+    if (fields.name !== void 0) updates.name = fields.name;
+    if (fields.email !== void 0) updates.email = fields.email;
+    if (fields.phone !== void 0) updates.phone = fields.phone;
+    if (fields.status !== void 0) {
+      updates.status = fields.status === "Suspended" ? "SUSPENDED" : "ACTIVE";
+    }
+    const updatedUser = await userRepository.updateUserProfile(targetUid, updates);
+    await auditRepository.createAuditLog({
+      actorUid: adminUid,
+      userId: targetUser.id,
+      action: "ADMIN_PROFILE_UPDATE",
+      resource: `users/${targetUid}`,
+      oldValue: JSON.stringify({
+        name: targetUser.name,
+        email: targetUser.email,
+        phone: targetUser.phone,
+        status: targetUser.status
+      }),
+      newValue: JSON.stringify(updates)
+    });
+    return updatedUser;
+  }
+  /**
+   * Get user transactions history
+   */
+  async getUserTransactions(targetUid, options) {
+    const user = await userRepository.findByUid(targetUid);
+    if (!user) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const txs = await transactionRepository.findByUserId(user.id, options);
+    return txs.map((t) => ({
+      id: t.id,
+      type: t.type,
+      amount: `$${parseFloat(t.amount).toFixed(2)}`,
+      status: t.status,
+      date: new Date(t.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      description: t.description
+    }));
+  }
+  /**
+   * Get user deposit history
+   */
+  async getUserDeposits(targetUid, options) {
+    const user = await userRepository.findByUid(targetUid);
+    if (!user) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const deps = await depositRepository.findByUserId(user.id, options);
+    return deps.map((d) => ({
+      id: d.id,
+      amount: `$${parseFloat(d.amount).toFixed(2)}`,
+      method: d.network || "USDT",
+      txHash: d.txHash || "N/A",
+      date: new Date(d.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      status: d.status === "COMPLETED" ? "Completed" : d.status === "PENDING" ? "Pending" : "Rejected"
+    }));
+  }
+  /**
+   * Get user withdrawal history
+   */
+  async getUserWithdrawals(targetUid, options) {
+    const user = await userRepository.findByUid(targetUid);
+    if (!user) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const withs = await withdrawalRepository.findByUserId(user.id, options);
+    return withs.map((w) => ({
+      id: w.id,
+      amount: `$${parseFloat(w.amount).toFixed(2)}`,
+      wallet: w.walletAddress,
+      date: new Date(w.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      status: w.status === "COMPLETED" ? "Approved" : w.status === "PENDING" ? "Pending" : "Rejected"
+    }));
+  }
+  /**
+   * Get user audit history
+   */
+  async getUserAudits(targetUid, options) {
+    const user = await userRepository.findByUid(targetUid);
+    if (!user) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const audits = await auditRepository.findByUserId(user.id, options);
+    return audits.map((a) => ({
+      action: a.action,
+      admin: a.actorUid === "SYSTEM" ? "System" : "Admin",
+      ip: "127.0.0.1",
+      // Standard fallback IP
+      time: new Date(a.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      module: a.resource
+    }));
+  }
+  /**
+   * Get user team network list of Level A, B, C, D descendants
+   */
+  async getUserTeamNetwork(targetUid) {
+    const user = await userRepository.findByUid(targetUid);
+    if (!user) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const descendants = await referralService.getDownlineDescendants(user.id);
+    const list = [];
+    for (const d of descendants) {
+      const u = await userRepository.findById(d.childId);
+      if (u) {
+        const wallet = await walletRepository.findByUserId(u.id);
+        const vip = await db.select().from(vipStatus).where((0, import_drizzle_orm31.eq)(vipStatus.userId, u.id));
+        list.push({
+          id: u.uid,
+          userId: u.userId,
+          name: u.name || "Anonymous",
+          email: u.email,
+          level: d.referralLevel === 1 ? "A" : d.referralLevel === 2 ? "B" : d.referralLevel === 3 ? "C" : "D",
+          vipTier: vip[0]?.tier || "VIP1",
+          walletBalance: wallet ? parseFloat(wallet.availableBalance) : 0,
+          joined: new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        });
+      }
+    }
+    return list;
+  }
+  /**
+   * Adjust user wallet balances atomically (Manual Admin Ledger Adjustment)
+   */
+  async adjustWalletBalance(userId, deltas, memo, adminUid) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new Error(`User not found with ID: ${userId}`);
+    }
+    const wallet = await walletRepository.findByUserId(userId);
+    if (!wallet) {
+      throw new Error(`Wallet not found for user ${userId}`);
+    }
+    const beforeBalance = parseFloat(wallet.availableBalance);
+    const availableDelta = parseFloat(deltas.availableBalance || "0.0");
+    const afterBalance = beforeBalance + availableDelta;
+    const updatedWallet = await walletRepository.incrementBalances(wallet.id, deltas);
+    const txn = await transactionRepository.createTransaction({
+      userId,
+      walletId: wallet.id,
+      type: "ADMIN_ADJUST",
+      referenceId: wallet.id,
+      status: "COMPLETED",
+      description: memo || "Administrative manual account balance adjustment.",
+      amount: availableDelta.toFixed(8),
+      balanceBefore: beforeBalance.toFixed(8),
+      balanceAfter: afterBalance.toFixed(8),
+      createdBy: adminUid
+    });
+    await auditRepository.createAuditLog({
+      actorUid: adminUid,
+      userId,
+      action: "WALLET_MANUAL_ADJUSTMENT",
+      resource: `wallets/${wallet.id}`,
+      oldValue: JSON.stringify(wallet),
+      newValue: JSON.stringify(updatedWallet)
+    });
+    await notificationRepository.createNotification({
+      userId,
+      message: `Your account balance was adjusted by our support team: "${memo}"`,
+      priority: "MEDIUM"
+    });
+    await vipService.recalculateVip(userId);
+    return updatedWallet;
+  }
+  /**
+   * Update a user's account active status (ACTIVE, SUSPENDED, PENDING_VERIFICATION)
+   */
+  async updateUserStatus(userId, status, adminUid, reason) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new Error(`User not found with ID: ${userId}`);
+    }
+    const updatedUser = await userRepository.updateUserProfile(user.uid, { status });
+    await auditRepository.createAuditLog({
+      actorUid: adminUid,
+      userId,
+      action: "USER_STATUS_CHANGE",
+      resource: `users/${userId}`,
+      oldValue: user.status,
+      newValue: status
+    });
+    await notificationRepository.createNotification({
+      userId,
+      message: `Your account status has been updated to ${status}. Reason: ${reason}`,
+      priority: "HIGH"
+    });
+    return updatedUser;
+  }
+  /**
+   * Administrative Approval of pending Withdrawals.
+   * Delegates ALL ledger/wallet/VIP logic to WithdrawalService (single source of truth)
+   * and only adds the admin-specific audit trail on top.
+   */
+  async approveWithdrawal(withdrawalId, adminUid, txHash, notes) {
+    const updatedW = await withdrawalService.approveWithdrawal(withdrawalId, txHash, adminUid);
+    await auditRepository.createAuditLog({
+      actorUid: adminUid,
+      userId: updatedW.userId,
+      action: "WITHDRAWAL_APPROVAL",
+      resource: `withdrawals/${updatedW.id}`,
+      newValue: notes ? `APPROVED \u2014 ${notes}` : "APPROVED"
+    });
+    return updatedW;
+  }
+  /**
+   * Administrative Rejection of pending Withdrawals.
+   * Delegates ALL ledger/wallet logic to WithdrawalService (single source of truth)
+   * and only adds the admin-specific audit trail on top.
+   */
+  async rejectWithdrawal(withdrawalId, adminUid, notes) {
+    const updatedW = await withdrawalService.rejectWithdrawal(withdrawalId, notes, adminUid);
+    await auditRepository.createAuditLog({
+      actorUid: adminUid,
+      userId: updatedW.userId,
+      action: "WITHDRAWAL_REJECTION",
+      resource: `withdrawals/${updatedW.id}`,
+      newValue: "REJECTED"
+    });
+    return updatedW;
+  }
+  /**
+   * Retrieve platform system wide audit logs
+   */
+  async getSystemAuditLogs(options) {
+    return auditRepository.findAll(options);
+  }
+  /**
+   * Fetch all registered users in the platform (paginated, newest first).
+   */
+  async getAllUsers(options) {
+    return userRepository.findAll(options);
+  }
+  /**
+   * Retrieve all platform support tickets
+   */
+  async getAllSupportTickets(options) {
+    return supportRepository.findAll(options);
+  }
+  /**
+   * Retrieve aggregated admin dashboard statistics and trends (Single Source of Truth)
+   */
+  async getAdminDashboardOverview() {
+    const allUsers = await db.select().from(users);
+    const totalUsers = allUsers.length;
+    const activeUsers = allUsers.filter((u) => u.status === "ACTIVE").length;
+    const suspendedUsers = allUsers.filter((u) => u.status === "SUSPENDED").length;
+    const allWallets = await db.select().from(wallets);
+    let totalLiquidity = 0;
+    for (const w of allWallets) {
+      totalLiquidity += parseFloat(w.availableBalance) + parseFloat(w.lockedBalance) + parseFloat(w.principalBalance);
+    }
+    const allDeposits = await db.select().from(deposits);
+    let totalInboundDeposits = 0;
+    for (const d of allDeposits) {
+      if (d.status === "COMPLETED") {
+        totalInboundDeposits += parseFloat(d.amount);
+      }
+    }
+    const allWithdrawals = await db.select().from(withdrawals);
+    const pendingWithdrawalsCount = allWithdrawals.filter((w) => w.status === "PENDING").length;
+    const pendingDepositsCount = allDeposits.filter((d) => d.status === "PENDING").length;
+    const allTickets = await db.select().from(supportTickets);
+    const activeSupportTicketsCount = allTickets.filter((t) => t.status === "OPEN").length;
+    const allActivityLogs = await db.select().from(activityLogs);
+    const securityThreatsCount = allActivityLogs.filter(
+      (l) => l.event === "SECURITY_EVENT" || l.status === "FAILED"
+    ).length;
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = /* @__PURE__ */ new Date();
+    const last6Months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      last6Months.push({
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        label: `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`,
+        usersCount: 0,
+        depositsSum: 0,
+        withdrawalsSum: 0,
+        revenueSum: 0
+      });
+    }
+    for (const u of allUsers) {
+      const uDate = new Date(u.createdAt);
+      for (const m of last6Months) {
+        if (uDate.getFullYear() === m.year && uDate.getMonth() === m.month) {
+          m.usersCount++;
+        }
+      }
+    }
+    const firstMonthDate = new Date(last6Months[0].year, last6Months[0].month, 1);
+    let cumulativeUsers = allUsers.filter((u) => new Date(u.createdAt) < firstMonthDate).length;
+    const userGrowthTrend = last6Months.map((m) => {
+      cumulativeUsers += m.usersCount;
+      return {
+        month: m.label,
+        users: cumulativeUsers
+      };
+    });
+    for (const d of allDeposits) {
+      if (d.status === "COMPLETED") {
+        const dDate = new Date(d.createdAt);
+        for (const m of last6Months) {
+          if (dDate.getFullYear() === m.year && dDate.getMonth() === m.month) {
+            m.depositsSum += parseFloat(d.amount);
+          }
+        }
+      }
+    }
+    for (const w of allWithdrawals) {
+      if (w.status === "COMPLETED") {
+        const wDate = new Date(w.createdAt);
+        for (const m of last6Months) {
+          if (wDate.getFullYear() === m.year && wDate.getMonth() === m.month) {
+            m.withdrawalsSum += parseFloat(w.amount);
+          }
+        }
+      }
+    }
+    const txFlowTrend = last6Months.map((m) => ({
+      month: m.label,
+      deposits: m.depositsSum,
+      withdrawals: m.withdrawalsSum
+    }));
+    for (const w of allWithdrawals) {
+      if (w.status === "COMPLETED") {
+        const wDate = new Date(w.createdAt);
+        for (const m of last6Months) {
+          if (wDate.getFullYear() === m.year && wDate.getMonth() === m.month) {
+            m.revenueSum += parseFloat(w.fee || "0");
+          }
+        }
+      }
+    }
+    const revenueTrend = last6Months.map((m) => ({
+      month: m.label,
+      revenue: m.revenueSum
+    }));
+    return {
+      stats: {
+        totalUsers,
+        activeUsers,
+        liquidityPool: totalLiquidity,
+        totalInboundDeposits
+      },
+      queues: {
+        pendingWithdrawals: pendingWithdrawalsCount,
+        pendingDeposits: pendingDepositsCount,
+        activeSupportTickets: activeSupportTicketsCount,
+        securityThreats: securityThreatsCount,
+        suspendedUsers
+      },
+      charts: {
+        userGrowth: userGrowthTrend,
+        txFlow: txFlowTrend,
+        revenue: revenueTrend
+      }
+    };
+  }
+};
+var adminService = new AdminService();
+
+// server/controllers/adminController.ts
+var AdminController = class {
+  /**
+   * Fetch compiled admin dashboard overview aggregation and statistics
+   */
+  async getDashboardOverview(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const overviewData = await adminService.getAdminDashboardOverview();
+      return sendSuccess(res, overviewData, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET Admin list of users with search, sort, filter, pagination
+   */
+  async getUsers(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const search = req.query.search || "";
+      const filter = req.query.filter || "All";
+      const sortBy = req.query.sortBy || "Newest";
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "10", 10);
+      const offset = (page - 1) * limit;
+      const result = await adminService.getAdminUsersPaginated({
+        search,
+        filter,
+        sortBy,
+        limit,
+        offset
+      });
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET Detailed profile of a single user
+   */
+  async getUserProfile(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const result = await adminService.getUserProfileDetail(targetUid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * PATCH Update user's profile info
+   */
+  async updateUserProfile(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      const { name, email, mobile, status } = req.body;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const result = await adminService.updateAdminUserProfile(
+        req.user.uid,
+        targetUid,
+        { name, email, phone: mobile, status },
+        req.ip,
+        req.headers["user-agent"]
+      );
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * POST Adjust a user's wallet
+   */
+  async adjustWalletBalance(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      const { amount, memo } = req.body;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const user = await userRepository.findByUid(targetUid);
+      if (!user) {
+        throw new ApiError(404, "User not found", "NOT_FOUND");
+      }
+      const result = await adminService.adjustWalletBalance(
+        user.id,
+        { availableBalance: amount.toString() },
+        memo || "Manual wallet adjustment by administrator",
+        req.user.uid
+      );
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * POST Send notification to a user
+   */
+  async sendNotification(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      const { message, priority } = req.body;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const user = await userRepository.findByUid(targetUid);
+      if (!user) {
+        throw new ApiError(404, "User not found", "NOT_FOUND");
+      }
+      await notificationRepository.createNotification({
+        userId: user.id,
+        message,
+        priority: priority || "MEDIUM"
+      });
+      return sendSuccess(res, { success: true, message: "Notification sent successfully." }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET Retrieve user's transaction history
+   */
+  async getUserTransactions(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "50", 10);
+      const offset = (page - 1) * limit;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const result = await adminService.getUserTransactions(targetUid, { limit, offset });
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET Retrieve user's deposit history
+   */
+  async getUserDeposits(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "50", 10);
+      const offset = (page - 1) * limit;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const result = await adminService.getUserDeposits(targetUid, { limit, offset });
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET Retrieve user's withdrawal history
+   */
+  async getUserWithdrawals(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "50", 10);
+      const offset = (page - 1) * limit;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const result = await adminService.getUserWithdrawals(targetUid, { limit, offset });
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET Retrieve user's audit logs
+   */
+  async getUserAudits(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "50", 10);
+      const offset = (page - 1) * limit;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const result = await adminService.getUserAudits(targetUid, { limit, offset });
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * GET Retrieve user's referral team network
+   */
+  async getUserTeamNetwork(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const { targetUid } = req.params;
+      if (!targetUid) {
+        throw new ApiError(400, "Target user UID is required", "BAD_REQUEST");
+      }
+      const result = await adminService.getUserTeamNetwork(targetUid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+};
+var adminController = new AdminController();
+
+// server/routes/v1/adminRoutes.ts
 var router3 = (0, import_express3.Router)();
-router3.use("/auth", authRoutes_default);
-router3.use("/users", userRoutes_default);
-router3.get("/health", (req, res) => {
+router3.get(
+  "/dashboard/overview",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getDashboardOverview
+);
+router3.get(
+  "/users",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getUsers
+);
+router3.get(
+  "/users/:targetUid/profile",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getUserProfile
+);
+router3.patch(
+  "/users/:targetUid/profile",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.updateUserProfile
+);
+router3.post(
+  "/users/:targetUid/wallet-adjustment",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.adjustWalletBalance
+);
+router3.post(
+  "/users/:targetUid/send-notification",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.sendNotification
+);
+router3.get(
+  "/users/:targetUid/transactions",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getUserTransactions
+);
+router3.get(
+  "/users/:targetUid/deposits",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getUserDeposits
+);
+router3.get(
+  "/users/:targetUid/withdrawals",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getUserWithdrawals
+);
+router3.get(
+  "/users/:targetUid/audits",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getUserAudits
+);
+router3.get(
+  "/users/:targetUid/team",
+  requireAuth,
+  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
+  adminController.getUserTeamNetwork
+);
+var adminRoutes_default = router3;
+
+// server/routes/v1/index.ts
+var router4 = (0, import_express4.Router)();
+router4.use("/auth", authRoutes_default);
+router4.use("/users", userRoutes_default);
+router4.use("/admin", adminRoutes_default);
+router4.get("/health", (req, res) => {
   res.json({
     status: "healthy",
     version: "1.0.0",
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-var v1_default = router3;
+var v1_default = router4;
 
 // server/routes/index.ts
-var router4 = (0, import_express4.Router)();
-router4.use("/v1", v1_default);
-var routes_default = router4;
+var router5 = (0, import_express5.Router)();
+router5.use("/v1", v1_default);
+var routes_default = router5;
 
 // server.ts
 async function bootstrap() {
-  const app = (0, import_express5.default)();
+  const app = (0, import_express6.default)();
   const PORT = config2.port;
   app.set("trust proxy", true);
   logger.info(`Starting CeFi Platform Foundation in [${config2.nodeEnv}] mode...`);
   app.use(helmetMiddleware);
   app.use(corsMiddleware);
-  app.use(import_express5.default.json());
-  app.use(import_express5.default.urlencoded({ extended: true }));
+  app.use(import_express6.default.json());
+  app.use(import_express6.default.urlencoded({ extended: true }));
   app.use((0, import_cookie_parser.default)());
   app.use("/api", rateLimiter(15 * 60 * 1e3, 300), routes_default);
   if (config2.nodeEnv !== "production") {
@@ -4845,7 +6346,7 @@ async function bootstrap() {
   } else {
     logger.info("Mounting production static assets build directories...");
     const distPath = import_path.default.join(process.cwd(), "dist");
-    app.use(import_express5.default.static(distPath));
+    app.use(import_express6.default.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });

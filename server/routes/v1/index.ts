@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import userRoutes from './userRoutes.ts';
 import authRoutes from './authRoutes.ts';
+import adminRoutes from './adminRoutes.ts';
 
 const router = Router();
 
@@ -14,6 +15,9 @@ router.use('/auth', authRoutes);
 
 // Mount user routes
 router.use('/users', userRoutes);
+
+// Mount admin routes
+router.use('/admin', adminRoutes);
 
 // Future endpoints placeholder (Wallets, Yield claims, Referrals, Salaries, Admin reports, etc.)
 router.get('/health', (req, res) => {

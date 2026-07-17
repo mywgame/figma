@@ -17,26 +17,28 @@ import type { EmailProvider, SendEmailParams } from './emailProvider.ts';
  * later when an email is actually sent.
  */
 export class ResendProvider implements EmailProvider {
-  private readonly client: Resend;
-  private readonly fromAddress: string;
+  private readonly client: Resend | null = null;
+  private readonly fromAddress: string | undefined;
 
   constructor(apiKey: string | undefined = config.email.resendApiKey, fromAddress: string | undefined = config.email.fromAddress) {
-    if (!apiKey) {
-      throw new Error(
-        'RESEND_API_KEY is not configured. Set RESEND_API_KEY in your environment before using ResendProvider.'
-      );
+    this.fromAddress = fromAddress;
+    if (apiKey) {
+      this.client = new Resend(apiKey);
+    } else {
+      console.warn('RESEND_API_KEY is not configured in the environment. Email sending will be disabled.');
     }
     if (!fromAddress) {
-      throw new Error(
-        'EMAIL_FROM is not configured. Set EMAIL_FROM in your environment before using ResendProvider (e.g. EMAIL_FROM="MetaFirm <noreply@metafirm.app>").'
-      );
+      console.warn('EMAIL_FROM is not configured in the environment. Email sending will be disabled.');
     }
-
-    this.client = new Resend(apiKey);
-    this.fromAddress = fromAddress;
   }
 
   async send({ to, subject, html }: SendEmailParams): Promise<void> {
+    if (!this.client || !this.fromAddress) {
+      throw new Error(
+        'Email provider is not configured. Please set RESEND_API_KEY and EMAIL_FROM in your environment variables to use email services.'
+      );
+    }
+
     const { error } = await this.client.emails.send({
       from: this.fromAddress,
       to,
