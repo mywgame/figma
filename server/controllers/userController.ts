@@ -78,6 +78,23 @@ export class UserController {
   }
 
   /**
+   * Fetch official VIP Qualification Matrix and requirements
+   */
+  async getVipMatrix(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { vipService } = await import('../services/vipService.ts');
+      const matrix = vipService.getVipMatrix();
+      return sendSuccess(res, matrix, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Execute manual Daily DPY yield claim
    */
   async claimYield(req: AuthRequest, res: Response, next: NextFunction) {

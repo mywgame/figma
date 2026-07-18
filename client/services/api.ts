@@ -251,6 +251,13 @@ class ApiService {
   }
 
   /**
+   * Users: Retrieve official VIP Qualification Matrix and requirements
+   */
+  async getVipMatrix(): Promise<ApiResponse<any>> {
+    return this.get<any>('/users/vip-matrix');
+  }
+
+  /**
    * Users: Execute manual Daily DPY yield claim
    */
   async claimYield(claimId: string): Promise<ApiResponse<any>> {

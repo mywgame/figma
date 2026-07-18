@@ -16,13 +16,14 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Crown,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTheme } from '../../hooks/useTheme.ts';
 import logoImg from '../../../assets/images/branding/logo.png';
 import logoMarkImg from '../../../assets/images/branding/logo-mark.png';
 
-export type DashboardTab = 'dashboard' | 'profile' | 'team' | 'transactions' | 'security' | 'settings' | 'support' | 'deposit' | 'withdrawal' | 'rewards' | 'task';
+export type DashboardTab = 'dashboard' | 'vip' | 'profile' | 'team' | 'transactions' | 'security' | 'settings' | 'support' | 'deposit' | 'withdrawal' | 'rewards' | 'task';
 
 interface SidebarProps {
   activeTab: DashboardTab;
@@ -47,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems = [
     { id: 'dashboard' as DashboardTab, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'vip' as DashboardTab, label: 'VIP Club', icon: Crown },
     { id: 'profile' as DashboardTab, label: 'Profile', icon: User },
     { id: 'team' as DashboardTab, label: 'My Team', icon: Users },
     { id: 'transactions' as DashboardTab, label: 'Transactions', icon: History },
@@ -57,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // BottomNav already surfaces these on mobile; the mobile drawer ("More") only
   // needs to show what BottomNav doesn't have room for.
-  const bottomNavTabs: DashboardTab[] = ['dashboard', 'team', 'transactions', 'support'];
+  const bottomNavTabs: DashboardTab[] = ['dashboard', 'vip', 'team', 'transactions', 'support'];
 
   const handleTabClick = (tabId: DashboardTab) => {
     setActiveTab(tabId);

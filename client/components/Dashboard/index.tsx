@@ -29,12 +29,13 @@ const VIP_CONFIG: Record<string, { label: string; color: string; bg: string; ico
 
 // Tab Views
 import { DashboardHome } from './DashboardHome.tsx';
-import { MyTeamView } from './MyTeamView.tsx';
+import { TeamView } from './Team/TeamView.tsx';
 import { ProfileView } from './ProfileView.tsx';
 import { SecurityView } from './SecurityView.tsx';
 import { SettingsView } from './SettingsView.tsx';
 import { SupportView } from './SupportView.tsx';
-import { TransactionsView } from './TransactionsView.tsx';
+import { TransactionsView } from './Transactions/TransactionsView.tsx';
+import { VIPView } from './VIP/VIPView.tsx';
 
 // Dedicated Sub-pages
 import { DashboardLayout } from './Layout/DashboardLayout.tsx';
@@ -145,10 +146,12 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
         );
       case 'profile':
         return <ProfileView />;
+      case 'vip':
+        return <VIPView dashboardData={dashboardData} />;
       case 'team':
-        return wrapLegacyView(<MyTeamView />);
+        return <TeamView dashboardData={dashboardData} />;
       case 'transactions':
-        return wrapLegacyView(<TransactionsView />);
+        return <TransactionsView />;
       case 'security':
         return <SecurityView />;
       case 'settings':
@@ -212,10 +215,15 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       <div className="relative z-10 flex-grow flex flex-col min-w-0">
 
         {/* 2.1 Top Bar Navigation */}
-        <TopNav identity={realIdentity} />
+        <TopNav
+          identity={realIdentity}
+          activeTab={activeTab}
+          onNavigate={setActiveTab}
+          onLogout={handleLogout}
+        />
 
         {/* 2.2 Scrollable Content Canvas Container */}
-        <main className="flex-grow p-4 sm:p-6 md:p-8 overflow-y-auto space-y-6 max-w-7xl w-full mx-auto pb-[calc(122px+env(safe-area-inset-bottom)+1.5rem)] md:pb-8">
+        <main className="flex-grow px-2 xs:px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 overflow-y-auto space-y-6 max-w-7xl w-full mx-auto pb-[calc(122px+env(safe-area-inset-bottom)+1.5rem)] md:pb-8">
 
           {/* Back shortcut — desktop only; mobile relies on BottomNav for navigation */}
           <div className={`hidden md:flex items-center justify-between pb-4 border-b ${t.sep}`}>
@@ -238,7 +246,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onMoreClick={() => setIsMobileSidebarOpen(true)}
       />
 
       {/* Toast Feedbacks */}

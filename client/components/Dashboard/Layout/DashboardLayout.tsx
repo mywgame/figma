@@ -57,7 +57,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
       )}
       
-      <div className={`rounded-3xl border p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl ${t.card} ${t.sep}`}>
+      <div className={`rounded-2xl sm:rounded-3xl border p-3 xs:p-4 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl ${t.card} ${t.sep}`}>
         {/* Subtle decorative glow orbs inside the layout container */}
         <div className={`absolute -right-16 -top-16 w-64 h-64 rounded-full blur-3xl pointer-events-none ${t.isDark ? 'bg-cyan-500/10' : 'bg-violet-400/10'}`} />
         <div className={`absolute -left-10 -bottom-10 w-48 h-48 rounded-full blur-3xl pointer-events-none ${t.isDark ? 'bg-purple-600/10' : 'bg-sky-400/10'}`} />

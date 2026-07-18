@@ -47,6 +47,17 @@ router.get(
 );
 
 /**
+ * @route GET /api/v1/users/vip-matrix
+ * @desc Get official VIP qualification requirements matrix
+ * @access Private
+ */
+router.get(
+  '/vip-matrix',
+  requireAuth,
+  userController.getVipMatrix
+);
+
+/**
  * @route POST /api/v1/users/claim-yield
  * @desc Claim daily yield DPY reward manually
  * @access Private

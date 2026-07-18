@@ -1,4 +1,4 @@
-  # metafir_Architecture
+ # metafir_Architecture
 
 │   .env
 │   .env.example
@@ -12,7 +12,6 @@
 │   MetaFirm_Master_Blueprint.md
 │   package-lock.json
 │   package.json
-│   READ.MD
 │   README.md
 │   server.ts
 │   tsconfig.json
@@ -28,43 +27,45 @@
 │   │       usdt-svg.svg
 │   │
 │   ├───images
+│   │   ├───backgrounds
+│   │   │   ├───admin
+│   │   │   │       .gitkeep
+│   │   │   │
+│   │   │   ├───auth
+│   │   │   │       .gitkeep
+│   │   │   │
+│   │   │   ├───dashboard
+│   │   │   │       .gitkeep
+│   │   │   │
+│   │   │   └───landing
+│   │   │           .gitkeep
+│   │   │
 │   │   ├───branding
 │   │   │       logo-mark.png
 │   │   │       logo.png
 │   │   │
-│   │   └───illustrations
-│   │           gpu-farm-illustration.svg
-│   │           solar-farm-illustration.svg
+│   │   ├───illustrations
+│   │   │       gpu-farm-illustration.svg
+│   │   │       solar-farm-illustration.svg
+│   │   │
+│   │   └───placeholders
+│   │           .gitkeep
 │   │
 │   └───video
+│       ├───admin
+│       │       .gitkeep
+│       │
+│       ├───dashboard
+│       │       .gitkeep
+│       │
 │       └───landing
+│               .gitkeep
 │               hero-background.mp4
 │
 ├───client
 │   │   App.tsx
 │   │   index.css
 │   │   main.tsx
-│   │
-│   ├───assets
-│   │   └───avatars
-│   │           avatar-01-hexagon.svg
-│   │           avatar-02-diamond.svg
-│   │           avatar-03-bolt.svg
-│   │           avatar-04-shield.svg
-│   │           avatar-05-cube.svg
-│   │           avatar-06-star.svg
-│   │           avatar-07-orbit.svg
-│   │           avatar-08-circuit.svg
-│   │           avatar-09-wave.svg
-│   │           avatar-10-prism.svg
-│   │           avatar-11-node.svg
-│   │           avatar-12-crystal.svg
-│   │           avatar-13-compass.svg
-│   │           avatar-14-hexgrid.svg
-│   │           avatar-15-pulse.svg
-│   │           avatar-16-rings.svg
-│   │           avatar-17-spark.svg
-│   │           avatar-18-infinity.svg
 │   │
 │   ├───components
 │   │   │   About.tsx
@@ -91,63 +92,36 @@
 │   │   │       DepositsView.tsx
 │   │   │       IncomeView.tsx
 │   │   │       index.tsx
-│   │   │       mockData.ts
 │   │   │       RewardsView.tsx
 │   │   │       SalaryView.tsx
 │   │   │       SecurityView.tsx
 │   │   │       SettingsView.tsx
 │   │   │       SupportView.tsx
-│   │   │       TrialFundView.tsx
-│   │   │       types.ts
 │   │   │       UsersView.tsx
 │   │   │       VipView.tsx
 │   │   │       WithdrawalsView.tsx
 │   │   │
 │   │   ├───Dashboard
-│   │   │   │   Announcements.tsx
-│   │   │   │   BottomNav.tsx
-│   │   │   │   DailyClaimCard.tsx
-│   │   │   │   DashboardHome.tsx
-│   │   │   │   GradientOrbs.tsx
-│   │   │   │   HeroBalanceCard.tsx
-│   │   │   │   IncomeStatCard.tsx
-│   │   │   │   index.tsx
-│   │   │   │   MetaFirmAssetIcon.tsx
-│   │   │   │   MonthlyEarningsChart.tsx
-│   │   │   │   MyTeamView.tsx
-│   │   │   │   NetworkLevels.tsx
-│   │   │   │   ProfileView.tsx
-│   │   │   │   RecentActivity.tsx
-│   │   │   │   SecurityView.tsx
-│   │   │   │   SettingsView.tsx
-│   │   │   │   Sidebar.tsx
-│   │   │   │   SupportView.tsx
-│   │   │   │   TeamOverview.tsx
-│   │   │   │   TopNav.tsx
-│   │   │   │   TransactionsView.tsx
-│   │   │   │
-│   │   │   ├───Deposit
-│   │   │   │       DepositView.tsx
-│   │   │   │
-│   │   │   ├───Layout
-│   │   │   │       DashboardLayout.tsx
-│   │   │   │
-│   │   │   ├───Rewards
-│   │   │   │       RewardsView.tsx
-│   │   │   │
-│   │   │   ├───Task
-│   │   │   │       TaskView.tsx
-│   │   │   │
-│   │   │   └───Withdrawal
-│   │   │           WithdrawalView.tsx
+│   │   │       Announcements.tsx
+│   │   │       DailyClaimCard.tsx
+│   │   │       DashboardHome.tsx
+│   │   │       index.tsx
+│   │   │       MetaFirmAssetIcon.tsx
+│   │   │       MyTeamView.tsx
+│   │   │       PortfolioOverview.tsx
+│   │   │       ProfileView.tsx
+│   │   │       RecentActivity.tsx
+│   │   │       SecurityView.tsx
+│   │   │       SettingsView.tsx
+│   │   │       Sidebar.tsx
+│   │   │       SupportView.tsx
+│   │   │       TeamOverview.tsx
+│   │   │       TopNav.tsx
+│   │   │       TransactionsView.tsx
 │   │   │
 │   │   └───ui
-│   │       │   AvatarPicker.tsx
 │   │       │   index.ts
-│   │       │   RingProgress.tsx
 │   │       │   theme.ts
-│   │       │   ThemeSwitch.tsx
-│   │       │   themeTokens.ts
 │   │       │
 │   │       ├───Buttons
 │   │       │       index.tsx
@@ -175,21 +149,12 @@
 │   │
 │   ├───contexts
 │   │       AuthContext.tsx
-│   │       ThemeContext.tsx
 │   │
 │   ├───hooks
 │   │       useAuth.ts
-│   │       useAvatar.ts
-│   │       useTheme.ts
 │   │
 │   ├───layouts
 │   │       BaseLayout.tsx
-│   │
-│   ├───lib
-│   │       avatars.ts
-│   │
-│   ├───mocks
-│   │       dashboardMockData.ts
 │   │
 │   ├───services
 │   │       api.ts
@@ -201,6 +166,18 @@
 │   └───utils
 │           index.ts
 │           landingData.ts
+│
+├───dist
+│   │   index.html
+│   │   server.cjs
+│   │   server.cjs.map
+│   │
+│   └───assets
+│           favicon-DzAemdKg.png
+│           index-B9sThOT7.js
+│           index-CjrTn7mj.css
+│           logo-CPbukfqA.png
+│           logo-mark-CJjUW_hu.png
 │
 ├───drizzle
 │   │   0000_eager_legion.sql
@@ -222,18 +199,10 @@
 │       create-superadmin.ts
 │
 ├───server
-│   ├───cache
-│   │   │   redisClient.ts
-│   │   │   redisKeys.ts
-│   │   │
-│   │   └───services
-│   │           otpService.ts
-│   │
 │   ├───config
 │   │       index.ts
 │   │
 │   ├───controllers
-│   │       adminController.ts
 │   │       authController.ts
 │   │       userController.ts
 │   │
@@ -273,7 +242,6 @@
 │   │   │   index.ts
 │   │   │
 │   │   └───v1
-│   │           adminRoutes.ts
 │   │           authRoutes.ts
 │   │           index.ts
 │   │           userRoutes.ts
@@ -304,7 +272,6 @@
 │   └───utils
 │           jwt.ts
 │           logger.ts
-│           otp.ts
 │           password.ts
 │           response.ts
 │           securityLogger.ts
@@ -321,10 +288,6 @@
 │           index.ts
 │
 └───src
-    │   App.tsx
-    │   index.css
-    │   main.tsx
-    │
     └───db
             achievements.ts
             activities.ts

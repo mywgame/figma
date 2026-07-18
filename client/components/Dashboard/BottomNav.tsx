@@ -3,36 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { LayoutDashboard, Users, History, HelpCircle, Menu } from 'lucide-react';
+import React, { useState } from 'react';
+import { Crown, LayoutDashboard, Users, History, HelpCircle } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { DashboardTab } from './Sidebar.tsx';
 
 interface BottomNavProps {
   activeTab: DashboardTab;
   setActiveTab: (tab: DashboardTab) => void;
-  onMoreClick: () => void;
+  onMoreClick?: () => void;
 }
 
 /**
- * Mobile-only fixed bottom tab bar — same navigation, same icons, same
- * routing as before. Only the visual treatment changed: the active tab now
- * sits on the MetaFirm brand gradient (cyan → purple) with a smooth
- * lift/scale transition instead of a flat highlight color.
+ * Mobile-only fixed bottom tab bar — order: VIP | History | Home | Team | Support.
+ * Minimal, elegant active design: gradient icon, gradient text, higher opacity/weight. No floating circle/sphere.
  */
-export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab, onMoreClick }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab }) => {
   const { t } = useTheme();
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
   const tabs: { id: DashboardTab; label: string; icon: React.ElementType }[] = [
+    { id: 'vip', label: 'VIP', icon: Crown },
+    { id: 'transactions', label: 'History', icon: History },
     { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
     { id: 'team', label: 'Team', icon: Users },
-    { id: 'transactions', label: 'History', icon: History },
     { id: 'support', label: 'Support', icon: HelpCircle },
   ];
-
-  // "More" is treated as its own pseudo-tab: active when the user is on a view
-  // not represented by one of the four primary tabs (profile/security/settings).
-  const isMoreActive = !tabs.some((i) => i.id === activeTab);
 
   const renderItem = (
     key: string,
@@ -40,47 +36,73 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab, o
     Icon: React.ElementType,
     isActive: boolean,
     onClick: () => void,
-  ) => (
-    <button
-      key={key}
-      onClick={onClick}
-      className="relative flex flex-col items-center justify-center gap-1 cursor-pointer focus:outline-none group"
-      aria-current={isActive ? 'page' : undefined}
-    >
-      {/* Active indicator pill */}
-      <span
-        className={`absolute -top-[1px] h-[3px] rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all duration-300 ease-out ${
-          isActive ? 'w-6 opacity-100' : 'w-0 opacity-0'
-        }`}
-      />
+  ) => {
+    const isHovered = hoveredTab === key;
+    const showGradient = isActive || isHovered;
 
-      <span
-        className={`flex items-center justify-center w-9 h-9 rounded-2xl transition-all duration-300 ease-out transform ${
-          isActive
-            ? 'bg-gradient-to-br from-cyan-500 to-purple-500 text-white scale-110 shadow-lg shadow-cyan-500/25 -translate-y-0.5'
-            : `${t.navInactive} group-hover:text-cyan-500 group-active:scale-90`
-        }`}
+    return (
+      <button
+        key={key}
+        onClick={onClick}
+        onMouseEnter={() => setHoveredTab(key)}
+        onMouseLeave={() => setHoveredTab(null)}
+        className="relative flex flex-col items-center justify-center gap-1 cursor-pointer focus:outline-none group py-2 px-1 rounded-2xl transition-all duration-300"
+        aria-current={isActive ? 'page' : undefined}
       >
-        <Icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2.4 : 2} />
-      </span>
-      <span
-        className={`text-[9px] font-bold tracking-wide transition-colors duration-300 ${
-          isActive ? 'bg-gradient-to-r from-cyan-500 to-purple-500 bg-clip-text text-transparent' : t.navInactive
-        }`}
-      >
-        {label}
-      </span>
-    </button>
-  );
+        {/* Subtle background highlight on hover (5% opacity in light mode, 8% in dark mode) */}
+        <div
+          className={`absolute inset-0.5 rounded-xl transition-all duration-300 pointer-events-none ${
+            isHovered ? 'opacity-100' : 'opacity-0'
+          } ${t.isDark ? 'bg-cyan-500/8' : 'bg-cyan-500/5'}`}
+        />
+
+        {/* Icon wrapper */}
+        <span
+          className={`flex items-center justify-center transition-all duration-300 ease-out relative z-10`}
+        >
+          <Icon
+            className="w-[20px] h-[20px] transition-all duration-300"
+            stroke={showGradient ? 'url(#metafirm-gradient)' : 'currentColor'}
+            strokeWidth={isActive ? 2.5 : 2}
+          />
+        </span>
+
+        {/* Label wrapper */}
+        <span
+          className={`text-[9px] font-bold tracking-wide transition-all duration-300 relative z-10 select-none ${
+            showGradient
+              ? 'bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent font-extrabold opacity-100'
+              : `${t.navInactive} opacity-75`
+          }`}
+        >
+          {label}
+        </span>
+
+        {/* Thin gradient underline (2.5px) centered beneath the active label */}
+        {isActive && (
+          <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-[2.5px] rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300" />
+        )}
+      </button>
+    );
+  };
 
   return (
     <nav
       id="mobile-bottom-nav"
       className={`md:hidden fixed bottom-0 inset-x-0 z-40 backdrop-blur-xl border-t pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] transition-colors duration-300 ${t.navBg} ${t.navBorder}`}
     >
-      <div className="grid grid-cols-5 h-[62px] max-w-lg mx-auto">
+      {/* SVG Gradient definition used globally by the icons */}
+      <svg className="absolute w-0 h-0" width="0" height="0" aria-hidden="true">
+        <defs>
+          <linearGradient id="metafirm-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#22d3ee" />
+            <stop offset="100%" stopColor="#a855f7" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <div className="grid grid-cols-5 h-[62px] max-w-lg mx-auto px-2">
         {tabs.map((item) => renderItem(item.id, item.label, item.icon, activeTab === item.id, () => setActiveTab(item.id)))}
-        {renderItem('more', 'More', Menu, isMoreActive, onMoreClick)}
       </div>
     </nav>
   );

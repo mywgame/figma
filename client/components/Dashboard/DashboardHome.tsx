@@ -18,6 +18,17 @@ import { MonthlyEarningsChart } from './MonthlyEarningsChart.tsx';
 import { NetworkLevels } from './NetworkLevels.tsx';
 import { RecentActivity } from './RecentActivity.tsx';
 
+const VIP_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  VIP1: { label: 'VIP1', color: '#94a3b8', bg: 'from-slate-400/30 to-slate-500/30', icon: '🥈' },
+  VIP2: { label: 'VIP2', color: '#f59e0b', bg: 'from-yellow-500/30 to-orange-500/30', icon: '🥇' },
+  VIP3: { label: 'VIP3', color: '#38bdf8', bg: 'from-cyan-500/30 to-blue-500/30', icon: '💎' },
+  VIP4: { label: 'VIP4', color: '#a855f7', bg: 'from-purple-500/30 to-indigo-500/30', icon: '👑' },
+  VIP5: { label: 'VIP5', color: '#ec4899', bg: 'from-pink-500/30 to-rose-500/30', icon: '🌟' },
+  VIP6: { label: 'VIP6', color: '#f43f5e', bg: 'from-rose-500/30 to-red-500/30', icon: '⚡' },
+  VIP7: { label: 'VIP7', color: '#10b981', bg: 'from-emerald-500/30 to-teal-500/30', icon: '🔥' },
+  VIP8: { label: 'VIP8', color: '#3b82f6', bg: 'from-blue-500/30 to-cyan-500/30', icon: '🚀' },
+};
+
 interface DashboardHomeProps {
   dashboardData: DashboardData | null;
   onRefresh?: () => Promise<void>;
@@ -46,6 +57,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
                         parseFloat(dashboardData.earnings.teamIncome) +
                         parseFloat(dashboardData.earnings.incentiveIncome);
     const totalWithdrawn = parseFloat(dashboardData.wallet.totalWithdrawn);
+
+    const vipTier = dashboardData?.vip?.tier || user?.vipTier || 'VIP1';
+    const currentVip = VIP_CONFIG[vipTier] || VIP_CONFIG['VIP1'];
 
     const levelACount = dashboardData.team?.levelACount || 0;
     const levelBCount = dashboardData.team?.levelBCount || 0;
@@ -123,6 +137,14 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
           totalBalance={totalBalance}
           totalEarned={totalEarned}
           totalWithdrawn={totalWithdrawn}
+          identity={{
+            name: user?.name || user?.email?.split('@')[0] || 'User',
+            id: user?.userId || 'MF-N/A',
+            rankLabel: currentVip.label,
+            rankColor: currentVip.color,
+            rankBg: currentVip.bg,
+            rankIcon: currentVip.icon,
+          }}
         />
 
         {/* 2. Quick Action Buttons — always one row (mobile shrinks size, desktop untouched) */}
@@ -197,6 +219,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
     );
   }
 
+  const fallbackVipTier = user?.vipTier || 'VIP1';
+  const fallbackVip = VIP_CONFIG[fallbackVipTier] || VIP_CONFIG['VIP1'];
+
   return (
     <div className="space-y-6 w-full text-left" id="metafirm-dashboard-home">
 
@@ -205,6 +230,14 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
         totalBalance={data.wallet.totalBalance}
         totalEarned={data.wallet.totalEarned}
         totalWithdrawn={data.wallet.totalWithdrawn}
+        identity={{
+          name: user?.name || user?.email?.split('@')[0] || 'User',
+          id: user?.userId || 'MF-N/A',
+          rankLabel: fallbackVip.label,
+          rankColor: fallbackVip.color,
+          rankBg: fallbackVip.bg,
+          rankIcon: fallbackVip.icon,
+        }}
       />
 
       {/* 2. Quick Action Buttons — always one row (mobile shrinks size, desktop untouched) */}
