@@ -12,10 +12,21 @@ import { logger } from './server/utils/logger.ts';
 import { errorHandler } from './server/middlewares/errorHandler.ts';
 import { helmetMiddleware, corsMiddleware, rateLimiter } from './server/middlewares/security.ts';
 import apiRoutes from './server/routes/index.ts';
+import { transactionMonitor } from './server/services/transactionMonitor.ts';
+import { treasuryService } from './server/blockchain/services/TreasuryService.ts';
+import { sweepQueueProcessor } from './server/blockchain/services/SweepQueueProcessor.ts';
 
 async function bootstrap() {
   const app = express();
   const PORT = config.port;
+
+  // Initialize treasury configurations if they don't exist
+  try {
+    await treasuryService.ensureAllTreasuryWallets();
+    logger.info('[Bootstrap] Treasury wallets verified/seeded successfully.');
+  } catch (err: any) {
+    logger.error('[Bootstrap] Failed to verify/seed treasury wallets:', err.message);
+  }
 
   // Enable trust proxy so Express resolves the client's real IP behind Cloud Run reverse proxies
   app.set('trust proxy', true);
@@ -27,7 +38,11 @@ async function bootstrap() {
   app.use(corsMiddleware);
 
   // 2. Body Parsers & Cookie Parser
-  app.use(express.json());
+  app.use(express.json({
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
@@ -58,11 +73,16 @@ async function bootstrap() {
   // 6. Bind and Listen
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server successfully bound to host 0.0.0.0, listening on port ${PORT}`);
+    // Start background transaction check routine
+    transactionMonitor.start();
+    sweepQueueProcessor.start();
   });
 
   // Graceful shutdown handling
   const shutdown = () => {
     logger.info('Received shutdown signal. Commencing graceful termination...');
+    transactionMonitor.stop();
+    sweepQueueProcessor.stop();
     server.close(() => {
       logger.info('Express server successfully closed. Process exiting.');
       process.exit(0);

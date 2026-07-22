@@ -7,6 +7,7 @@ import { Router } from 'express';
 import userRoutes from './userRoutes.ts';
 import authRoutes from './authRoutes.ts';
 import adminRoutes from './adminRoutes.ts';
+import webhookRoutes from './webhookRoutes.ts';
 
 const router = Router();
 
@@ -18,6 +19,9 @@ router.use('/users', userRoutes);
 
 // Mount admin routes
 router.use('/admin', adminRoutes);
+
+// Mount webhook routes
+router.use('/webhooks', webhookRoutes);
 
 // Future endpoints placeholder (Wallets, Yield claims, Referrals, Salaries, Admin reports, etc.)
 router.get('/health', (req, res) => {

@@ -11,6 +11,7 @@ import { api } from '../../../services/api.ts';
 import { VIPProgress } from './VIPProgress.tsx';
 import { VIPCardGrid } from './VIPCardGrid.tsx';
 import { VipMatrixTier } from './types.ts';
+import { VIPSkeleton } from '../Skeletons/VIPSkeleton.tsx';
 
 interface VIPViewProps {
   dashboardData: any;
@@ -87,12 +88,7 @@ export const VIPView: React.FC<VIPViewProps> = ({ dashboardData }) => {
       )}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-3">
-          <RefreshCw className="w-8 h-8 text-cyan-500 animate-spin" />
-          <p className={`text-xs font-semibold tracking-wider uppercase ${t.textMuted}`}>
-            Retrieving Audit Specs Matrix...
-          </p>
-        </div>
+        <VIPSkeleton />
       ) : (
         <div className="space-y-8">
           {/* 3. Progress Card */}

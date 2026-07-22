@@ -17,37 +17,42 @@ import type { EmailProvider, SendEmailParams } from './emailProvider.ts';
  * later when an email is actually sent.
  */
 export class ResendProvider implements EmailProvider {
-  private readonly client: Resend | null = null;
-  private readonly fromAddress: string | undefined;
+  private readonly client: Resend;
+  private readonly fromAddress: string;
 
   constructor(apiKey: string | undefined = config.email.resendApiKey, fromAddress: string | undefined = config.email.fromAddress) {
-    this.fromAddress = fromAddress;
-    if (apiKey) {
-      this.client = new Resend(apiKey);
-    } else {
-      console.warn('RESEND_API_KEY is not configured in the environment. Email sending will be disabled.');
+    const cleanApiKey = apiKey ? apiKey.replace(/^['"]|['"]$/g, '').trim() : '';
+    const cleanFromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, '').trim() : '';
+
+    if (!cleanApiKey) {
+      throw new Error('RESEND_API_KEY is not configured in the environment. Real email delivery is required.');
     }
-    if (!fromAddress) {
-      console.warn('EMAIL_FROM is not configured in the environment. Email sending will be disabled.');
+    if (!cleanFromAddress) {
+      throw new Error('EMAIL_FROM is not configured in the environment. Real email delivery is required.');
     }
+
+    this.client = new Resend(cleanApiKey);
+    this.fromAddress = cleanFromAddress;
   }
 
   async send({ to, subject, html }: SendEmailParams): Promise<void> {
-    if (!this.client || !this.fromAddress) {
-      throw new Error(
-        'Email provider is not configured. Please set RESEND_API_KEY and EMAIL_FROM in your environment variables to use email services.'
-      );
-    }
+    console.log(`[Resend] Initiating real email delivery to ${to} with subject: "${subject}"`);
+    try {
+      const response = await this.client.emails.send({
+        from: this.fromAddress,
+        to,
+        subject,
+        html,
+      });
 
-    const { error } = await this.client.emails.send({
-      from: this.fromAddress,
-      to,
-      subject,
-      html,
-    });
+      console.log('[Resend API Response]:', JSON.stringify(response, null, 2));
 
-    if (error) {
-      throw new Error(`Failed to send email via Resend: ${error.message}`);
+      if (response.error) {
+        throw new Error(`Resend API Error (HTTP ${response.error.statusCode || '422'}): ${response.error.message} [Name: ${response.error.name}]`);
+      }
+    } catch (err: any) {
+      console.error('[Resend Send Exception]:', err);
+      throw err;
     }
   }
 }

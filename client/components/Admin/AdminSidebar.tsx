@@ -22,7 +22,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
-  Sparkles
+  Sparkles,
+  Vault
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 
@@ -40,7 +41,8 @@ export type AdminTab =
   | 'audit'
   | 'security'
   | 'settings'
-  | 'trial_fund';
+  | 'trial_fund'
+  | 'treasury';
 
 interface AdminSidebarProps {
   activeTab: AdminTab;
@@ -58,12 +60,12 @@ const ROLE_PERMISSIONS: Record<string, AdminTab[]> = {
   admin: [
     'dashboard', 'users', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
-    'audit', 'security', 'settings', 'trial_fund'
+    'audit', 'security', 'settings', 'trial_fund', 'treasury'
   ],
   superadmin: [
     'dashboard', 'users', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
-    'audit', 'security', 'settings', 'trial_fund'
+    'audit', 'security', 'settings', 'trial_fund', 'treasury'
   ],
   operator: [
     'dashboard', 'users', 'deposits', 'withdrawals', 'announcements', 'audit', 'security'
@@ -72,7 +74,7 @@ const ROLE_PERMISSIONS: Record<string, AdminTab[]> = {
     'dashboard', 'users', 'support', 'announcements'
   ],
   finance: [
-    'dashboard', 'deposits', 'withdrawals', 'income', 'rewards', 'salary'
+    'dashboard', 'deposits', 'withdrawals', 'income', 'rewards', 'salary', 'treasury'
   ],
   auditor: [
     'dashboard', 'audit', 'security'
@@ -104,6 +106,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { id: 'users', label: 'Users', icon: Users },
     { id: 'deposits', label: 'Deposits', icon: ArrowDownLeft, color: 'text-emerald-500' },
     { id: 'withdrawals', label: 'Withdrawals', icon: ArrowUpRight, color: 'text-amber-500' },
+    { id: 'treasury', label: 'Treasury Vault', icon: Vault, color: 'text-amber-400' },
     { id: 'vip', label: 'VIP Management', icon: Award, color: 'text-purple-500' },
     { id: 'income', label: 'Team Commission Engine', icon: TrendingUp, color: 'text-blue-500' },
     { id: 'rewards', label: 'Rewards Pool', icon: Gift, color: 'text-rose-500' },

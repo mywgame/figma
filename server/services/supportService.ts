@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import { supportRepository } from '../repositories/supportRepository.ts';
+import { notificationService } from './notificationService.ts';
 
 export class SupportService {
   /**
@@ -25,6 +26,8 @@ export class SupportService {
     subject: string;
     description: string;
     priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    attachmentName?: string;
+    attachmentData?: string;
   }) {
     const ticketNumber = this.generateTicketNumber();
     const ticket = await supportRepository.createTicket({
@@ -34,6 +37,8 @@ export class SupportService {
       subject: data.subject,
       description: data.description,
       priority: data.priority || 'LOW',
+      attachmentName: data.attachmentName,
+      attachmentData: data.attachmentData,
     });
 
     // Automatically append the initial user description as the first thread message
@@ -42,6 +47,15 @@ export class SupportService {
       senderId: data.userId,
       senderType: 'USER',
       message: data.description,
+    });
+
+    // Dispatch notification to administrators
+    await notificationService.notifyAdmins({
+      title: 'New Support Ticket Created',
+      description: `Inquiry ${ticket.ticketNumber} regarding ${data.category} has been opened.`,
+      icon: 'MessageSquare',
+      type: 'support',
+      priority: 'MEDIUM',
     });
 
     return ticket;
@@ -77,6 +91,27 @@ export class SupportService {
     const newStatus = data.senderType === 'ADMIN' ? 'PENDING_USER' : 'OPEN';
     await supportRepository.updateTicket(ticket.id, { status: newStatus });
 
+    // Send notifications
+    if (data.senderType === 'ADMIN') {
+      // Notify the ticket owner user of admin's reply
+      await notificationService.createStructuredNotification(ticket.userId, {
+        title: 'New Support Message',
+        description: `MetaFirm Support has replied to your ticket ${ticket.ticketNumber}: "${data.message.substring(0, 60)}..."`,
+        icon: 'MessageSquare',
+        type: 'support',
+        priority: 'HIGH',
+      });
+    } else if (data.senderType === 'USER') {
+      // Notify administrators of the user's response reply
+      await notificationService.notifyAdmins({
+        title: 'New User Ticket Reply',
+        description: `User replied to ticket ${ticket.ticketNumber}: "${data.message.substring(0, 60)}..."`,
+        icon: 'MessageSquare',
+        type: 'support',
+        priority: 'MEDIUM',
+      });
+    }
+
     return messageRecord;
   }
 
@@ -85,6 +120,20 @@ export class SupportService {
    */
   async getUserTickets(userId: string, options?: { limit?: number; offset?: number; status?: string }) {
     return supportRepository.findByUserId(userId, options);
+  }
+
+  /**
+   * Retrieve list of all support tickets for administrative oversight
+   */
+  async getAdminTickets(options?: {
+    status?: string;
+    priority?: string;
+    category?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    return supportRepository.findAdminTickets(options);
   }
 
   /**

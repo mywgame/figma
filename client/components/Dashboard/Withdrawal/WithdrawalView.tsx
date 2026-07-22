@@ -6,54 +6,10 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Copy, History, Wallet } from 'lucide-react';
 import { useTheme } from '../../../hooks/useTheme.ts';
+import { useAuth } from '../../../hooks/useAuth.ts';
 import { DashboardLayout } from '../Layout/DashboardLayout.tsx';
 import { Input } from '../../ui/Inputs/index.tsx';
 import { Button } from '../../ui/Buttons/index.tsx';
-
-const MOCK_WITHDRAWAL_HISTORY = [
-  {
-    id: 'w1',
-    dateTime: '2026-07-16 18:22:15',
-    network: 'USDT BEP20',
-    amount: '100.00',
-    status: 'PENDING',
-    txNumber: 'WTH-74291845',
-    txHash: '0x8b3a5c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6bf12',
-  },
-  {
-    id: 'w2',
-    dateTime: '2026-07-12 11:05:30',
-    network: 'USDT TRC20',
-    amount: '50.00',
-    status: 'APPROVED',
-    txNumber: 'WTH-28491054',
-    txHash: '0x5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6de9a',
-  },
-  {
-    id: 'w3',
-    dateTime: '2026-07-05 08:44:12',
-    network: 'USDT Polygon',
-    amount: '200.00',
-    status: 'APPROVED',
-    txNumber: 'WTH-10385921',
-    txHash: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d',
-  }
-];
-
-const VERIFIED_WITHDRAWAL_ADDRESSES: Record<string, string[]> = {
-  USDT_BEP20: [
-    '0x72a9df28c9e120fd0e762b3c4d5e6f7a8b9cf82e',
-    '0x3f5c6e8d7a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d'
-  ],
-  USDT_POLYGON: [
-    '0x9c8b7a6d5e4f3c2b1a0e9f8d7c6b5a4f3e2d1c0b',
-    '0x5a4d3c2b1a0e9f8d7c6b5a4f3e2d1c0b9a8f7e6d'
-  ],
-  USDT_TRC20: [
-    'TY1e9f8d7c6b5a4f3e2d1c0b9a8f7e6d5c',
-    'TX8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c'
-  ],
-};
 
 interface WithdrawalViewProps {
   showToast: (msg: string) => void;
@@ -65,6 +21,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
   onBack,
 }) => {
   const { t } = useTheme();
+  const { token } = useAuth();
 
   const [withdrawNetwork, setWithdrawNetwork] = useState('USDT_BEP20');
   const [selectedWithdrawAddress, setSelectedWithdrawAddress] = useState('');
@@ -72,19 +29,88 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
   const [emailOtp, setEmailOtp] = useState('');
   const [googleAuth2fa, setGoogleAuth2fa] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [debugOtp, setDebugOtp] = useState<string | null>(null);
+
+  const [verifiedAddresses, setVerifiedAddresses] = useState<Record<string, string[]>>({});
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [withdrawalsHistory, setWithdrawalsHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const fetchWithdrawalAddresses = async () => {
+    if (!token) return;
+    setLoadingAddresses(true);
+    try {
+      const res = await fetch('/api/v1/users/security/withdrawal-addresses', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const body = await res.json();
+      if (res.ok && body.success && body.data) {
+        setVerifiedAddresses(body.data);
+      }
+    } catch (err) {
+      console.error('Failed to load verified withdrawal addresses:', err);
+    } finally {
+      setLoadingAddresses(false);
+    }
+  };
+
+  const fetchWithdrawalsHistory = async () => {
+    if (!token) return;
+    setLoadingHistory(true);
+    try {
+      const res = await fetch('/api/v1/users/withdrawals', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const body = await res.json();
+      if (res.ok && body.success && body.data) {
+        setWithdrawalsHistory(body.data);
+      }
+    } catch (err) {
+      console.error('Failed to load withdrawals history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   useEffect(() => {
-    const list = VERIFIED_WITHDRAWAL_ADDRESSES[withdrawNetwork] || [];
-    setSelectedWithdrawAddress(list[0] || '');
-  }, [withdrawNetwork]);
+    fetchWithdrawalAddresses();
+    fetchWithdrawalsHistory();
+  }, [token]);
 
-  const handleSendOtp = () => {
+  useEffect(() => {
+    const list = verifiedAddresses[withdrawNetwork] || [];
+    setSelectedWithdrawAddress(list[0] || '');
+  }, [withdrawNetwork, verifiedAddresses]);
+
+  const handleSendOtp = async () => {
     if (isSendingOtp) return;
     setIsSendingOtp(true);
-    setTimeout(() => {
-      setIsSendingOtp(false);
+    setDebugOtp(null);
+    try {
+      const res = await fetch('/api/v1/users/withdrawals/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error?.message || 'Failed to dispatch verification OTP.');
+      }
+      if (body.success && body.data?.debugOtp) {
+        setDebugOtp(body.data.debugOtp);
+      }
       showToast('A verification code has been sent to your registered email address!');
-    }, 1500);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to send OTP.');
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
   const handleCopyTxHash = (hash: string) => {
@@ -92,8 +118,12 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
     showToast('Transaction Hash copied to clipboard!');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedWithdrawAddress) {
+      showToast('Please select a verified withdrawal address.');
+      return;
+    }
     if (!withdrawAmountState || parseFloat(withdrawAmountState) <= 0) {
       showToast('Please specify a valid withdrawal amount.');
       return;
@@ -106,10 +136,36 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
       showToast('Please provide a valid 6-digit Google Authenticator code.');
       return;
     }
-    
-    showToast(`Withdrawal request of ${withdrawAmountState} USDT submitted for admin approval!`);
-    setEmailOtp('');
-    setGoogleAuth2fa('');
+
+    try {
+      const res = await fetch('/api/v1/users/withdrawals/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amount: withdrawAmountState,
+          network: withdrawNetwork,
+          walletAddress: selectedWithdrawAddress,
+          emailOtp,
+          googleAuth2fa,
+        }),
+      });
+
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error?.message || 'Failed to submit withdrawal request.');
+      }
+
+      showToast('Withdrawal request submitted successfully for administrative review!');
+      setEmailOtp('');
+      setGoogleAuth2fa('');
+      setDebugOtp(null);
+      fetchWithdrawalsHistory();
+    } catch (err: any) {
+      showToast(err.message || 'An error occurred during withdrawal submission.');
+    }
   };
 
   return (
@@ -160,15 +216,21 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
                 onChange={(e) => setSelectedWithdrawAddress(e.target.value)}
                 className={`w-full rounded-2xl px-4 py-3 text-xs font-mono font-semibold outline-none transition-all ${t.inset} ${t.text} border border-white/10 ${t.isDark ? 'bg-black/40' : 'bg-gray-100'}`}
               >
-                {(VERIFIED_WITHDRAWAL_ADDRESSES[withdrawNetwork] || []).map((addr) => (
+                {(verifiedAddresses[withdrawNetwork] || []).map((addr) => (
                   <option key={addr} value={addr} className={`${t.isDark ? 'bg-[#0e1230] text-white' : 'bg-white text-gray-900'} font-mono text-xs`}>
                     {addr}
                   </option>
                 ))}
               </select>
-              <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-sans">
-                <Check className="w-3.5 h-3.5 shrink-0" /> Verified Address from Profile
-              </span>
+              {(verifiedAddresses[withdrawNetwork] || []).length > 0 ? (
+                <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-sans mt-1">
+                  <Check className="w-3.5 h-3.5 shrink-0" /> Verified Address from Profile
+                </span>
+              ) : (
+                <span className="text-[11px] text-amber-500 flex items-center gap-1 font-sans mt-1">
+                  ⚠️ No verified addresses found. Please add one in Security Settings.
+                </span>
+              )}
             </div>
 
             {/* Withdrawal Amount */}
@@ -190,7 +252,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
                   type="text"
                   placeholder="6-digit Email OTP"
                   value={emailOtp}
-                  onChange={(e) => setEmailOtp(e.target.value)}
+                  onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
                   maxLength={6}
                   className={`flex-1 rounded-2xl px-4 py-2.5 text-xs font-mono outline-none border border-white/10 ${t.inset} ${t.text} ${t.isDark ? 'bg-black/40' : 'bg-gray-100'}`}
@@ -204,6 +266,12 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
                   {isSendingOtp ? 'Sending...' : 'Send OTP'}
                 </button>
               </div>
+              {debugOtp && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex flex-col gap-1 text-[11px] font-mono mt-1.5">
+                  <span className="text-amber-500 font-bold">[SANDBOX SIMULATION OTP]:</span>
+                  <span className="text-lg tracking-widest text-center font-extrabold text-amber-400">{debugOtp}</span>
+                </div>
+              )}
             </div>
 
             {/* Google Authenticator code */}
@@ -215,7 +283,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
                 type="text"
                 placeholder="6-digit Authenticator Code"
                 value={googleAuth2fa}
-                onChange={(e) => setGoogleAuth2fa(e.target.value)}
+                onChange={(e) => setGoogleAuth2fa(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 required
                 maxLength={6}
                 className={`w-full rounded-2xl px-4 py-3 text-xs font-mono outline-none border border-white/10 ${t.inset} ${t.text} ${t.isDark ? 'bg-black/40' : 'bg-gray-100'}`}
@@ -241,34 +309,45 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
             </span>
           </div>
           <div className="space-y-3">
-            {MOCK_WITHDRAWAL_HISTORY.map((item) => (
-              <div key={item.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-[11px]">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-white">{item.network}</span>
-                  <span className="font-mono text-amber-400 font-bold">{item.amount} USDT</span>
+            {withdrawalsHistory.length > 0 ? (
+              withdrawalsHistory.map((item) => (
+                <div key={item.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-[11px]">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-white">{item.network.replace('_', ' ')}</span>
+                    <span className="font-mono text-amber-400 font-bold">{parseFloat(item.amount).toFixed(2)} USDT</span>
+                  </div>
+                  <div className="flex justify-between text-gray-400 text-[10px]">
+                    <span>{new Date(item.createdAt).toLocaleString()}</span>
+                    <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${
+                      item.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
+                    }`}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] border-t border-white/5 pt-2 font-mono text-gray-500">
+                    <span>TX: {item.reference}</span>
+                    {item.txHash ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTxHash(item.txHash)}
+                        className="hover:text-amber-400 flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Click to copy Hash"
+                      >
+                        <span>{item.txHash.slice(0, 8)}...{item.txHash.slice(-6)}</span>
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <span className="italic text-gray-600">Pending Blockchain Execution</span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex justify-between text-gray-400 text-[10px]">
-                  <span>{item.dateTime}</span>
-                  <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${
-                    item.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
-                  }`}>
-                    {item.status}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[10px] border-t border-white/5 pt-2 font-mono text-gray-500">
-                  <span>TX: {item.txNumber}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyTxHash(item.txHash)}
-                    className="hover:text-amber-400 flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Click to copy Hash"
-                  >
-                    <span>{item.txHash.slice(0, 8)}...{item.txHash.slice(-6)}</span>
-                    <Copy className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+              ))
+            ) : (
+              <div className="p-6 text-center rounded-2xl bg-white/5 border border-white/5 space-y-1">
+                <span className="text-xs text-gray-400 block font-semibold">No withdrawals logged yet</span>
+                <span className="text-[10px] text-gray-500 block">Once you submit a request and it's verified, it will appear here.</span>
               </div>
-            ))}
+            )}
           </div>
         </div>
 

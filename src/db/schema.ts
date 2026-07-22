@@ -35,3 +35,4 @@ export * from './activities.ts';
 export * from './settings.ts';
 export * from './sessions.ts';
 export * from './team_commission_history.ts';
+export * from './treasury.ts';

@@ -69,6 +69,8 @@ export class DepositAddressRepository {
     userId: string;
     network: string;
     address: string;
+    derivationIndex?: number;
+    qrPath?: string;
   }) {
     try {
       const result = await db
@@ -77,6 +79,8 @@ export class DepositAddressRepository {
           userId: data.userId,
           network: data.network,
           address: data.address,
+          derivationIndex: data.derivationIndex,
+          qrPath: data.qrPath,
         })
         .returning();
       return result[0];

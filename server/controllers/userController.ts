@@ -8,12 +8,25 @@ import { AuthRequest } from '../middlewares/auth.ts';
 import { userService } from '../services/userService.ts';
 import { dashboardService } from '../services/dashboardService.ts';
 import { claimService } from '../services/claimService.ts';
+import { supportService } from '../services/supportService.ts';
+import { notificationService } from '../services/notificationService.ts';
 import { sendSuccess } from '../utils/response.ts';
 import { ApiError } from '../middlewares/errorHandler.ts';
 import { UserRole } from '../../shared/types/index.ts';
 import { db } from '../../src/db/index.ts';
 import { wallets, vipStatus } from '../../src/db/schema.ts';
 import { eq } from 'drizzle-orm';
+import { depositService } from '../services/depositService.ts';
+import { blockchainProvider } from '../services/blockchainProvider.ts';
+import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
+import { depositRepository } from '../repositories/depositRepository.ts';
+import { settingsRepository } from '../repositories/settingsRepository.ts';
+import { withdrawalRepository } from '../repositories/withdrawalRepository.ts';
+import { withdrawalService } from '../services/withdrawalService.ts';
+import { emailService } from '../services/emailService.ts';
+import { totp } from '../utils/totp.ts';
+import { otpService } from '../cache/services/otpService.ts';
+import { addressService } from '../blockchain/services/AddressService.ts';
 
 export class UserController {
   /**
@@ -315,6 +328,583 @@ export class UserController {
         role as UserRole
       );
       return sendSuccess(res, updatedUser, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Fetch support tickets created by the authenticated user
+   */
+  async getSupportTickets(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const tickets = await supportService.getUserTickets(user.id);
+      return sendSuccess(res, tickets, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Create a support ticket
+   */
+  async createSupportTicket(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { category, subject, description, attachmentName, attachmentData } = req.body;
+
+      if (!category || !subject || !description) {
+        throw new ApiError(400, 'Category, subject, and description are required fields.', 'BAD_REQUEST');
+      }
+
+      const ticket = await supportService.createSupportTicket({
+        userId: user.id,
+        category,
+        subject,
+        description,
+        attachmentName,
+        attachmentData,
+      });
+
+      return sendSuccess(res, ticket, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Fetch conversation messages under a support ticket
+   */
+  async getTicketMessages(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { ticketId } = req.params;
+
+      if (!ticketId) {
+        throw new ApiError(400, 'Ticket ID is required', 'BAD_REQUEST');
+      }
+
+      const messages = await supportService.getTicketMessages(ticketId, user.id, false);
+      return sendSuccess(res, messages, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Reply to an existing support ticket
+   */
+  async replyToTicket(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { ticketId } = req.params;
+      const { message } = req.body;
+
+      if (!ticketId || !message) {
+        throw new ApiError(400, 'Ticket ID and message content are required', 'BAD_REQUEST');
+      }
+
+      const messageRecord = await supportService.addTicketReply({
+        ticketId,
+        senderId: user.id,
+        senderType: 'USER',
+        message,
+      });
+
+      return sendSuccess(res, messageRecord, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Close a support ticket
+   */
+  async closeTicket(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { ticketId } = req.params;
+
+      if (!ticketId) {
+        throw new ApiError(400, 'Ticket ID is required', 'BAD_REQUEST');
+      }
+
+      const ticket = await supportService.getTicketById(ticketId);
+      if (!ticket) {
+        throw new ApiError(404, 'Ticket not found', 'NOT_FOUND');
+      }
+      if (ticket.userId !== user.id) {
+        throw new ApiError(403, 'Unauthorized to close this support ticket', 'FORBIDDEN');
+      }
+
+      const updatedTicket = await supportService.updateTicketProperties(ticketId, {
+        status: 'CLOSED'
+      });
+
+      return sendSuccess(res, updatedTicket, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Fetch notifications for the authenticated user
+   */
+  async getNotifications(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const notifications = await notificationService.getUserNotifications(user.id);
+      return sendSuccess(res, notifications, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Mark a single notification as read
+   */
+  async markNotificationRead(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { id } = req.params;
+      if (!id) {
+        throw new ApiError(400, 'Notification ID is required', 'BAD_REQUEST');
+      }
+      const updated = await notificationService.markNotificationAsRead(id, user.id);
+      return sendSuccess(res, updated, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Mark all notifications as read
+   */
+  async markAllNotificationsRead(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      await notificationService.markAllNotificationsAsRead(user.id);
+      return sendSuccess(res, { success: true }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE Delete/Dismiss a single notification
+   */
+  async deleteNotification(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { id } = req.params;
+      if (!id) {
+        throw new ApiError(400, 'Notification ID is required', 'BAD_REQUEST');
+      }
+      const deleted = await notificationService.deleteNotification(id, user.id);
+      return sendSuccess(res, deleted, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Verify and automatically credit a deposit based on a provided transaction hash.
+   */
+  async verifyDeposit(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { txHash, network } = req.body;
+      if (!txHash || !network) {
+        throw new ApiError(400, 'Transaction Hash and Network are required.', 'BAD_REQUEST');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      
+      // 1. Fetch user's assigned deposit address for this network
+      const userAddressRecord = await depositAddressRepository.findByUserAndNetwork(user.id, network);
+      if (!userAddressRecord) {
+        throw new ApiError(404, 'No deposit address generated for this network. Please contact support.', 'NOT_FOUND');
+      }
+
+      const assignedAddress = userAddressRecord.address;
+
+      // 2. Query blockchain via provider
+      const blockchainTx = await blockchainProvider.getTransaction(network, txHash);
+      if (!blockchainTx) {
+        throw new ApiError(404, 'Transaction hash not found on the blockchain. Please verify and retry.', 'NOT_FOUND');
+      }
+
+      // 3. Perform security and business logic checks
+      if (!blockchainTx.isSuccessful) {
+        throw new ApiError(400, 'The provided transaction failed on-chain.', 'BAD_REQUEST');
+      }
+
+      // Check if receiver matches user's assigned address (ignoring case)
+      if (blockchainTx.receiver.toLowerCase() !== assignedAddress.toLowerCase()) {
+        throw new ApiError(400, `Transaction receiver (${blockchainTx.receiver}) does not match your assigned address for this network.`, 'BAD_REQUEST');
+      }
+
+      // Prevent replay attacks (check if deposit already exists for this txHash)
+      const existingDeposit = await depositRepository.findByTxHash(txHash);
+      if (existingDeposit) {
+        throw new ApiError(400, 'This transaction hash has already been verified and credited.', 'REPLAY_ATTACK');
+      }
+
+      // 4. Create pending deposit record and process success atomically in db transaction
+      const deposit = await depositService.createDeposit(
+        user.id,
+        blockchainTx.amount,
+        network,
+        assignedAddress,
+        txHash
+      );
+
+      const completedDeposit = await depositService.processSuccessfulDeposit(deposit.id, txHash, 'SYSTEM');
+
+      return sendSuccess(res, {
+        message: 'Deposit verified and credited successfully!',
+        deposit: completedDeposit
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Generates and returns a new 2FA setup secret and QR code URL
+   */
+  async getMfaSetup(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      
+      const user = await userService.getUserProfile(req.user.uid);
+      const secret = totp.generateSecret();
+      
+      // Save secret key temporarily (not yet fully enabled)
+      await settingsRepository.updateUserSettings(user.id, {
+        mfaSecret: secret
+      });
+
+      const otpauthUrl = totp.getOtpauthUrl(user.email, secret, 'MetaFirm');
+      
+      return sendSuccess(res, {
+        secret,
+        otpauthUrl,
+        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpauthUrl)}`
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Verifies the setup code and enables MFA
+   */
+  async enableMfa(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      
+      const { code } = req.body;
+      if (!code) {
+        throw new ApiError(400, 'Verification code is required.', 'BAD_REQUEST');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      const settings = await settingsRepository.findUserSettingsByUserId(user.id);
+      
+      if (!settings || !settings.mfaSecret) {
+        throw new ApiError(400, 'MFA setup has not been initiated. Please fetch configuration first.', 'BAD_REQUEST');
+      }
+
+      const isValid = totp.verifyToken(settings.mfaSecret, code);
+      if (!isValid) {
+        throw new ApiError(400, 'Invalid Google Authenticator code. Verification failed.', 'BAD_REQUEST');
+      }
+
+      await settingsRepository.updateUserSettings(user.id, {
+        mfaEnabled: true
+      });
+
+      return sendSuccess(res, {
+        message: 'Google Authenticator 2FA enabled successfully!'
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Disables MFA requiring verification
+   */
+  async disableMfa(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      
+      const { code } = req.body;
+      if (!code) {
+        throw new ApiError(400, 'Verification code is required.', 'BAD_REQUEST');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      const settings = await settingsRepository.findUserSettingsByUserId(user.id);
+      
+      if (!settings || !settings.mfaEnabled || !settings.mfaSecret) {
+        throw new ApiError(400, 'MFA is not currently enabled.', 'BAD_REQUEST');
+      }
+
+      const isValid = totp.verifyToken(settings.mfaSecret, code);
+      if (!isValid) {
+        throw new ApiError(400, 'Invalid Google Authenticator code. Verification failed.', 'BAD_REQUEST');
+      }
+
+      await settingsRepository.updateUserSettings(user.id, {
+        mfaEnabled: false,
+        mfaSecret: null
+      });
+
+      return sendSuccess(res, {
+        message: 'Google Authenticator 2FA disabled successfully!'
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Retrieves user's registered withdrawal addresses
+   */
+  async getWithdrawalAddresses(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const settings = await settingsRepository.findUserSettingsByUserId(user.id);
+      
+      const addresses = settings && settings.withdrawalAddresses 
+        ? JSON.parse(settings.withdrawalAddresses) 
+        : { USDT_BEP20: [], USDT_POLYGON: [], USDT_TRC20: [] };
+
+      return sendSuccess(res, addresses, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Generates and dispatches Email OTP to add/change withdrawal address
+   */
+  async sendWithdrawalAddressOtp(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { otp } = await otpService.generateAndStoreOtp(user.email, 'withdrawal-address');
+      
+      await emailService.sendOtpEmail(user.email, otp, 'Registering new withdrawal address');
+      
+      return sendSuccess(res, {
+        message: 'OTP sent successfully to your registered email.',
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Validates Email OTP and adds a verified withdrawal address
+   */
+  async addWithdrawalAddress(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { network, address, otp } = req.body;
+      if (!network || !address || !otp) {
+        throw new ApiError(400, 'Network, address, and OTP code are required.', 'BAD_REQUEST');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      
+      // Verify Email OTP
+      await otpService.verifyOtp(user.email, otp, 'withdrawal-address');
+
+      // Update addresses map in DB
+      const settings = await settingsRepository.findUserSettingsByUserId(user.id);
+      const addresses = settings && settings.withdrawalAddresses 
+        ? JSON.parse(settings.withdrawalAddresses) 
+        : { USDT_BEP20: [], USDT_POLYGON: [], USDT_TRC20: [] };
+
+      if (!addresses[network]) {
+        addresses[network] = [];
+      }
+      
+      // Ensure no duplicates
+      if (!addresses[network].includes(address)) {
+        addresses[network].push(address);
+      }
+
+      await settingsRepository.updateUserSettings(user.id, {
+        withdrawalAddresses: JSON.stringify(addresses)
+      });
+
+      return sendSuccess(res, {
+        message: 'Withdrawal address added and verified successfully!',
+        addresses
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Generates and dispatches Email OTP to process a withdrawal
+   */
+  async sendWithdrawalOtp(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const { otp } = await otpService.generateAndStoreOtp(user.email, 'withdrawal');
+      
+      await emailService.sendOtpEmail(user.email, otp, 'Initiating an outbound withdrawal');
+      
+      return sendSuccess(res, {
+        message: 'OTP sent successfully to your registered email.',
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Dual-factor validated withdrawal submission
+   */
+  async requestWithdrawal(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { amount, network, walletAddress, emailOtp, googleAuth2fa } = req.body;
+      if (!amount || !network || !walletAddress || !emailOtp || !googleAuth2fa) {
+        throw new ApiError(400, 'Amount, network, address, Email OTP, and Authenticator code are required.', 'BAD_REQUEST');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      const settings = await settingsRepository.findUserSettingsByUserId(user.id);
+
+      // 1. Verify Email OTP
+      await otpService.verifyOtp(user.email, emailOtp, 'withdrawal');
+
+      // 2. Verify Google Authenticator (if enabled)
+      if (settings && settings.mfaEnabled && settings.mfaSecret) {
+        const isValid = totp.verifyToken(settings.mfaSecret, googleAuth2fa);
+        if (!isValid) {
+          throw new ApiError(400, 'Invalid Google Authenticator code.', 'BAD_REQUEST');
+        }
+      } else {
+        throw new ApiError(400, 'Multi-Factor Google Authenticator is required for withdrawal execution. Please enable it in Security first.', 'BAD_REQUEST');
+      }
+
+      // 3. Verify destination address matches one of the user's registered & verified addresses
+      const verifiedAddresses = settings && settings.withdrawalAddresses
+        ? JSON.parse(settings.withdrawalAddresses)
+        : {};
+      const networkList = verifiedAddresses[network] || [];
+      if (!networkList.includes(walletAddress)) {
+        throw new ApiError(400, 'The specified withdrawal address has not been registered and verified in your Security configuration.', 'BAD_REQUEST');
+      }
+
+      // 4. Delegate to transactionally safe withdrawal service
+      const withdrawal = await withdrawalService.createWithdrawal(
+        user.id,
+        amount,
+        walletAddress,
+        network
+      );
+
+      return sendSuccess(res, {
+        message: 'Withdrawal request submitted successfully for administrative review.',
+        withdrawal
+      }, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fetch withdrawals for the current user
+   */
+  async getWithdrawals(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const list = await withdrawalRepository.findByUserId(user.id);
+      return sendSuccess(res, list, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Generate or retrieve a permanent deposit address for a selected network
+   */
+  async generateDepositAddress(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { network } = req.body;
+      if (!network) {
+        throw new ApiError(400, 'Network parameter is required.', 'BAD_REQUEST');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      const addressRecord = await addressService.getOrCreateDepositAddress(user.id, network);
+
+      return sendSuccess(res, addressRecord, 200);
     } catch (error) {
       next(error);
     }

@@ -32,6 +32,8 @@ export const userSettings = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .unique(), // 1-to-1 User configuration alignment
     mfaEnabled: boolean('mfa_enabled').default(false).notNull(), // Multi-Factor Auth status
+    mfaSecret: text('mfa_secret'), // Google Authenticator Base32 secret key
+    withdrawalAddresses: text('withdrawal_addresses'), // JSON string of verified withdrawal addresses per network
     emailNotifications: boolean('email_notifications').default(true).notNull(), // Transactional and general alerts
     marketingConsent: boolean('marketing_consent').default(false).notNull(), // Promotional newsletter Opt-In status
     language: text('language').default('en').notNull(), // Standard locale preference (e.g. "en", "es", "zh")

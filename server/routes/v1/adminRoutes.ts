@@ -132,4 +132,191 @@ router.get(
   adminController.getUserTeamNetwork
 );
 
+/**
+ * @route GET /api/v1/admin/support/tickets
+ * @desc Retrieve all support tickets in system with filters
+ */
+router.get(
+  '/support/tickets',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getAdminTickets
+);
+
+/**
+ * @route GET /api/v1/admin/support/tickets/:ticketId/messages
+ * @desc Get complete conversation history of a specific ticket
+ */
+router.get(
+  '/support/tickets/:ticketId/messages',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getAdminTicketMessages
+);
+
+/**
+ * @route POST /api/v1/admin/support/tickets/:ticketId/messages
+ * @desc Submit admin reply under ticket thread
+ */
+router.post(
+  '/support/tickets/:ticketId/messages',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.replyToTicketAsAdmin
+);
+
+/**
+ * @route PATCH /api/v1/admin/support/tickets/:ticketId
+ * @desc Update support ticket state/properties (status, priority, assignment)
+ */
+router.patch(
+  '/support/tickets/:ticketId',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateTicketProperties
+);
+
+/**
+ * @route GET /api/v1/admin/treasury/:network
+ * @desc Retrieve treasury wallet configurations, balances, and deposit addresses for a network
+ */
+router.get(
+  '/treasury/:network',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getTreasuryOverview
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep/address
+ * @desc Sweep a specific user deposit address to Hot Wallet
+ */
+router.post(
+  '/treasury/sweep/address',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.sweepUserDepositAddress
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep/all
+ * @desc Sweep all positive-balance deposit addresses on a network
+ */
+router.post(
+  '/treasury/sweep/all',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.sweepAllEligibleAddresses
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep/hot-to-cold
+ * @desc Sweep funds from Hot Wallet to Cold Wallet
+ */
+router.post(
+  '/treasury/sweep/hot-to-cold',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.sweepHotToCold
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep/retry
+ * @desc Retry a failed sweep job
+ */
+router.post(
+  '/treasury/sweep/retry',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.sweepRetryJob
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/config
+ * @desc Update auto-sweep configuration (enabled/threshold) for a network
+ */
+router.post(
+  '/treasury/config',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateAutoSweepConfig
+);
+
+/**
+ * @route GET /api/v1/admin/treasury/jobs
+ * @desc Get list of all sweep jobs
+ */
+router.get(
+  '/treasury-jobs',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getSweepJobs
+);
+
+/**
+ * @route GET /api/v1/admin/treasury/sweep-queue
+ * @desc Retrieve current sweep queue items with real-time native gas balances
+ */
+router.get(
+  '/treasury/sweep-queue',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getSweepQueue
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep-queue/fund-gas
+ * @desc Fund native gas manually for a specific queue item
+ */
+router.post(
+  '/treasury/sweep-queue/fund-gas',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.fundGasQueueItem
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep-queue/sweep
+ * @desc Sweep a specific queue item manually
+ */
+router.post(
+  '/treasury/sweep-queue/sweep',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.sweepQueueItem
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep-queue/cancel
+ * @desc Cancel a sweep queue item
+ */
+router.post(
+  '/treasury/sweep-queue/cancel',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.cancelQueueItem
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep-queue/bulk-action
+ * @desc Execute bulk actions on selected queue items
+ */
+router.post(
+  '/treasury/sweep-queue/bulk-action',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.bulkActionQueue
+);
+
+/**
+ * @route POST /api/v1/admin/treasury/sweep-mode
+ * @desc Update comprehensive sweep modes, delay configuration, and emergency pausing
+ */
+router.post(
+  '/treasury/sweep-mode',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateSweepModeConfig
+);
+
 export default router;

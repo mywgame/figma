@@ -7,7 +7,7 @@ import { vipRepository } from '../repositories/vipRepository.ts';
 import { walletRepository } from '../repositories/walletRepository.ts';
 import { referralService } from './referralService.ts';
 import { referralRepository } from '../repositories/referralRepository.ts';
-import { notificationRepository } from '../repositories/notificationRepository.ts';
+import { notificationService } from './notificationService.ts';
 import { auditRepository } from '../repositories/auditRepository.ts';
 
 export class VipService {
@@ -98,9 +98,17 @@ export class VipService {
         reason: `Auto VIP recalculation based on wallet balance (${walletBalance.toFixed(2)} USDT) and team qualification (A:${levelAValidCount}, BCD:${levelBcdValidCount}).`,
       });
 
-      await notificationRepository.createNotification({
-        userId,
-        message: `Your VIP membership has been updated from ${previousTier} to ${calculatedTier}.`,
+      const prevNum = parseInt(previousTier.replace('VIP', '') || '1', 10);
+      const currNum = parseInt(calculatedTier.replace('VIP', '') || '1', 10);
+      const isUpgrade = currNum > prevNum;
+
+      await notificationService.createStructuredNotification(userId, {
+        title: isUpgrade ? 'VIP Level Upgraded!' : 'VIP Level Adjusted',
+        description: isUpgrade 
+          ? `Congratulations! Your VIP membership has been upgraded from ${previousTier} to ${calculatedTier}.`
+          : `Your VIP membership has been adjusted from ${previousTier} to ${calculatedTier}.`,
+        icon: isUpgrade ? 'Sparkles' : 'ShieldAlert',
+        type: 'vip',
         priority: 'HIGH',
       });
 

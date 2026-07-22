@@ -46,6 +46,7 @@ import { AuditLogsView } from './AuditLogsView.tsx';
 import { SecurityView } from './SecurityView.tsx';
 import { SettingsView } from './SettingsView.tsx';
 import { TrialFundView } from './TrialFundView.tsx';
+import { TreasuryView } from './TreasuryView.tsx';
 
 interface EnterpriseAdminDashboardProps {
   onBackToLanding: () => void;
@@ -95,6 +96,8 @@ export const EnterpriseAdminDashboard: React.FC<EnterpriseAdminDashboardProps> =
         return <SettingsView t={t} isDark={isDark} />;
       case 'trial_fund':
         return <TrialFundView t={t} isDark={isDark} />;
+      case 'treasury':
+        return <TreasuryView t={t} isDark={isDark} />;
       default:
         return <DashboardHome t={t} isDark={isDark} onNavigate={(path) => setActiveTab(path as AdminTab)} />;
     }

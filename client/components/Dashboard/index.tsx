@@ -37,6 +37,18 @@ import { SupportView } from './SupportView.tsx';
 import { TransactionsView } from './Transactions/TransactionsView.tsx';
 import { VIPView } from './VIP/VIPView.tsx';
 
+// Loading Skeletons
+import {
+  DashboardSkeleton,
+  VIPSkeleton,
+  TeamSkeleton,
+  TransactionSkeleton,
+  DepositSkeleton,
+  WithdrawalSkeleton,
+  ProfileSkeleton,
+  SupportSkeleton,
+} from './Skeletons/index.ts';
+
 // Dedicated Sub-pages
 import { DashboardLayout } from './Layout/DashboardLayout.tsx';
 import { DepositView } from './Deposit/DepositView.tsx';
@@ -63,6 +75,15 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
   // Dashboard state
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+  useEffect(() => {
+    setIsPageLoading(true);
+    const timer = setTimeout(() => {
+      setIsPageLoading(false);
+    }, 650);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -137,6 +158,41 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
 
   // Render main sub-view depending on active tab state
   const renderActiveView = () => {
+    if (isLoading || isPageLoading) {
+      switch (activeTab) {
+        case 'dashboard':
+          return (
+            <DashboardLayout variant="blank">
+              <DashboardSkeleton />
+            </DashboardLayout>
+          );
+        case 'vip':
+          return <VIPSkeleton />;
+        case 'profile':
+          return <ProfileSkeleton />;
+        case 'team':
+          return <TeamSkeleton />;
+        case 'transactions':
+          return <TransactionSkeleton />;
+        case 'deposit':
+          return (
+            <DashboardLayout title="USDT Deposit Gateway" onBack={() => setActiveTab('dashboard')}>
+              <DepositSkeleton />
+            </DashboardLayout>
+          );
+        case 'withdrawal':
+          return (
+            <DashboardLayout title="USDT Withdrawal Portal" onBack={() => setActiveTab('dashboard')}>
+              <WithdrawalSkeleton />
+            </DashboardLayout>
+          );
+        case 'support':
+          return <SupportSkeleton />;
+        default:
+          return <DashboardSkeleton />;
+      }
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -157,7 +213,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       case 'settings':
         return wrapLegacyView(<SettingsView />);
       case 'support':
-        return wrapLegacyView(<SupportView />);
+        return <SupportView />;
       case 'deposit':
         return (
           <DepositView

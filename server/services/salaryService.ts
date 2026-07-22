@@ -9,7 +9,7 @@ import { vipRepository } from '../repositories/vipRepository.ts';
 import { referralService } from './referralService.ts';
 import { transactionRepository } from '../repositories/transactionRepository.ts';
 import { incomeRepository } from '../repositories/incomeRepository.ts';
-import { notificationRepository } from '../repositories/notificationRepository.ts';
+import { notificationService } from './notificationService.ts';
 import { auditRepository } from '../repositories/auditRepository.ts';
 
 export class SalaryService {
@@ -127,9 +127,11 @@ export class SalaryService {
     });
 
     // 8. Dispatch notification
-    await notificationRepository.createNotification({
-      userId,
-      message: `Congratulations! You have received a weekly reward of ${rewardStr} USDT as a ${starTitle} with ${qualifiedVip2Count} qualified VIP2+ members in your team.`,
+    await notificationService.createStructuredNotification(userId, {
+      title: 'Weekly Reward Received',
+      description: `Congratulations! You have received a weekly reward of ${rewardStr} USDT as a ${starTitle} with ${qualifiedVip2Count} qualified VIP2+ members in your team.`,
+      icon: 'Award',
+      type: 'referral',
       priority: 'HIGH',
     });
 

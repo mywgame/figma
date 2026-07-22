@@ -156,6 +156,8 @@ export class SettingsRepository {
     userId: string,
     updates: Partial<{
       mfaEnabled: boolean;
+      mfaSecret: string | null;
+      withdrawalAddresses: string | null;
       emailNotifications: boolean;
       marketingConsent: boolean;
       language: string;

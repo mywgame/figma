@@ -8,6 +8,7 @@ import { Menu, X, User, Lock, Settings, HelpCircle, LogOut } from 'lucide-react'
 import { useTheme } from '../../hooks/useTheme.ts';
 import { useAvatar } from '../../hooks/useAvatar.ts';
 import { ThemeSwitch } from '../ui/ThemeSwitch.tsx';
+import { NotificationBell } from './NotificationBell.tsx';
 import { AvatarPicker } from '../ui/AvatarPicker.tsx';
 import logoImg from '../../../assets/images/branding/logo.png';
 import logoMarkImg from '../../../assets/images/branding/logo-mark.png';
@@ -51,6 +52,7 @@ export const TopNav: React.FC<TopNavProps> = ({ identity, activeTab, onNavigate,
       {/* Right: theme switch + hamburger menu */}
       <div className="flex items-center gap-3 relative">
         <ThemeSwitch />
+        <NotificationBell />
 
         <div className="relative">
           <button

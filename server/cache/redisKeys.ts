@@ -33,6 +33,36 @@ export const REDIS_KEYS = {
    * Generates the key for counting failed forgot password OTP attempts
    */
   forgotPasswordAttempts: (email: string) => `otp:forgot-password:attempts:${email.toLowerCase()}`,
+
+  /**
+   * Generates the key for storing a withdrawal OTP
+   */
+  withdrawalOtp: (email: string) => `otp:withdrawal:${email.toLowerCase()}`,
+
+  /**
+   * Generates the key for tracking withdrawal OTP resend cooldown
+   */
+  withdrawalCooldown: (email: string) => `otp:withdrawal:cooldown:${email.toLowerCase()}`,
+
+  /**
+   * Generates the key for counting failed withdrawal OTP attempts
+   */
+  withdrawalAttempts: (email: string) => `otp:withdrawal:attempts:${email.toLowerCase()}`,
+
+  /**
+   * Generates the key for storing a withdrawal address OTP
+   */
+  withdrawalAddressOtp: (email: string) => `otp:withdrawal-address:${email.toLowerCase()}`,
+
+  /**
+   * Generates the key for tracking withdrawal address OTP resend cooldown
+   */
+  withdrawalAddressCooldown: (email: string) => `otp:withdrawal-address:cooldown:${email.toLowerCase()}`,
+
+  /**
+   * Generates the key for counting failed withdrawal address OTP attempts
+   */
+  withdrawalAddressAttempts: (email: string) => `otp:withdrawal-address:attempts:${email.toLowerCase()}`,
 };
 
 export const CACHE_TTL = {

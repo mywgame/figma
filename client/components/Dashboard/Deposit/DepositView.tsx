@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Wallet, Check, Copy, History } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Wallet, Check, Copy, History, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useTheme } from '../../../hooks/useTheme.ts';
+import { useAuth } from '../../../hooks/useAuth.ts';
 import { DashboardLayout } from '../Layout/DashboardLayout.tsx';
 import { DashboardData } from '../../../types/index.ts';
+import QRCode from 'qrcode';
 
 const MOCK_DEPOSIT_HISTORY = [
   {
@@ -51,17 +53,77 @@ export const DepositView: React.FC<DepositViewProps> = ({
   onBack,
 }) => {
   const { t } = useTheme();
+  const { token } = useAuth();
   const [depositNetwork, setDepositNetwork] = useState('USDT_BEP20');
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
-  const getDepositAddress = () => {
-    if (!dashboardData || !dashboardData.depositAddresses) return '0x9821c9e2b45a90d1f43a8b32d541';
-    const found = dashboardData.depositAddresses.find(da => da.network === depositNetwork);
-    return found ? found.address : '0x9821c9e2b45a90d1f43a8b32d541';
+  // Auto-verification form states
+  const [txHash, setTxHash] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+  const [verifySuccess, setVerifySuccess] = useState('');
+
+  // Address generation/retrieval states
+  const [localAddresses, setLocalAddresses] = useState<Record<string, string>>({});
+  const [generatingAddress, setGeneratingAddress] = useState(false);
+
+  // Sync existing deposit addresses on mount/update
+  useEffect(() => {
+    if (dashboardData?.depositAddresses) {
+      const initialMap: Record<string, string> = {};
+      dashboardData.depositAddresses.forEach(da => {
+        initialMap[da.network] = da.address;
+      });
+      setLocalAddresses(prev => ({ ...initialMap, ...prev }));
+    }
+  }, [dashboardData]);
+
+  const currentAddress = localAddresses[depositNetwork] || '';
+
+  // QR Code generation triggers when depositNetwork or currentAddress changes
+  useEffect(() => {
+    if (currentAddress) {
+      QRCode.toDataURL(currentAddress, { width: 250, margin: 2 })
+        .then(url => setQrCodeUrl(url))
+        .catch(err => console.error('Local QR Code gen error:', err));
+    } else {
+      setQrCodeUrl('');
+    }
+  }, [depositNetwork, currentAddress]);
+
+  const handleGenerateAddress = async () => {
+    setGeneratingAddress(true);
+    try {
+      const res = await fetch('/api/v1/users/deposits/address', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ network: depositNetwork })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || 'Failed to generate deposit address');
+      }
+      
+      const newAddress = data.data.address;
+      setLocalAddresses(prev => ({
+        ...prev,
+        [depositNetwork]: newAddress
+      }));
+      showToast('Deposit address successfully generated!');
+    } catch (err: any) {
+      showToast(err.message || 'Error generating deposit address.');
+    } finally {
+      setGeneratingAddress(false);
+    }
   };
 
   const handleCopyWalletAddress = () => {
-    navigator.clipboard.writeText(getDepositAddress());
+    if (!currentAddress) return;
+    navigator.clipboard.writeText(currentAddress);
     setCopiedAddress(true);
     setTimeout(() => setCopiedAddress(false), 2000);
   };
@@ -69,6 +131,39 @@ export const DepositView: React.FC<DepositViewProps> = ({
   const handleCopyTxHash = (hash: string) => {
     navigator.clipboard.writeText(hash);
     showToast('Transaction Hash copied to clipboard!');
+  };
+
+  const handleVerifyTx = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!txHash.trim()) return;
+
+    setVerifying(true);
+    setVerifyError('');
+    setVerifySuccess('');
+
+    try {
+      const res = await fetch('/api/v1/users/deposits/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ txHash: txHash.trim(), network: depositNetwork })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || 'Verification failed. Please ensure the Tx Hash is correct and not yet processed.');
+      }
+
+      setVerifySuccess('Deposit verified successfully! Your account balance has been updated.');
+      setTxHash('');
+      showToast('Deposit successfully verified!');
+    } catch (err: any) {
+      setVerifyError(err.message || 'An error occurred during verification.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -106,37 +201,116 @@ export const DepositView: React.FC<DepositViewProps> = ({
           </div>
         </div>
 
-        {/* QR Code Section */}
-        <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-black/25 border border-white/5 space-y-2.5 max-w-xs mx-auto sm:mx-0">
-          <img
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(getDepositAddress())}`}
-            alt="Deposit QR Code"
-            className="w-32 h-32 rounded-lg border-4 border-white shadow-md bg-white"
-            referrerPolicy="no-referrer"
-          />
-          <span className={`text-[9px] font-mono uppercase tracking-widest block ${t.textMuted}`}>
-            Scan to transfer USDT
-          </span>
-        </div>
-
-        {/* Deposit Address Box */}
-        <div className="space-y-2">
-          <span className={`text-[10px] font-mono font-bold uppercase tracking-wider block ${t.textMuted}`}>
-            Your Assigned Deposit Address
-          </span>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className={`p-3.5 rounded-2xl flex-1 flex items-center font-mono text-xs select-all overflow-hidden ${t.inset} ${t.text}`}>
-              <span className="truncate w-full block">{getDepositAddress()}</span>
+        {!currentAddress ? (
+          <div className={`rounded-2xl border p-6 text-center space-y-4 backdrop-blur-lg ${t.card}`}>
+            <div className="mx-auto w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center">
+              <Wallet className="w-6 h-6 text-cyan-500" />
+            </div>
+            <div className="space-y-1">
+              <h4 className={`text-sm font-bold ${t.text}`}>No Address Generated</h4>
+              <p className={`text-[11px] leading-relaxed max-w-sm mx-auto ${t.textMuted}`}>
+                To deposit USDT via this network, you must first generate your permanent deposit address.
+              </p>
             </div>
             <button
               type="button"
-              onClick={handleCopyWalletAddress}
-              className="flex items-center justify-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-all cursor-pointer active:scale-95 shrink-0"
+              disabled={generatingAddress}
+              onClick={handleGenerateAddress}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
             >
-              {copiedAddress ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedAddress ? 'Copied!' : 'Copy Address'}</span>
+              {generatingAddress ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+              <span>{generatingAddress ? 'Generating Address...' : 'Generate My Deposit Address'}</span>
             </button>
           </div>
+        ) : (
+          <>
+            {/* QR Code Section */}
+            <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-black/25 border border-white/5 space-y-2.5 max-w-xs mx-auto sm:mx-0">
+              {qrCodeUrl ? (
+                <img
+                  src={qrCodeUrl}
+                  alt="Deposit QR Code"
+                  className="w-32 h-32 rounded-lg border-4 border-white shadow-md bg-white"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-32 h-32 rounded-lg border border-white/10 flex items-center justify-center bg-white/5">
+                  <RefreshCw className="w-6 h-6 animate-spin text-cyan-500" />
+                </div>
+              )}
+              <span className={`text-[9px] font-mono uppercase tracking-widest block ${t.textMuted}`}>
+                Scan to transfer USDT
+              </span>
+            </div>
+
+            {/* Deposit Address Box */}
+            <div className="space-y-2">
+              <span className={`text-[10px] font-mono font-bold uppercase tracking-wider block ${t.textMuted}`}>
+                Your Assigned Deposit Address
+              </span>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className={`p-3.5 rounded-2xl flex-1 flex items-center font-mono text-xs select-all overflow-hidden ${t.inset} ${t.text}`}>
+                  <span className="truncate w-full block">{currentAddress}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyWalletAddress}
+                  className="flex items-center justify-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-all cursor-pointer active:scale-95 shrink-0"
+                >
+                  {copiedAddress ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedAddress ? 'Copied!' : 'Copy Address'}</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Self-Service Instant Verification Gateway */}
+        <div className={`rounded-2xl border p-5 backdrop-blur-lg space-y-4 ${t.card}`}>
+          <div className="flex items-center gap-2">
+            <Wallet className="w-4.5 h-4.5 text-cyan-500" />
+            <h4 className={`text-xs font-bold uppercase tracking-wider ${t.text}`}>Instant Deposit Verification</h4>
+          </div>
+          <p className={`text-[11px] leading-relaxed ${t.textMuted}`}>
+            Have you already completed your transfer? Paste your transaction hash below to manually trigger instant validation and credit your balance.
+          </p>
+
+          {verifySuccess && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-500 text-xs flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{verifySuccess}</span>
+            </div>
+          )}
+
+          {verifyError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{verifyError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleVerifyTx} className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              placeholder="Enter transaction hash (0x... or Tron Tx ID)"
+              value={txHash}
+              onChange={(e) => setTxHash(e.target.value.trim())}
+              disabled={verifying}
+              className={`p-3 rounded-2xl flex-1 font-mono text-xs border transition-all ${
+                t.isDark
+                  ? 'bg-white/5 border-white/10 text-white focus:border-cyan-500'
+                  : 'bg-black/5 border-black/10 text-black focus:border-cyan-600'
+              } outline-none`}
+            />
+            <button
+              type="submit"
+              disabled={verifying || !txHash.trim()}
+              className="flex items-center justify-center gap-1.5 px-5 py-3 rounded-2xl text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90 disabled:opacity-40 transition-all cursor-pointer active:scale-95 shrink-0"
+            >
+              {verifying ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
+              <span>{verifying ? 'Verifying…' : 'Verify Deposit'}</span>
+            </button>
+          </form>
         </div>
 
         {/* Deposit History */}

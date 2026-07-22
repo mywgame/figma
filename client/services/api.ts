@@ -263,6 +263,133 @@ class ApiService {
   async claimYield(claimId: string): Promise<ApiResponse<any>> {
     return this.post<any>('/users/claim-yield', { claimId });
   }
+
+  /* =========================================================================
+   * SUPPORT & ADMINISTRATIVE TICKETS ENDPOINTS
+   * ========================================================================= */
+
+  /**
+   * Users: Fetch user's submitted support tickets
+   */
+  async getUserSupportTickets(): Promise<ApiResponse<any>> {
+    return this.get<any>('/users/support/tickets');
+  }
+
+  /**
+   * Users: Create a brand new support ticket (with optional attachments in base64 payload)
+   */
+  async createUserSupportTicket(payload: {
+    category: string;
+    subject: string;
+    description: string;
+    attachmentName?: string;
+    attachmentData?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post<any>('/users/support/tickets', payload);
+  }
+
+  /**
+   * Users: Fetch conversation thread history for a ticket
+   */
+  async getTicketMessages(ticketId: string): Promise<ApiResponse<any>> {
+    return this.get<any>(`/users/support/tickets/${ticketId}/messages`);
+  }
+
+  /**
+   * Users: Submit response/reply inside a ticket thread
+   */
+  async replyToTicket(ticketId: string, message: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/users/support/tickets/${ticketId}/messages`, { message });
+  }
+
+  /**
+   * Users: Resolve and close a ticket
+   */
+  async closeTicket(ticketId: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/users/support/tickets/${ticketId}/close`, {});
+  }
+
+  /**
+   * Admin: Retrieve all support tickets with pagination, search, and category filters
+   */
+  async getAdminSupportTickets(params?: {
+    status?: string;
+    priority?: string;
+    category?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (params?.status) query.append('status', params.status);
+    if (params?.priority) query.append('priority', params.priority);
+    if (params?.category) query.append('category', params.category);
+    if (params?.search) query.append('search', params.search);
+    if (params?.limit) query.append('limit', params.limit.toString());
+    if (params?.offset) query.append('offset', params.offset.toString());
+
+    return this.get<any>(`/admin/support/tickets?${query.toString()}`);
+  }
+
+  /**
+   * Admin: Retrieve complete thread history for any ticket in system
+   */
+  async getAdminTicketMessages(ticketId: string): Promise<ApiResponse<any>> {
+    return this.get<any>(`/admin/support/tickets/${ticketId}/messages`);
+  }
+
+  /**
+   * Admin: Reply inside a user ticket thread
+   */
+  async replyToTicketAsAdmin(ticketId: string, message: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/support/tickets/${ticketId}/messages`, { message });
+  }
+
+  /**
+   * Admin: Update ticket status, priority, or assignment properties
+   */
+  async updateTicketProperties(
+    ticketId: string,
+    payload: {
+      status?: string;
+      priority?: string;
+      assignedAdminUid?: string;
+    }
+  ): Promise<ApiResponse<any>> {
+    return this.patch<any>(`/admin/support/tickets/${ticketId}`, payload);
+  }
+
+  /* =========================================================================
+   * NOTIFICATIONS ENDPOINTS
+   * ========================================================================= */
+
+  /**
+   * Users: Fetch user notifications
+   */
+  async getNotifications(): Promise<ApiResponse<any>> {
+    return this.get<any>('/users/notifications');
+  }
+
+  /**
+   * Users: Mark a single notification as read
+   */
+  async markNotificationRead(id: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/users/notifications/${id}/read`, {});
+  }
+
+  /**
+   * Users: Mark all notifications as read
+   */
+  async markAllNotificationsRead(): Promise<ApiResponse<any>> {
+    return this.post<any>('/users/notifications/read-all', {});
+  }
+
+  /**
+   * Users: Delete/Dismiss a single notification
+   */
+  async deleteNotification(id: string): Promise<ApiResponse<any>> {
+    return this.delete<any>(`/users/notifications/${id}`);
+  }
 }
 
 export const api = new ApiService();

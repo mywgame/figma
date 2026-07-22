@@ -11,6 +11,8 @@ import {
   Lock, ShieldCheck, Key, CheckCircle, XCircle, Smartphone, Laptop, Globe, Clock, Mail,
   AlertTriangle, RotateCw, LogOut, Fingerprint, Wallet, Plus, Pencil, BadgeCheck, Clock3,
 } from 'lucide-react';
+import { Mfa } from '../Auth/Mfa/Mfa.tsx';
+import { SecurityVerification } from '../Auth/SecurityVerification/SecurityVerification.tsx';
 
 interface UserSession {
   id: string;
@@ -81,17 +83,16 @@ export const SecurityView: React.FC = () => {
   const [sessionsSuccess, setSessionsSuccess] = useState('');
   const [sessionsError, setSessionsError] = useState('');
 
-  // Withdrawal Addresses — mock only (see TODO above)
+  // Withdrawal Addresses
   const [withdrawAddresses, setWithdrawAddresses] = useState<WithdrawalAddress[]>([
     { network: 'USDT_BEP20', address: '', verified: false },
     { network: 'USDT_POLYGON', address: '', verified: false },
     { network: 'USDT_TRC20', address: '', verified: false },
   ]);
   const [editingNetwork, setEditingNetwork] = useState<WithdrawalNetwork | null>(null);
-  const [draftAddress, setDraftAddress] = useState('');
-  const [otpStep, setOtpStep] = useState<'idle' | 'sent'>('idle');
-  const [otpCode, setOtpCode] = useState('');
-  const [otpBusy, setOtpBusy] = useState(false);
+
+  // Two-Factor Authentication States
+  const [mfaEnabled, setMfaEnabled] = useState(false);
 
   const getPasswordStrength = (pwd: string) => {
     if (!pwd) return { score: 0, label: 'Empty', color: 'bg-gray-400/40', textColor: t.textMuted };
@@ -113,15 +114,46 @@ export const SecurityView: React.FC = () => {
     if (token) {
       fetchSecuritySummary();
       fetchSessionsList();
+      fetchWithdrawalAddresses();
     }
   }, [token]);
+
+  const fetchWithdrawalAddresses = async () => {
+    try {
+      const res = await fetch('/api/v1/users/security/withdrawal-addresses', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.success && body.data) {
+          const apiData = body.data as Record<WithdrawalNetwork, string[]>;
+          setWithdrawAddresses((prev) =>
+            prev.map((wa) => {
+              const list = apiData[wa.network] || [];
+              const lastAddress = list[list.length - 1] || '';
+              return {
+                ...wa,
+                address: lastAddress,
+                verified: !!lastAddress,
+              };
+            })
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load withdrawal addresses:', err);
+    }
+  };
 
   const fetchSecuritySummary = async () => {
     try {
       const res = await fetch('/api/v1/users/security/summary', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const body = await res.json();
-        if (body.success) setSummary(body.data);
+        if (body.success) {
+          setSummary(body.data);
+          setMfaEnabled(body.data.mfaEnabled || false);
+        }
       }
     } catch (err) {
       console.error('Failed to load security summary:', err);
@@ -230,42 +262,9 @@ export const SecurityView: React.FC = () => {
     }
   };
 
-  // ---- Withdrawal address mock flow ----
+  // ---- Withdrawal address flow ----
   const startEdit = (network: WithdrawalNetwork) => {
-    const existing = withdrawAddresses.find((w) => w.network === network);
-    setDraftAddress(existing?.address || '');
     setEditingNetwork(network);
-    setOtpStep('idle');
-    setOtpCode('');
-  };
-
-  const sendMockOtp = () => {
-    if (!draftAddress.trim()) return;
-    setOtpBusy(true);
-    setTimeout(() => {
-      setOtpStep('sent');
-      setOtpBusy(false);
-    }, 900);
-  };
-
-  const verifyMockOtp = () => {
-    if (otpCode.trim().length !== 6 || !editingNetwork) return;
-    setOtpBusy(true);
-    setTimeout(() => {
-      setWithdrawAddresses((prev) =>
-        prev.map((w) => (w.network === editingNetwork ? { ...w, address: draftAddress.trim(), verified: true } : w)),
-      );
-      setEditingNetwork(null);
-      setOtpStep('idle');
-      setOtpCode('');
-      setOtpBusy(false);
-    }, 700);
-  };
-
-  const cancelEdit = () => {
-    setEditingNetwork(null);
-    setOtpStep('idle');
-    setOtpCode('');
   };
 
   const alertBox = (kind: 'success' | 'error', message: string) => (
@@ -457,19 +456,18 @@ export const SecurityView: React.FC = () => {
           )}
 
           {activeSubTab === 'twoFactor' && (
-            <div className={`rounded-2xl border p-8 backdrop-blur-lg text-center space-y-4 ${t.card}`}>
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center">
-                <Fingerprint className="w-7 h-7 text-cyan-500" />
+            <div className={`rounded-2xl border p-6 backdrop-blur-lg space-y-6 ${t.card}`}>
+              <div className={`pb-4 border-b ${t.sep}`}>
+                <h3 className={`text-sm font-extrabold flex items-center gap-2 ${t.text}`}><Fingerprint className="w-4 h-4 text-cyan-500" /> Multi-Factor Authentication</h3>
+                <p className={`text-xs mt-1 ${t.textMuted}`}>Add an extra layer of protection using your Google Authenticator or compatible app.</p>
               </div>
-              <div>
-                <h3 className={`text-sm font-extrabold ${t.text}`}>Two-Factor Authentication</h3>
-                <p className={`text-xs mt-1 max-w-sm mx-auto ${t.textMuted}`}>
-                  App-based (TOTP) 2FA is on our roadmap to add an extra layer of protection to your account.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-500 border border-amber-500/25">
-                <Clock3 className="w-3 h-3" /> Coming Soon
-              </span>
+
+              <Mfa
+                onSuccess={(enabled) => {
+                  setMfaEnabled(enabled);
+                  fetchSecuritySummary();
+                }}
+              />
             </div>
           )}
 
@@ -511,43 +509,17 @@ export const SecurityView: React.FC = () => {
 
                       {isEditingThis && (
                         <div className={`mt-4 pt-4 border-t space-y-3 ${t.sep}`}>
-                          <Input
-                            label={`${meta.label} Address`}
-                            placeholder="Paste wallet address"
-                            value={draftAddress}
-                            onChange={(e) => setDraftAddress(e.target.value)}
-                            disabled={otpStep === 'sent'}
+                          <SecurityVerification
+                            token={token || ''}
+                            network={wa.network}
+                            networkLabel={meta.label}
+                            userEmail={user?.email}
+                            onSuccess={() => {
+                              setEditingNetwork(null);
+                              fetchWithdrawalAddresses();
+                            }}
+                            onCancel={() => setEditingNetwork(null)}
                           />
-
-                          {otpStep === 'idle' ? (
-                            <div className="flex justify-end gap-2">
-                              <button onClick={cancelEdit} className={`px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer ${t.textMuted}`}>Cancel</button>
-                              <button
-                                onClick={sendMockOtp}
-                                disabled={!draftAddress.trim() || otpBusy}
-                                className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity"
-                              >
-                                {otpBusy ? 'Sending…' : 'Send Email OTP'}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              <p className={`text-[11px] ${t.textMuted}`}>
-                                A 6-digit verification code has been sent to <span className={t.text}>{user?.email}</span>.
-                              </p>
-                              <Input label="Enter OTP" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-                              <div className="flex justify-end gap-2">
-                                <button onClick={cancelEdit} className={`px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer ${t.textMuted}`}>Cancel</button>
-                                <button
-                                  onClick={verifyMockOtp}
-                                  disabled={otpCode.length !== 6 || otpBusy}
-                                  className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity"
-                                >
-                                  {otpBusy ? 'Verifying…' : 'Verify & Save'}
-                                </button>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>

@@ -176,17 +176,12 @@ export class AuthService {
     const { otp } = await otpService.generateAndStoreOtp(trimmedEmail, 'register');
 
     // 8. Send registration OTP email
-    try {
-      await emailService.sendOtpEmail(trimmedEmail, otp, 'verify your account');
-    } catch (err) {
-      console.error('Failed to send registration OTP email:', err);
-    }
+    await emailService.sendOtpEmail(trimmedEmail, otp, 'verify your account');
 
     // Strip password hash from returned object
     const { passwordHash: _, ...safeUser } = pendingData;
     return {
       user: safeUser,
-      debugOtp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     };
   }
 
@@ -294,7 +289,6 @@ export class AuthService {
 
     return {
       success: true,
-      debugOtp: process.env.NODE_ENV !== 'production' ? otp : undefined,
     };
   }
 
@@ -543,10 +537,8 @@ export class AuthService {
     }
 
     // Always return success message for security to prevent username harvesting.
-    // In non-production, return debugToken (OTP) so the frontend/tester can retrieve it.
     return {
       message: 'If the email is registered, a 6-digit verification code has been sent to your email address.',
-      debugToken: process.env.NODE_ENV !== 'production' ? otp : undefined, // Map the generated OTP as debugToken in dev
     };
   }
 

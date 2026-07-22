@@ -49,10 +49,51 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Momentum scrolling for touch devices */
+.overflow-y-auto, .overflow-x-auto, .overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure smooth scrolling when utilizing anchor points or programmatic scrolls */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* High performance rendering optimization for scroll animations */
+.transform-gpu {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Optimized custom scrollbars to prevent default layout shift and reduce visual clutter */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 136, 159, 0.25);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 136, 159, 0.45);
 }
 
 ::selection {

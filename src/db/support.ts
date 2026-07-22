@@ -20,6 +20,8 @@ export const supportTickets = pgTable(
     category: text('category').notNull(), // DEPOSIT, WITHDRAWAL, SECURITY, ACCOUNT, OTHER
     subject: text('subject').notNull(), // Headline summary of the support ticket
     description: text('description').notNull(), // Detail text submitted by user
+    attachmentName: text('attachment_name'), // Name of the uploaded attachment
+    attachmentData: text('attachment_data'), // Base64 data of the uploaded attachment
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

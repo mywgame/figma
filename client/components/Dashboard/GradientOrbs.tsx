@@ -16,9 +16,9 @@ export const GradientOrbs: React.FC = () => {
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      <div className={`absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full blur-[120px] ${t.gradOrbs.a}`} />
-      <div className={`absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] ${t.gradOrbs.b}`} />
-      <div className={`absolute top-1/2 left-0 w-[400px] h-[400px] rounded-full blur-[100px] ${t.gradOrbs.c}`} />
+      <div className={`absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full blur-[120px] transform-gpu ${t.gradOrbs.a}`} />
+      <div className={`absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] transform-gpu ${t.gradOrbs.b}`} />
+      <div className={`absolute top-1/2 left-0 w-[400px] h-[400px] rounded-full blur-[100px] transform-gpu ${t.gradOrbs.c}`} />
 
       {/* Frosted noise texture — pixel-matched to the figma reference */}
       <div

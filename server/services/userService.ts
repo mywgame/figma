@@ -11,6 +11,8 @@ import { activityRepository } from '../repositories/activityRepository.ts';
 import { sessionRepository } from '../repositories/sessionRepository.ts';
 import { settingsRepository } from '../repositories/settingsRepository.ts';
 import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
+import { notificationService } from './notificationService.ts';
+import { blockchainProvider } from './blockchainProvider.ts';
 import { UserRole } from '../../shared/types/index.ts';
 import { hashPassword, comparePassword } from '../utils/password.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
@@ -65,38 +67,6 @@ export class UserService {
           userId,
           tier: 'VIP1',
           points: '0.00000000',
-        });
-      }
-
-      // Generate permanent deposit addresses if missing
-      const existingAddresses = await depositAddressRepository.findByUserId(userId);
-      if (existingAddresses.length === 0) {
-        const randomHex = () => crypto.randomBytes(20).toString('hex');
-        
-        // USDT_BEP20
-        await depositAddressRepository.createDepositAddress({
-          userId,
-          network: 'USDT_BEP20',
-          address: `0x${randomHex()}`,
-        });
-
-        // USDT_POLYGON
-        await depositAddressRepository.createDepositAddress({
-          userId,
-          network: 'USDT_POLYGON',
-          address: `0x${randomHex()}`,
-        });
-
-        // USDT_TRC20
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let trcAddress = 'T';
-        for (let i = 0; i < 33; i++) {
-          trcAddress += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        await depositAddressRepository.createDepositAddress({
-          userId,
-          network: 'USDT_TRC20',
-          address: trcAddress,
         });
       }
     } catch (err) {
@@ -175,6 +145,14 @@ export class UserService {
       newValue: 'Password successfully updated',
     });
 
+    await notificationService.createStructuredNotification(user.id, {
+      title: 'Password Changed Successfully',
+      description: 'Your account password has been changed successfully. If you did not make this change, please contact support immediately.',
+      icon: 'Key',
+      type: 'security',
+      priority: 'HIGH',
+    });
+
     return { message: 'Password updated successfully.' };
   }
 
@@ -225,6 +203,14 @@ export class UserService {
       device: userAgent,
       oldValue: user.email,
       newValue: newEmailLower,
+    });
+
+    await notificationService.createStructuredNotification(user.id, {
+      title: 'Email Address Updated',
+      description: `Your account email address has been successfully updated to ${newEmailLower}.`,
+      icon: 'ShieldAlert',
+      type: 'security',
+      priority: 'HIGH',
     });
 
     return { message: 'Email address updated successfully.' };
@@ -493,6 +479,9 @@ export class UserService {
 
     const prevLogin = lastLoginLogs[1] || lastLoginLogs[0] || null;
 
+    const userSettingsRecord = await settingsRepository.findUserSettingsByUserId(user.id);
+    const mfaEnabled = userSettingsRecord ? userSettingsRecord.mfaEnabled : false;
+
     return {
       passwordChangedAt: user.passwordChangedAt,
       failedLoginAttempts: user.failedLoginAttempts,
@@ -501,6 +490,7 @@ export class UserService {
       currentLoginDevice: currentSession ? `${currentSession.browser || ''} on ${currentSession.device || ''}` : null,
       lastLoginTime: prevLogin ? prevLogin.createdAt : null,
       lastLoginIp: prevLogin ? prevLogin.ipAddress : null,
+      mfaEnabled,
     };
   }
 }

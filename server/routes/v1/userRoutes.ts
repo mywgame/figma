@@ -171,4 +171,224 @@ router.patch(
   userController.adminUpdateUser
 );
 
+/**
+ * @route GET /api/v1/users/notifications
+ * @desc Get list of own notifications
+ * @access Private
+ */
+router.get(
+  '/notifications',
+  requireAuth,
+  userController.getNotifications
+);
+
+/**
+ * @route POST /api/v1/users/notifications/read-all
+ * @desc Mark all notifications as read
+ * @access Private
+ */
+router.post(
+  '/notifications/read-all',
+  requireAuth,
+  userController.markAllNotificationsRead
+);
+
+/**
+ * @route POST /api/v1/users/notifications/:id/read
+ * @desc Mark a single notification as read
+ * @access Private
+ */
+router.post(
+  '/notifications/:id/read',
+  requireAuth,
+  userController.markNotificationRead
+);
+
+/**
+ * @route DELETE /api/v1/users/notifications/:id
+ * @desc Delete/Dismiss a single notification
+ * @access Private
+ */
+router.delete(
+  '/notifications/:id',
+  requireAuth,
+  userController.deleteNotification
+);
+
+/**
+ * @route GET /api/v1/users/support/tickets
+ * @desc Get list of own support tickets
+ * @access Private
+ */
+router.get(
+  '/support/tickets',
+  requireAuth,
+  userController.getSupportTickets
+);
+
+/**
+ * @route POST /api/v1/users/support/tickets
+ * @desc Create a support ticket
+ * @access Private
+ */
+router.post(
+  '/support/tickets',
+  requireAuth,
+  userController.createSupportTicket
+);
+
+/**
+ * @route GET /api/v1/users/support/tickets/:ticketId/messages
+ * @desc Retrieve ticket message conversation thread
+ * @access Private
+ */
+router.get(
+  '/support/tickets/:ticketId/messages',
+  requireAuth,
+  userController.getTicketMessages
+);
+
+/**
+ * @route POST /api/v1/users/support/tickets/:ticketId/messages
+ * @desc Submit reply message inside ticket thread
+ * @access Private
+ */
+router.post(
+  '/support/tickets/:ticketId/messages',
+  requireAuth,
+  userController.replyToTicket
+);
+
+/**
+ * @route POST /api/v1/users/support/tickets/:ticketId/close
+ * @desc Mark a support ticket as resolved and closed
+ * @access Private
+ */
+router.post(
+  '/support/tickets/:ticketId/close',
+  requireAuth,
+  userController.closeTicket
+);
+
+/**
+ * @route POST /api/v1/users/deposits/verify
+ * @desc Submit and verify transactional deposit hash
+ * @access Private
+ */
+router.post(
+  '/deposits/verify',
+  requireAuth,
+  userController.verifyDeposit
+);
+
+/**
+ * @route POST /api/v1/users/deposits/address
+ * @desc Generate or fetch permanent deposit address on-demand
+ * @access Private
+ */
+router.post(
+  '/deposits/address',
+  requireAuth,
+  userController.generateDepositAddress
+);
+
+/**
+ * @route GET /api/v1/users/security/mfa/setup
+ * @desc Retrieve secret key and otpauth config parameters for 2FA setup
+ * @access Private
+ */
+router.get(
+  '/security/mfa/setup',
+  requireAuth,
+  userController.getMfaSetup
+);
+
+/**
+ * @route POST /api/v1/users/security/mfa/enable
+ * @desc Verify pin code and enable 2FA
+ * @access Private
+ */
+router.post(
+  '/security/mfa/enable',
+  requireAuth,
+  userController.enableMfa
+);
+
+/**
+ * @route POST /api/v1/users/security/mfa/disable
+ * @desc Verify pin code and disable 2FA
+ * @access Private
+ */
+router.post(
+  '/security/mfa/disable',
+  requireAuth,
+  userController.disableMfa
+);
+
+/**
+ * @route GET /api/v1/users/security/withdrawal-addresses
+ * @desc Fetch verified outbound withdrawal addresses
+ * @access Private
+ */
+router.get(
+  '/security/withdrawal-addresses',
+  requireAuth,
+  userController.getWithdrawalAddresses
+);
+
+/**
+ * @route POST /api/v1/users/security/withdrawal-addresses/send-otp
+ * @desc Send verification OTP for registering a withdrawal address
+ * @access Private
+ */
+router.post(
+  '/security/withdrawal-addresses/send-otp',
+  requireAuth,
+  userController.sendWithdrawalAddressOtp
+);
+
+/**
+ * @route POST /api/v1/users/security/withdrawal-addresses
+ * @desc Submit and record verified withdrawal address
+ * @access Private
+ */
+router.post(
+  '/security/withdrawal-addresses',
+  requireAuth,
+  userController.addWithdrawalAddress
+);
+
+/**
+ * @route POST /api/v1/users/withdrawals/send-otp
+ * @desc Send verification OTP for withdrawal processing
+ * @access Private
+ */
+router.post(
+  '/withdrawals/send-otp',
+  requireAuth,
+  userController.sendWithdrawalOtp
+);
+
+/**
+ * @route POST /api/v1/users/withdrawals/request
+ * @desc Submit outbound withdrawal request
+ * @access Private
+ */
+router.post(
+  '/withdrawals/request',
+  requireAuth,
+  userController.requestWithdrawal
+);
+
+/**
+ * @route GET /api/v1/users/withdrawals
+ * @desc Get list of own withdrawal requests
+ * @access Private
+ */
+router.get(
+  '/withdrawals',
+  requireAuth,
+  userController.getWithdrawals
+);
+
 export default router;

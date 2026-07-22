@@ -59,7 +59,6 @@ export class AuthController {
         data: {
           email,
           user: result.user,
-          debugOtp: result.debugOtp,
         },
       });
     } catch (error: any) {
@@ -116,9 +115,7 @@ export class AuthController {
       return res.status(200).json({
         success: true,
         message: 'A new 6-digit verification code has been sent to your email address.',
-        data: {
-          debugOtp: result.debugOtp,
-        },
+        data: {},
       });
     } catch (error: any) {
       return next(new ApiError(400, error.message, 'RESEND_OTP_FAILED'));
@@ -234,9 +231,7 @@ export class AuthController {
       return res.status(200).json({
         success: true,
         message: result.message,
-        data: {
-          debugToken: process.env.NODE_ENV !== 'production' ? result.debugToken : undefined,
-        },
+        data: {},
       });
     } catch (error: any) {
       return next(error);
