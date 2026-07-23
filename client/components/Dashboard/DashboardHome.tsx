@@ -81,7 +81,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
     };
 
     const referralCode = user?.referralCode || '';
-    const referralLink = referralCode ? `https://metafirm.app/ref/${referralCode}` : 'N/A';
+    const referralLink = referralCode 
+      ? (typeof window !== 'undefined' ? `${window.location.origin}/register?ref=${referralCode}` : `https://metafirm.app/register?ref=${referralCode}`)
+      : 'N/A';
 
     // Calculate seconds remaining until next UTC Midnight
     const now = new Date();

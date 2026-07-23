@@ -3,22 +3,52 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { Input, Button } from '../../ui/index.ts';
 import { COUNTRIES, COUNTRY_DATA } from '../Shared/countries.ts';
 
+export function getPendingReferralCode(): string {
+  try {
+    if (typeof window === 'undefined') return '';
+    const params = new URLSearchParams(window.location.search);
+    const codeFromSearch = params.get('ref') || params.get('referralCode') || params.get('referral');
+    if (codeFromSearch && codeFromSearch.trim()) {
+      const trimmed = codeFromSearch.trim();
+      sessionStorage.setItem('pendingReferralCode', trimmed);
+      return trimmed;
+    }
+
+    const pathMatch = window.location.pathname.match(/^\/ref\/([^\/]+)/i);
+    if (pathMatch && pathMatch[1]) {
+      const trimmed = decodeURIComponent(pathMatch[1]).trim();
+      sessionStorage.setItem('pendingReferralCode', trimmed);
+      return trimmed;
+    }
+
+    const stored = sessionStorage.getItem('pendingReferralCode');
+    if (stored && stored.trim()) {
+      return stored.trim();
+    }
+  } catch (err) {
+    console.error('Error parsing pending referral code:', err);
+  }
+  return '';
+}
+
 interface RegisterProps {
   onSuccess: (email: string) => void;
   onError: (msg: string | null) => void;
   onSuccessMsg: (msg: string | null) => void;
+  initialReferralCode?: string;
 }
 
 export const Register: React.FC<RegisterProps> = ({
   onSuccess,
   onError,
   onSuccessMsg,
+  initialReferralCode,
 }) => {
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
@@ -28,7 +58,14 @@ export const Register: React.FC<RegisterProps> = ({
   const [mobileNumber, setMobileNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [referralCode, setReferralCode] = useState('');
+  const [referralCode, setReferralCode] = useState(() => initialReferralCode || getPendingReferralCode() || '');
+
+  useEffect(() => {
+    const code = initialReferralCode || getPendingReferralCode();
+    if (code && !referralCode) {
+      setReferralCode(code);
+    }
+  }, [initialReferralCode]);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);

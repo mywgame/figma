@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShieldCheck, UserPlus } from 'lucide-react';
 import { Modal, Alert } from './ui/index.ts';
@@ -11,7 +11,7 @@ import logoImg from '../../assets/images/branding/logo.png';
 
 // Import refactored feature components
 import { Login } from './Auth/Login/Login.tsx';
-import { Register } from './Auth/Register/Register.tsx';
+import { Register, getPendingReferralCode } from './Auth/Register/Register.tsx';
 import { VerifyEmail } from './Auth/VerifyEmail/VerifyEmail.tsx';
 import { ForgotPassword } from './Auth/ForgotPassword/ForgotPassword.tsx';
 import { ResetPassword } from './Auth/ResetPassword/ResetPassword.tsx';
@@ -20,12 +20,24 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: 'login' | 'register';
+  initialReferralCode?: string;
 }
 
 type AuthView = 'login' | 'register' | 'otp-verify' | 'forgot-password' | 'reset-password';
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'login' }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({
+  isOpen,
+  onClose,
+  initialMode = 'login',
+  initialReferralCode,
+}) => {
   const [activeView, setActiveView] = useState<AuthView>(initialMode === 'register' ? 'register' : 'login');
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveView(initialMode === 'register' ? 'register' : 'login');
+    }
+  }, [isOpen, initialMode]);
   
   // States to pass between steps
   const [email, setEmail] = useState('');
@@ -126,6 +138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
 
           {activeView === 'register' && (
             <Register
+              initialReferralCode={initialReferralCode || getPendingReferralCode()}
               onSuccess={(registeredEmail) => {
                 resetMessages();
                 setEmail(registeredEmail);

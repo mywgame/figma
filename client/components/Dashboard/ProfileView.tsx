@@ -28,7 +28,9 @@ export const ProfileView: React.FC = () => {
   const [userId, setUserId] = useState(user?.userId || 'MF-PENDING');
 
   const referralCode = user?.referralCode || 'MF-742D9C';
-  const referralLink = `https://metafirm.app/ref/${referralCode}`;
+  const referralLink = typeof window !== 'undefined' 
+    ? `${window.location.origin}/register?ref=${referralCode}` 
+    : `https://metafirm.app/register?ref=${referralCode}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink);

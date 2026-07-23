@@ -36,6 +36,7 @@ import { Faq } from './components/Faq.tsx';
 import { Contact } from './components/Contact.tsx';
 import { Footer } from './components/Footer.tsx';
 import { AuthModal } from './components/AuthModal.tsx';
+import { getPendingReferralCode } from './components/Auth/Register/Register.tsx';
 import { UserDashboard } from './components/Dashboard/index.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
 import { EnterpriseAdminDashboard } from './components/Admin/index.tsx';
@@ -264,6 +265,7 @@ function MainAppContent() {
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
+  const [referralCodeForAuth, setReferralCodeForAuth] = useState<string>('');
 
   // Initial premium app loading timer
   useEffect(() => {
@@ -273,16 +275,36 @@ function MainAppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 1. Client-Side Pathname Routing Sync
+  // 1. Client-Side Pathname & Referral Routing Sync
   useEffect(() => {
     const handleLocationChange = () => {
       const path = window.location.pathname;
+      const search = window.location.search;
+      const searchParams = new URLSearchParams(search);
+      const codeFromSearch = searchParams.get('ref') || searchParams.get('referralCode') || searchParams.get('referral');
+      const pathMatch = path.match(/^\/ref\/([^\/]+)/i);
+      const extractedCode = (codeFromSearch || (pathMatch && pathMatch[1]) || '').trim();
+
+      if (extractedCode) {
+        try {
+          sessionStorage.setItem('pendingReferralCode', extractedCode);
+        } catch (e) {
+          // ignore storage errors
+        }
+        setReferralCodeForAuth(extractedCode);
+      }
+
       if (path === '/admin') {
         setCurrentView('admin');
       } else if (path === '/dashboard') {
         setCurrentView('dashboard');
       } else {
         setCurrentView('landing');
+        // If route is /register or /ref/CODE or a referral code is present in URL query params, trigger registration modal
+        if (path === '/register' || path.startsWith('/ref/') || extractedCode) {
+          setAuthModalMode('register');
+          setIsAuthModalOpen(true);
+        }
       }
     };
 
@@ -301,8 +323,10 @@ function MainAppContent() {
       window.history.pushState(null, '', '/admin');
     } else if (currentView === 'dashboard' && currentPath !== '/dashboard') {
       window.history.pushState(null, '', '/dashboard');
-    } else if (currentView === 'landing' && currentPath !== '/') {
-      window.history.pushState(null, '', '/');
+    } else if (currentView === 'landing') {
+      if (currentPath !== '/' && currentPath !== '/register' && !currentPath.startsWith('/ref/')) {
+        window.history.pushState(null, '', '/');
+      }
     }
   }, [currentView]);
 
@@ -359,6 +383,12 @@ function MainAppContent() {
   }, [currentView]);
 
   const handleOpenAuth = (mode: 'login' | 'register') => {
+    if (mode === 'register') {
+      const code = getPendingReferralCode();
+      if (code) {
+        setReferralCodeForAuth(code);
+      }
+    }
     setAuthModalMode(mode);
     setIsAuthModalOpen(true);
   };
@@ -607,6 +637,7 @@ function MainAppContent() {
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
         initialMode={authModalMode} 
+        initialReferralCode={referralCodeForAuth}
       />
 
       {/* 5. Floating Quick-Link to original sync dashboard when authenticated */}
