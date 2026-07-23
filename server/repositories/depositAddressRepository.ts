@@ -96,6 +96,17 @@ export class DepositAddressRepository {
       throw new Error('Failed to store generated deposit address.');
     }
   }
+
+  /**
+   * Delete a deposit address by ID (used for rollback if subscription setup fails)
+   */
+  async deleteDepositAddress(id: string) {
+    try {
+      await db.delete(depositAddresses).where(eq(depositAddresses.id, id));
+    } catch (error) {
+      console.error('Database deletion (deleteDepositAddress) failed:', error);
+    }
+  }
 }
 
 export const depositAddressRepository = new DepositAddressRepository();

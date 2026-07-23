@@ -3669,6 +3669,16 @@ var DepositAddressRepository = class {
       throw new Error("Failed to store generated deposit address.");
     }
   }
+  /**
+   * Delete a deposit address by ID (used for rollback if subscription setup fails)
+   */
+  async deleteDepositAddress(id) {
+    try {
+      await db.delete(depositAddresses).where((0, import_drizzle_orm27.eq)(depositAddresses.id, id));
+    } catch (error) {
+      console.error("Database deletion (deleteDepositAddress) failed:", error);
+    }
+  }
 };
 var depositAddressRepository = new DepositAddressRepository();
 
@@ -4923,6 +4933,44 @@ var TatumProvider = class {
     const txHash = "0x" + import_crypto3.default.randomBytes(32).toString("hex");
     console.log(`[TatumProvider] [SIMULATION ONLY] USDT Transfer initiated on ${network} to ${toAddress} with amount ${amount}. Generated txHash: ${txHash}`);
     return txHash;
+  }
+  /**
+   * Subscribe address to Tatum webhook notifications automatically
+   */
+  async subscribeAddress(network, address, webhookUrl) {
+    if (!this.isConfigured) {
+      console.log(`[TatumProvider] [SIMULATION MODE] Skipping webhook subscription for address ${address} on network ${network}`);
+      return true;
+    }
+    const netConfig = blockchainConfig.networks[network];
+    let chain = netConfig?.chainName;
+    if (!chain) {
+      if (network.includes("BEP20") || network.includes("BSC")) chain = "BSC";
+      else if (network.includes("POLYGON") || network.includes("MATIC")) chain = "POLYGON";
+      else if (network.includes("TRC20") || network.includes("TRON")) chain = "TRON";
+      else chain = "BSC";
+    }
+    const requestBody = {
+      type: "INCOMING_FUNGIBLE_TX",
+      attr: {
+        address,
+        chain,
+        url: webhookUrl
+      }
+    };
+    try {
+      console.log(`[TatumProvider] Creating Tatum webhook subscription for address ${address} on chain ${chain}...`);
+      const result = await this.postRequest("/v3/subscription", requestBody);
+      console.log(`[TatumProvider] Tatum subscription created successfully. Subscription ID: ${result?.id}`);
+      return true;
+    } catch (error) {
+      if (error.message && (error.message.includes("already exists") || error.message.includes("already subscribed"))) {
+        console.log(`[TatumProvider] Address ${address} is already subscribed on Tatum.`);
+        return true;
+      }
+      console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, error.message);
+      throw new Error(`Tatum webhook subscription failed: ${error.message}`);
+    }
   }
 };
 
@@ -6831,15 +6879,15 @@ var AddressService = class {
     const derivationIndex = await this.getNextDerivationIndex(network);
     const address = await this.provider.generateDepositAddress(network, derivationIndex);
     const qrPath = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(address)}`;
+    let newAddress;
     try {
-      const newAddress = await depositAddressRepository.createDepositAddress({
+      newAddress = await depositAddressRepository.createDepositAddress({
         userId,
         network,
         address,
         derivationIndex,
         qrPath
       });
-      return newAddress;
     } catch (error) {
       const existingAgain = await depositAddressRepository.findByUserAndNetwork(userId, network);
       if (existingAgain) {
@@ -6847,6 +6895,19 @@ var AddressService = class {
       }
       throw error;
     }
+    const webhookUrl = process.env.TATUM_WEBHOOK_URL || "https://figma-metafirm.up.railway.app/api/v1/webhooks/tatum";
+    if (this.provider.subscribeAddress) {
+      try {
+        await this.provider.subscribeAddress(network, address, webhookUrl);
+      } catch (subErr) {
+        console.error(`[AddressService] Subscription failed for address ${address}. Rolling back database record...`);
+        if (newAddress && newAddress.id) {
+          await depositAddressRepository.deleteDepositAddress(newAddress.id);
+        }
+        throw subErr;
+      }
+    }
+    return newAddress;
   }
   /**
    * Validate destination address format on target network
@@ -10107,37 +10168,49 @@ function verifyWebhookSignature(req, res, next) {
       return res.status(401).json({ error: "Replay attack or timestamp skewed too far." });
     }
   }
-  if (signature && WEBHOOK_SECRET) {
-    const rawBody = req.rawBody;
-    if (!rawBody) {
-      logger.warn("[Webhook] Request rejected: empty raw body.");
-      return res.status(400).json({ error: "Empty payload body." });
-    }
-    try {
-      const hmac512 = import_crypto8.default.createHmac("sha512", WEBHOOK_SECRET);
-      const computed512 = hmac512.update(rawBody).digest("hex");
-      const buf512 = Buffer.from(computed512, "hex");
-      const sigBuf = Buffer.from(signature.trim(), "hex");
-      let isSignatureValid = buf512.length === sigBuf.length && import_crypto8.default.timingSafeEqual(buf512, sigBuf);
-      if (!isSignatureValid) {
-        const hmac256 = import_crypto8.default.createHmac("sha256", WEBHOOK_SECRET);
-        const computed256 = hmac256.update(rawBody).digest("hex");
-        const buf256 = Buffer.from(computed256, "hex");
-        isSignatureValid = buf256.length === sigBuf.length && import_crypto8.default.timingSafeEqual(buf256, sigBuf);
+  const isProduction2 = process.env.NODE_ENV === "production";
+  const allowUnsigned = process.env.ALLOW_UNSIGNED_WEBHOOKS === "true";
+  const requireSignature = process.env.REQUIRE_WEBHOOK_SIGNATURE === "true" || isProduction2 && !allowUnsigned && Boolean(WEBHOOK_SECRET);
+  if (signature) {
+    if (!WEBHOOK_SECRET) {
+      logger.warn("[Webhook] Signature header provided, but TATUM_WEBHOOK_SECRET is not configured on server.");
+      if (requireSignature) {
+        return res.status(500).json({ error: "Server misconfiguration: TATUM_WEBHOOK_SECRET missing." });
       }
-      if (!isSignatureValid) {
-        logger.warn("[Webhook] Request rejected: signature verification failed (forged payload).");
-        return res.status(401).json({ error: "Signature verification failed." });
+    } else {
+      const rawBody = req.rawBody;
+      if (!rawBody) {
+        logger.warn("[Webhook] Request rejected: empty raw body.");
+        return res.status(400).json({ error: "Empty payload body." });
       }
-      logger.info("[Webhook] Signature verification passed successfully.");
-    } catch (err) {
-      logger.error("[Webhook] Error during signature verification:", err.message);
-      return res.status(500).json({ error: "Internal signature verification error." });
+      try {
+        const hmac512 = import_crypto8.default.createHmac("sha512", WEBHOOK_SECRET);
+        const computed512 = hmac512.update(rawBody).digest("hex");
+        const buf512 = Buffer.from(computed512, "hex");
+        const sigBuf = Buffer.from(signature.trim(), "hex");
+        let isSignatureValid = buf512.length === sigBuf.length && import_crypto8.default.timingSafeEqual(buf512, sigBuf);
+        if (!isSignatureValid) {
+          const hmac256 = import_crypto8.default.createHmac("sha256", WEBHOOK_SECRET);
+          const computed256 = hmac256.update(rawBody).digest("hex");
+          const buf256 = Buffer.from(computed256, "hex");
+          isSignatureValid = buf256.length === sigBuf.length && import_crypto8.default.timingSafeEqual(buf256, sigBuf);
+        }
+        if (!isSignatureValid) {
+          logger.warn("[Webhook] Request rejected: signature verification failed (forged payload).");
+          return res.status(401).json({ error: "Signature verification failed." });
+        }
+        logger.info("[Webhook] Signature verification passed successfully.");
+      } catch (err) {
+        logger.error("[Webhook] Error during signature verification:", err.message);
+        return res.status(500).json({ error: "Internal signature verification error." });
+      }
     }
-  } else if (!signature) {
-    logger.info("[Webhook] Notice: Request received without signature header (e.g. Test Alert or standard notification). Proceeding with processing.");
-  } else if (!WEBHOOK_SECRET) {
-    logger.warn("[Webhook] Signature header provided, but TATUM_WEBHOOK_SECRET is not configured on server. Proceeding with processing.");
+  } else {
+    if (requireSignature) {
+      logger.warn("[Webhook] Request rejected: missing required signature header in strict mode.");
+      return res.status(401).json({ error: "Missing required webhook signature header." });
+    }
+    logger.info("[Webhook] Notice: Unsigned request allowed (ALLOW_UNSIGNED_WEBHOOKS or non-strict mode active). Relying on on-chain node verification.");
   }
   next();
 }

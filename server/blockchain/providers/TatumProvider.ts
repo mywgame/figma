@@ -452,5 +452,48 @@ export class TatumProvider implements BlockchainProvider {
     console.log(`[TatumProvider] [SIMULATION ONLY] USDT Transfer initiated on ${network} to ${toAddress} with amount ${amount}. Generated txHash: ${txHash}`);
     return txHash;
   }
+
+  /**
+   * Subscribe address to Tatum webhook notifications automatically
+   */
+  async subscribeAddress(network: string, address: string, webhookUrl: string): Promise<boolean> {
+    if (!this.isConfigured) {
+      console.log(`[TatumProvider] [SIMULATION MODE] Skipping webhook subscription for address ${address} on network ${network}`);
+      return true;
+    }
+
+    const netConfig = blockchainConfig.networks[network];
+    let chain = netConfig?.chainName;
+    if (!chain) {
+      if (network.includes('BEP20') || network.includes('BSC')) chain = 'BSC';
+      else if (network.includes('POLYGON') || network.includes('MATIC')) chain = 'POLYGON';
+      else if (network.includes('TRC20') || network.includes('TRON')) chain = 'TRON';
+      else chain = 'BSC';
+    }
+
+    const requestBody = {
+      type: 'INCOMING_FUNGIBLE_TX',
+      attr: {
+        address: address,
+        chain: chain,
+        url: webhookUrl,
+      },
+    };
+
+    try {
+      console.log(`[TatumProvider] Creating Tatum webhook subscription for address ${address} on chain ${chain}...`);
+      const result = await this.postRequest<{ id: string }>('/v3/subscription', requestBody);
+      console.log(`[TatumProvider] Tatum subscription created successfully. Subscription ID: ${result?.id}`);
+      return true;
+    } catch (error: any) {
+      // If Tatum indicates subscription already exists, treat as non-fatal success
+      if (error.message && (error.message.includes('already exists') || error.message.includes('already subscribed'))) {
+        console.log(`[TatumProvider] Address ${address} is already subscribed on Tatum.`);
+        return true;
+      }
+      console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, error.message);
+      throw new Error(`Tatum webhook subscription failed: ${error.message}`);
+    }
+  }
 }
 export default TatumProvider;

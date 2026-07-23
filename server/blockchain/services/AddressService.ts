@@ -50,17 +50,17 @@ export class AddressService {
     // 3. Generate the actual address via the provider
     const address = await this.provider.generateDepositAddress(network, derivationIndex);
 
-    // 4. Save permanently to database with duplicate prevention under race conditions
+    // 4. Save permanently to database first
     const qrPath = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(address)}`;
+    let newAddress;
     try {
-      const newAddress = await depositAddressRepository.createDepositAddress({
+      newAddress = await depositAddressRepository.createDepositAddress({
         userId,
         network,
         address,
         derivationIndex,
         qrPath,
       });
-      return newAddress;
     } catch (error: any) {
       // Under high concurrency/race conditions, check if another process succeeded
       const existingAgain = await depositAddressRepository.findByUserAndNetwork(userId, network);
@@ -69,6 +69,23 @@ export class AddressService {
       }
       throw error;
     }
+
+    // 5. Create webhook subscription for this saved permanent address
+    // If subscription fails, delete the DB record and throw error to keep DB strictly synced with Tatum
+    const webhookUrl = process.env.TATUM_WEBHOOK_URL || 'https://figma-metafirm.up.railway.app/api/v1/webhooks/tatum';
+    if (this.provider.subscribeAddress) {
+      try {
+        await this.provider.subscribeAddress(network, address, webhookUrl);
+      } catch (subErr: any) {
+        console.error(`[AddressService] Subscription failed for address ${address}. Rolling back database record...`);
+        if (newAddress && newAddress.id) {
+          await depositAddressRepository.deleteDepositAddress(newAddress.id);
+        }
+        throw subErr;
+      }
+    }
+
+    return newAddress;
   }
 
   /**

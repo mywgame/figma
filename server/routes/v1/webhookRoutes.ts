@@ -37,45 +37,59 @@ function verifyWebhookSignature(req: Request, res: Response, next: NextFunction)
     }
   }
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  const allowUnsigned = process.env.ALLOW_UNSIGNED_WEBHOOKS === 'true';
+  const requireSignature = process.env.REQUIRE_WEBHOOK_SIGNATURE === 'true' || (isProduction && !allowUnsigned && Boolean(WEBHOOK_SECRET));
+
   // 2. Signature verification
-  if (signature && WEBHOOK_SECRET) {
-    const rawBody = (req as any).rawBody;
-    if (!rawBody) {
-      logger.warn('[Webhook] Request rejected: empty raw body.');
-      return res.status(400).json({ error: 'Empty payload body.' });
-    }
-
-    try {
-      // Try HMAC SHA-512 first (Tatum default)
-      const hmac512 = crypto.createHmac('sha512', WEBHOOK_SECRET);
-      const computed512 = hmac512.update(rawBody).digest('hex');
-      const buf512 = Buffer.from(computed512, 'hex');
-      const sigBuf = Buffer.from(signature.trim(), 'hex');
-
-      let isSignatureValid = buf512.length === sigBuf.length && crypto.timingSafeEqual(buf512, sigBuf);
-
-      // Fallback to SHA-256 if SHA-512 comparison length/content didn't match
-      if (!isSignatureValid) {
-        const hmac256 = crypto.createHmac('sha256', WEBHOOK_SECRET);
-        const computed256 = hmac256.update(rawBody).digest('hex');
-        const buf256 = Buffer.from(computed256, 'hex');
-        isSignatureValid = buf256.length === sigBuf.length && crypto.timingSafeEqual(buf256, sigBuf);
+  if (signature) {
+    if (!WEBHOOK_SECRET) {
+      logger.warn('[Webhook] Signature header provided, but TATUM_WEBHOOK_SECRET is not configured on server.');
+      if (requireSignature) {
+        return res.status(500).json({ error: 'Server misconfiguration: TATUM_WEBHOOK_SECRET missing.' });
+      }
+    } else {
+      const rawBody = (req as any).rawBody;
+      if (!rawBody) {
+        logger.warn('[Webhook] Request rejected: empty raw body.');
+        return res.status(400).json({ error: 'Empty payload body.' });
       }
 
-      if (!isSignatureValid) {
-        logger.warn('[Webhook] Request rejected: signature verification failed (forged payload).');
-        return res.status(401).json({ error: 'Signature verification failed.' });
-      }
+      try {
+        // Try HMAC SHA-512 first (Tatum default)
+        const hmac512 = crypto.createHmac('sha512', WEBHOOK_SECRET);
+        const computed512 = hmac512.update(rawBody).digest('hex');
+        const buf512 = Buffer.from(computed512, 'hex');
+        const sigBuf = Buffer.from(signature.trim(), 'hex');
 
-      logger.info('[Webhook] Signature verification passed successfully.');
-    } catch (err: any) {
-      logger.error('[Webhook] Error during signature verification:', err.message);
-      return res.status(500).json({ error: 'Internal signature verification error.' });
+        let isSignatureValid = buf512.length === sigBuf.length && crypto.timingSafeEqual(buf512, sigBuf);
+
+        // Fallback to SHA-256 if SHA-512 comparison length/content didn't match
+        if (!isSignatureValid) {
+          const hmac256 = crypto.createHmac('sha256', WEBHOOK_SECRET);
+          const computed256 = hmac256.update(rawBody).digest('hex');
+          const buf256 = Buffer.from(computed256, 'hex');
+          isSignatureValid = buf256.length === sigBuf.length && crypto.timingSafeEqual(buf256, sigBuf);
+        }
+
+        if (!isSignatureValid) {
+          logger.warn('[Webhook] Request rejected: signature verification failed (forged payload).');
+          return res.status(401).json({ error: 'Signature verification failed.' });
+        }
+
+        logger.info('[Webhook] Signature verification passed successfully.');
+      } catch (err: any) {
+        logger.error('[Webhook] Error during signature verification:', err.message);
+        return res.status(500).json({ error: 'Internal signature verification error.' });
+      }
     }
-  } else if (!signature) {
-    logger.info('[Webhook] Notice: Request received without signature header (e.g. Test Alert or standard notification). Proceeding with processing.');
-  } else if (!WEBHOOK_SECRET) {
-    logger.warn('[Webhook] Signature header provided, but TATUM_WEBHOOK_SECRET is not configured on server. Proceeding with processing.');
+  } else {
+    // Unsigned webhook payload
+    if (requireSignature) {
+      logger.warn('[Webhook] Request rejected: missing required signature header in strict mode.');
+      return res.status(401).json({ error: 'Missing required webhook signature header.' });
+    }
+    logger.info('[Webhook] Notice: Unsigned request allowed (ALLOW_UNSIGNED_WEBHOOKS or non-strict mode active). Relying on on-chain node verification.');
   }
 
   next();
