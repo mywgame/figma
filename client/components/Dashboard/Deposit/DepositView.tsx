@@ -11,52 +11,30 @@ import { DashboardLayout } from '../Layout/DashboardLayout.tsx';
 import { DashboardData } from '../../../types/index.ts';
 import QRCode from 'qrcode';
 
-const MOCK_DEPOSIT_HISTORY = [
-  {
-    id: 'd1',
-    dateTime: '2026-07-15 14:32:10',
-    network: 'USDT BEP20',
-    amount: '150.00',
-    status: 'SUCCESSFUL',
-    txNumber: 'DEP-84920482',
-    txHash: '0x2F3a6c9d8e7f1a2b3c4d5e6f7a8b9c0d1e2f3a6cb97',
-  },
-  {
-    id: 'd2',
-    dateTime: '2026-07-10 09:15:43',
-    network: 'USDT TRC20',
-    amount: '500.00',
-    status: 'SUCCESSFUL',
-    txNumber: 'DEP-39105829',
-    txHash: '0x7e8f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e8fd24',
-  },
-  {
-    id: 'd3',
-    dateTime: '2026-07-01 11:24:02',
-    network: 'USDT Polygon',
-    amount: '80.00',
-    status: 'SUCCESSFUL',
-    txNumber: 'DEP-21948104',
-    txHash: '0x3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d',
-  }
-];
+import { api } from '../../../services/api.ts';
 
 interface DepositViewProps {
   dashboardData: DashboardData | null;
   showToast: (msg: string) => void;
   onBack: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
 export const DepositView: React.FC<DepositViewProps> = ({
   dashboardData,
   showToast,
   onBack,
+  onRefresh,
 }) => {
   const { t } = useTheme();
   const { token } = useAuth();
   const [depositNetwork, setDepositNetwork] = useState('USDT_BEP20');
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+
+  // Real Deposit History state
+  const [depositHistory, setDepositHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Auto-verification form states
   const [txHash, setTxHash] = useState('');
@@ -67,6 +45,25 @@ export const DepositView: React.FC<DepositViewProps> = ({
   // Address generation/retrieval states
   const [localAddresses, setLocalAddresses] = useState<Record<string, string>>({});
   const [generatingAddress, setGeneratingAddress] = useState(false);
+
+  // Fetch real deposit history
+  const fetchDepositHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await api.getUserDeposits();
+      if (res.success && Array.isArray(res.data)) {
+        setDepositHistory(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load user deposit history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDepositHistory();
+  }, []);
 
   // Sync existing deposit addresses on mount/update
   useEffect(() => {
@@ -159,6 +156,10 @@ export const DepositView: React.FC<DepositViewProps> = ({
       setVerifySuccess('Deposit verified successfully! Your account balance has been updated.');
       setTxHash('');
       showToast('Deposit successfully verified!');
+      fetchDepositHistory();
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (err: any) {
       setVerifyError(err.message || 'An error occurred during verification.');
     } finally {
@@ -320,32 +321,51 @@ export const DepositView: React.FC<DepositViewProps> = ({
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider">Deposit History</span>
           </div>
           <div className="space-y-2.5">
-            {MOCK_DEPOSIT_HISTORY.map((item) => (
-              <div key={item.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-[11px]">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-white">{item.network}</span>
-                  <span className="font-mono text-cyan-400 font-bold">{item.amount} USDT</span>
-                </div>
-                <div className="flex justify-between text-gray-400 text-[10px]">
-                  <span>{item.dateTime}</span>
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold text-[9px]">
-                    {item.status}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[10px] border-t border-white/5 pt-2 font-mono text-gray-500">
-                  <span>TX: {item.txNumber}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyTxHash(item.txHash)}
-                    className="hover:text-cyan-400 flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Click to copy Hash"
-                  >
-                    <span>{item.txHash.slice(0, 8)}...{item.txHash.slice(-6)}</span>
-                    <Copy className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+            {loadingHistory ? (
+              <div className="p-4 text-center text-xs text-gray-400">Loading deposit history...</div>
+            ) : depositHistory.length === 0 ? (
+              <div className="p-4 text-center text-xs text-gray-400 border border-white/5 rounded-2xl bg-white/5">
+                No deposit history found.
               </div>
-            ))}
+            ) : (
+              depositHistory.map((item) => {
+                const txHashVal = item.txHash || '';
+                const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString() : '';
+                return (
+                  <div key={item.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-[11px]">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-white">{item.network || 'USDT'}</span>
+                      <span className="font-mono text-cyan-400 font-bold">{item.amount} USDT</span>
+                    </div>
+                    <div className="flex justify-between text-gray-400 text-[10px]">
+                      <span>{dateStr}</span>
+                      <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${
+                        item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' :
+                        item.status === 'FAILED' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] border-t border-white/5 pt-2 font-mono text-gray-500">
+                      <span>REF: {item.referenceNumber || item.id.slice(0, 8)}</span>
+                      {txHashVal ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyTxHash(txHashVal)}
+                          className="hover:text-cyan-400 flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Click to copy Hash"
+                        >
+                          <span>{txHashVal.length > 14 ? `${txHashVal.slice(0, 8)}...${txHashVal.slice(-6)}` : txHashVal}</span>
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <span className="text-gray-600">Pending Tx</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 

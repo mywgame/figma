@@ -129,6 +129,18 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
       { key: 'incentiveIncome', label: 'Incentive Income', today: 0.00, total: parseFloat(dashboardData.earnings.incentiveIncome), icon: Award, accent: 'amber' },
     ] as MockIncomeCard[];
 
+    const realRecentTransactions = (dashboardData.recentTransactions || []).map((tx: any) => {
+      const typeLower = (tx.type || 'deposit').toLowerCase();
+      return {
+        id: tx.id,
+        type: typeLower,
+        hash: tx.referenceId || `TX-${tx.id.slice(0, 8)}`,
+        amount: Math.abs(parseFloat(tx.amount || '0')),
+        token: 'USDT',
+        time: tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : 'N/A',
+      };
+    });
+
     return (
       <div className="space-y-6 w-full text-left" id="metafirm-dashboard-home">
 
@@ -207,7 +219,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
         {/* 5. Network Levels + Recent Transactions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="recent-transactions-container">
           <NetworkLevels network={realNetwork} />
-          <RecentActivity transactions={data.recentTransactions} onViewAll={() => onQuickAction?.('team')} />
+          <RecentActivity transactions={realRecentTransactions} onViewAll={() => onQuickAction?.('team')} />
         </div>
 
         {/* 6. Announcements (preserved from earlier phase; no figma equivalent) */}

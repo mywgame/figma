@@ -20,6 +20,7 @@ import { depositService } from '../services/depositService.ts';
 import { blockchainProvider } from '../services/blockchainProvider.ts';
 import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
 import { depositRepository } from '../repositories/depositRepository.ts';
+import { transactionRepository } from '../repositories/transactionRepository.ts';
 import { settingsRepository } from '../repositories/settingsRepository.ts';
 import { withdrawalRepository } from '../repositories/withdrawalRepository.ts';
 import { withdrawalService } from '../services/withdrawalService.ts';
@@ -866,6 +867,45 @@ export class UserController {
         message: 'Withdrawal request submitted successfully for administrative review.',
         withdrawal
       }, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fetch deposits for the current user
+   */
+  async getDeposits(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+      const status = req.query.status as string | undefined;
+      const list = await depositRepository.findByUserId(user.id, { limit, offset, status });
+      return sendSuccess(res, list, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fetch transactions for the current user
+   */
+  async getTransactions(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+      const type = req.query.type as string | undefined;
+      const status = req.query.status as string | undefined;
+      const list = await transactionRepository.findByUserId(user.id, { limit, offset, type, status });
+      return sendSuccess(res, list, 200);
     } catch (error) {
       next(error);
     }

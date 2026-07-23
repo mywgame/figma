@@ -220,6 +220,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
             dashboardData={dashboardData}
             showToast={showToast}
             onBack={() => setActiveTab('dashboard')}
+            onRefresh={fetchDashboard}
           />
         );
       case 'withdrawal':

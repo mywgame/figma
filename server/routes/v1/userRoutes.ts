@@ -271,6 +271,28 @@ router.post(
 );
 
 /**
+ * @route GET /api/v1/users/deposits
+ * @desc Get list of own deposit records
+ * @access Private
+ */
+router.get(
+  '/deposits',
+  requireAuth,
+  userController.getDeposits
+);
+
+/**
+ * @route GET /api/v1/users/transactions
+ * @desc Get list of own transaction ledger records
+ * @access Private
+ */
+router.get(
+  '/transactions',
+  requireAuth,
+  userController.getTransactions
+);
+
+/**
  * @route POST /api/v1/users/deposits/verify
  * @desc Submit and verify transactional deposit hash
  * @access Private

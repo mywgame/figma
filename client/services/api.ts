@@ -251,6 +251,29 @@ class ApiService {
   }
 
   /**
+   * Users: Retrieve user deposit history
+   */
+  async getUserDeposits(params?: { limit?: number; offset?: number; status?: string }): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (params?.limit) query.append('limit', params.limit.toString());
+    if (params?.offset) query.append('offset', params.offset.toString());
+    if (params?.status) query.append('status', params.status);
+    return this.get<any>(`/users/deposits?${query.toString()}`);
+  }
+
+  /**
+   * Users: Retrieve user transaction history
+   */
+  async getUserTransactions(params?: { limit?: number; offset?: number; type?: string; status?: string }): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (params?.limit) query.append('limit', params.limit.toString());
+    if (params?.offset) query.append('offset', params.offset.toString());
+    if (params?.type) query.append('type', params.type);
+    if (params?.status) query.append('status', params.status);
+    return this.get<any>(`/users/transactions?${query.toString()}`);
+  }
+
+  /**
    * Users: Retrieve official VIP Qualification Matrix and requirements
    */
   async getVipMatrix(): Promise<ApiResponse<any>> {

@@ -1,0 +1,59 @@
+warning: in the working copy of 'server/controllers/userController.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/server/controllers/userController.ts b/server/controllers/userController.ts[m
+[1mindex 47fcda5..94440b3 100644[m
+[1m--- a/server/controllers/userController.ts[m
+[1m+++ b/server/controllers/userController.ts[m
+[36m@@ -20,6 +20,7 @@[m [mimport { depositService } from '../services/depositService.ts';[m
+ import { blockchainProvider } from '../services/blockchainProvider.ts';[m
+ import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';[m
+ import { depositRepository } from '../repositories/depositRepository.ts';[m
+[32m+[m[32mimport { transactionRepository } from '../repositories/transactionRepository.ts';[m
+ import { settingsRepository } from '../repositories/settingsRepository.ts';[m
+ import { withdrawalRepository } from '../repositories/withdrawalRepository.ts';[m
+ import { withdrawalService } from '../services/withdrawalService.ts';[m
+[36m@@ -871,6 +872,45 @@[m [mexport class UserController {[m
+     }[m
+   }[m
+ [m
+[32m+[m[32m  /**[m
+[32m+[m[32m   * Fetch deposits for the current user[m
+[32m+[m[32m   */[m
+[32m+[m[32m  async getDeposits(req: AuthRequest, res: Response, next: NextFunction) {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      if (!req.user) {[m
+[32m+[m[32m        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');[m
+[32m+[m[32m      }[m
+[32m+[m[32m      const user = await userService.getUserProfile(req.user.uid);[m
+[32m+[m[32m      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;[m
+[32m+[m[32m      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;[m
+[32m+[m[32m      const status = req.query.status as string | undefined;[m
+[32m+[m[32m      const list = await depositRepository.findByUserId(user.id, { limit, offset, status });[m
+[32m+[m[32m      return sendSuccess(res, list, 200);[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      next(error);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  /**[m
+[32m+[m[32m   * Fetch transactions for the current user[m
+[32m+[m[32m   */[m
+[32m+[m[32m  async getTransactions(req: AuthRequest, res: Response, next: NextFunction) {[m
+[32m+[m[32m    try {[m
+[32m+[m[32m      if (!req.user) {[m
+[32m+[m[32m        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');[m
+[32m+[m[32m      }[m
+[32m+[m[32m      const user = await userService.getUserProfile(req.user.uid);[m
+[32m+[m[32m      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;[m
+[32m+[m[32m      const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;[m
+[32m+[m[32m      const type = req.query.type as string | undefined;[m
+[32m+[m[32m      const status = req.query.status as string | undefined;[m
+[32m+[m[32m      const list = await transactionRepository.findByUserId(user.id, { limit, offset, type, status });[m
+[32m+[m[32m      return sendSuccess(res, list, 200);[m
+[32m+[m[32m    } catch (error) {[m
+[32m+[m[32m      next(error);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+   /**[m
+    * Fetch withdrawals for the current user[m
+    */[m

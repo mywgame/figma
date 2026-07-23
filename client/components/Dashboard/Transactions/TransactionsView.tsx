@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../../hooks/useTheme.ts';
 import { SearchInput } from '../../ui/Inputs/index.tsx';
 import { DashboardLayout } from '../Layout/DashboardLayout.tsx';
@@ -11,6 +11,7 @@ import { Transaction, TransactionType } from './types.ts';
 import { TransactionTable } from './TransactionTable.tsx';
 import { ReceiptModal } from './ReceiptModal.tsx';
 import { motion, AnimatePresence } from 'motion/react';
+import { api } from '../../../services/api.ts';
 
 export const TransactionsView: React.FC = () => {
   const { t } = useTheme();
@@ -20,89 +21,61 @@ export const TransactionsView: React.FC = () => {
   const [copiedHash, setCopiedHash] = useState<boolean>(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
-  // Pristine high-fidelity Mock Dataset covering all requested types and status badges
-  const mockTransactions: Transaction[] = [
-    {
-      id: 'TX-83921',
-      type: 'Yield Claim',
-      amount: '+$245.82',
-      status: 'Completed',
-      method: 'Reward Pool V2',
-      date: '2026-06-28 12:45 UTC',
-    },
-    {
-      id: 'TX-83905',
-      type: 'Deposit',
-      amount: '+$50,000.00',
-      status: 'Completed',
-      method: 'USDT ERC20',
-      date: '2026-06-27 18:20 UTC',
-    },
-    {
-      id: 'TX-83894',
-      type: 'Withdrawal',
-      amount: '-$12,500.00',
-      status: 'Completed',
-      method: 'USDC TRC20',
-      date: '2026-06-27 09:14 UTC',
-    },
-    {
-      id: 'TX-83782',
-      type: 'Salary',
-      amount: '+$1,500.00',
-      status: 'Completed',
-      method: 'Direct Deposit',
-      date: '2026-06-26 00:00 UTC',
-    },
-    {
-      id: 'TX-83741',
-      type: 'Referral Income',
-      amount: '+$340.50',
-      status: 'Completed',
-      method: 'Affiliate Credit',
-      date: '2026-06-25 15:32 UTC',
-    },
-    {
-      id: 'TX-83601',
-      type: 'Reward',
-      amount: '+$124.15',
-      status: 'Processing',
-      method: 'Staking Booster',
-      date: '2026-06-24 11:05 UTC',
-    },
-    {
-      id: 'TX-83542',
-      type: 'Withdrawal',
-      amount: '-$5,000.00',
-      status: 'Failed',
-      method: 'USDT ERC20',
-      date: '2026-06-23 04:12 UTC',
-    },
-    {
-      id: 'TX-83492',
-      type: 'Deposit',
-      amount: '+$12,000.00',
-      status: 'Completed',
-      method: 'Bank Wire Direct',
-      date: '2026-06-22 10:45 UTC',
-    },
-    {
-      id: 'TX-83410',
-      type: 'Team Income',
-      amount: '+$182.40',
-      status: 'Completed',
-      method: 'Level A Commission',
-      date: '2026-06-21 21:30 UTC',
-    },
-    {
-      id: 'TX-83390',
-      type: 'Bonus',
-      amount: '+$500.00',
-      status: 'Pending',
-      method: 'Promo Code Active',
-      date: '2026-06-20 14:15 UTC',
-    },
-  ];
+  // Real transactions state
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setIsLoading(true);
+      try {
+        const res = await api.getUserTransactions();
+        if (res.success && Array.isArray(res.data)) {
+          const mapped: Transaction[] = res.data.map((dbTx: any) => {
+            let mappedType: TransactionType = 'Deposit';
+            const rawType = (dbTx.type || '').toUpperCase();
+            if (rawType.includes('WITHDRAW')) mappedType = 'Withdrawal';
+            else if (rawType.includes('CLAIM') || rawType.includes('YIELD')) mappedType = 'Yield Claim';
+            else if (rawType.includes('REWARD')) mappedType = 'Reward';
+            else if (rawType.includes('TEAM')) mappedType = 'Team Income';
+            else if (rawType.includes('REFERRAL')) mappedType = 'Referral Income';
+            else if (rawType.includes('SALARY')) mappedType = 'Salary';
+            else if (rawType.includes('BONUS')) mappedType = 'Bonus';
+            else mappedType = 'Deposit';
+
+            let mappedStatus: any = 'Completed';
+            const rawStatus = (dbTx.status || '').toUpperCase();
+            if (rawStatus === 'PENDING') mappedStatus = 'Pending';
+            else if (rawStatus === 'PROCESSING') mappedStatus = 'Processing';
+            else if (rawStatus === 'FAILED' || rawStatus === 'REJECTED') mappedStatus = 'Failed';
+            else mappedStatus = 'Completed';
+
+            const numericAmount = parseFloat(dbTx.amount || '0');
+            const isNegative = numericAmount < 0 || mappedType === 'Withdrawal';
+            const formattedAmount = `${isNegative ? '-' : '+'}$${Math.abs(numericAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+            const dateStr = dbTx.createdAt ? new Date(dbTx.createdAt).toLocaleString() : 'N/A';
+
+            return {
+              id: dbTx.referenceId || `TX-${dbTx.id.slice(0, 8)}`,
+              type: mappedType,
+              amount: formattedAmount,
+              status: mappedStatus,
+              method: dbTx.description || 'USDT',
+              date: dateStr,
+            };
+          });
+          setTransactions(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load user transactions:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
 
   // Handle Clipboard copies securely
   const handleCopy = (text: string, isHash: boolean = false) => {
@@ -117,7 +90,7 @@ export const TransactionsView: React.FC = () => {
   };
 
   // Filter based on tabs selection and search string
-  const filteredTransactions = mockTransactions.filter((tx) => {
+  const filteredTransactions = transactions.filter((tx) => {
     // 1. Tab Filter Match
     let tabMatch = true;
     if (filterType === 'deposits') {

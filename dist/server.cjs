@@ -4422,10 +4422,31 @@ init_auditRepository();
 var import_crypto3 = __toESM(require("crypto"), 1);
 
 // server/blockchain/config/blockchainConfig.ts
-var rawEnv = (process.env.BLOCKCHAIN_ENV || (process.env.NODE_ENV === "production" ? "production" : "development")).toLowerCase();
-var blockchainEnv = rawEnv === "production" || rawEnv === "mainnet" ? "production" : rawEnv === "sandbox" || rawEnv === "testnet" ? "sandbox" : "development";
+var dotenv3 = __toESM(require("dotenv"), 1);
+dotenv3.config();
+var rawEnv = process.env.BLOCKCHAIN_ENV?.trim().toLowerCase();
+if (!rawEnv) {
+  throw new Error(
+    "[blockchainConfig] Critical Configuration Error: BLOCKCHAIN_ENV environment variable is missing or empty. You must explicitly set BLOCKCHAIN_ENV to 'production', 'sandbox', 'testnet', or 'development' in your environment configuration."
+  );
+}
+var blockchainEnv;
+var isTestnet;
+if (rawEnv === "production" || rawEnv === "mainnet") {
+  blockchainEnv = "production";
+  isTestnet = false;
+} else if (rawEnv === "sandbox" || rawEnv === "testnet") {
+  blockchainEnv = "sandbox";
+  isTestnet = true;
+} else if (rawEnv === "development") {
+  blockchainEnv = "development";
+  isTestnet = true;
+} else {
+  throw new Error(
+    `[blockchainConfig] Critical Configuration Error: Invalid BLOCKCHAIN_ENV value '${process.env.BLOCKCHAIN_ENV}'. Allowed values are 'production', 'sandbox', 'testnet', or 'development'.`
+  );
+}
 var apiKey = process.env.TATUM_API_KEY || "";
-var isTestnet = process.env.IS_TESTNET !== void 0 ? process.env.IS_TESTNET === "true" : apiKey.startsWith("t-") || blockchainEnv !== "production";
 var baseUrl = process.env.TATUM_BASE_URL || "https://api.tatum.io";
 var blockchainConfig = {
   env: blockchainEnv,
@@ -6009,6 +6030,9 @@ var TatumProvider2 = class {
 };
 var blockchainProvider = new TatumProvider2();
 
+// server/controllers/userController.ts
+init_transactionRepository();
+
 // server/repositories/withdrawalRepository.ts
 var import_drizzle_orm33 = require("drizzle-orm");
 init_db();
@@ -7523,6 +7547,43 @@ var UserController = class {
     }
   }
   /**
+   * Fetch deposits for the current user
+   */
+  async getDeposits(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+      const offset = req.query.offset ? parseInt(req.query.offset) : 0;
+      const status = req.query.status;
+      const list = await depositRepository.findByUserId(user.id, { limit, offset, status });
+      return sendSuccess(res, list, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
+   * Fetch transactions for the current user
+   */
+  async getTransactions(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+      const offset = req.query.offset ? parseInt(req.query.offset) : 0;
+      const type = req.query.type;
+      const status = req.query.status;
+      const list = await transactionRepository.findByUserId(user.id, { limit, offset, type, status });
+      return sendSuccess(res, list, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+  /**
    * Fetch withdrawals for the current user
    */
   async getWithdrawals(req, res, next) {
@@ -7819,6 +7880,16 @@ router.post(
   "/support/tickets/:ticketId/close",
   requireAuth,
   userController.closeTicket
+);
+router.get(
+  "/deposits",
+  requireAuth,
+  userController.getDeposits
+);
+router.get(
+  "/transactions",
+  requireAuth,
+  userController.getTransactions
 );
 router.post(
   "/deposits/verify",
