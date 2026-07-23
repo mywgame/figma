@@ -336,15 +336,15 @@ export class TatumProvider implements BlockchainProvider {
       try {
         let path = '';
         let body: any = {};
-        if (network === 'USDT_BEP20') {
+        if (network === 'USDT_BEP20' || network === 'BSC') {
           path = '/v3/bsc/transaction';
           body = {
             to: toAddress,
-            currency: 'BNB',
+            currency: 'BSC',
             amount: amount,
             fromPrivateKey: signingKey,
           };
-        } else if (network === 'USDT_POLYGON') {
+        } else if (network === 'USDT_POLYGON' || network === 'POLYGON' || network === 'MATIC') {
           path = '/v3/polygon/transaction';
           body = {
             to: toAddress,
@@ -352,7 +352,7 @@ export class TatumProvider implements BlockchainProvider {
             amount: amount,
             fromPrivateKey: signingKey,
           };
-        } else if (network === 'USDT_TRC20') {
+        } else if (network === 'USDT_TRC20' || network === 'TRON' || network === 'TRX') {
           path = '/v3/tron/transaction';
           body = {
             to: toAddress,
@@ -414,7 +414,13 @@ export class TatumProvider implements BlockchainProvider {
   async broadcastTransaction(network: string, toAddress: string, amount: string, fromPrivateKey?: string): Promise<string> {
     const netConfig = blockchainConfig.networks[network];
     const contract = netConfig?.contractAddress;
-    const chain = netConfig?.chainName || 'BSC';
+    let chain = netConfig?.chainName;
+    if (!chain) {
+      if (network.includes('BEP20') || network.includes('BSC')) chain = 'BSC';
+      else if (network.includes('POLYGON') || network.includes('MATIC')) chain = 'POLYGON';
+      else if (network.includes('TRC20') || network.includes('TRON')) chain = 'TRON';
+      else chain = 'BSC';
+    }
     const signingKey = fromPrivateKey || netConfig?.hotPrivateKey || '';
 
     if (this.isConfigured && signingKey && contract) {
