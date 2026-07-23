@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { BlockchainProvider, BlockchainTransaction } from '../interfaces/BlockchainProvider.ts';
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 import { ProviderError } from '../errors/BlockchainError.ts';
+import { formatTokenAmount, normalizeAmount } from '../utils/amountUtils.ts';
 
 export class TatumProvider implements BlockchainProvider {
   private readonly apiKey: string;
@@ -24,7 +25,7 @@ export class TatumProvider implements BlockchainProvider {
    * Helper to perform GET requests with proper Tatum headers
    */
   private async getRequest<T>(path: string): Promise<T> {
-    const url = `https://api.tatum.io${path}`;
+    const url = `${blockchainConfig.baseUrl}${path}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -45,7 +46,7 @@ export class TatumProvider implements BlockchainProvider {
    * Helper to perform POST requests with proper Tatum headers
    */
   private async postRequest<T>(path: string, body: any): Promise<T> {
-    const url = `https://api.tatum.io${path}`;
+    const url = `${blockchainConfig.baseUrl}${path}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -176,6 +177,7 @@ export class TatumProvider implements BlockchainProvider {
       try {
         const netConfig = blockchainConfig.networks[network];
         let chain = netConfig?.chainName || 'BSC';
+        const decimals = netConfig?.decimals ?? (network === 'USDT_BEP20' ? 18 : 6);
 
         // 1. Attempt to fetch structured token transfer record from Tatum
         try {
@@ -189,7 +191,7 @@ export class TatumProvider implements BlockchainProvider {
 
             return {
               hash: txHash,
-              amount: parsedTx.amount || '0.00000000',
+              amount: normalizeAmount(parsedTx.amount || parsedTx.value || '0', decimals),
               sender: parsedTx.from || '',
               receiver: parsedTx.to || '',
               confirmations: Math.max(1, confirmations),
@@ -228,16 +230,23 @@ export class TatumProvider implements BlockchainProvider {
               if (topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') {
                 if (topics[1]) from = '0x' + topics[1].slice(-40);
                 if (topics[2]) to = '0x' + topics[2].slice(-40);
-                if (log.data) {
+                if (log.data && log.data !== '0x') {
                   const hexVal = log.data.replace(/^0x/, '');
-                  amount = (parseInt(hexVal, 16) / 1e6).toFixed(8); // Standard 6 decimal places for USDT
+                  if (hexVal) {
+                    try {
+                      const rawBigInt = BigInt('0x' + hexVal);
+                      amount = formatTokenAmount(rawBigInt, decimals);
+                    } catch (err) {
+                      console.error('[TatumProvider] Error parsing BigInt token transfer amount:', err);
+                    }
+                  }
                 }
               }
             }
 
             return {
               hash: txHash,
-              amount: amount !== '0.00000000' ? amount : (rawTx.value || '0.00000000'),
+              amount: amount !== '0.00000000' ? amount : normalizeAmount(rawTx.value || '0', decimals),
               sender: from,
               receiver: to,
               confirmations: Math.max(1, confirmations),

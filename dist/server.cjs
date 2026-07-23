@@ -4422,30 +4422,41 @@ init_auditRepository();
 var import_crypto3 = __toESM(require("crypto"), 1);
 
 // server/blockchain/config/blockchainConfig.ts
+var rawEnv = (process.env.BLOCKCHAIN_ENV || (process.env.NODE_ENV === "production" ? "production" : "development")).toLowerCase();
+var blockchainEnv = rawEnv === "production" || rawEnv === "mainnet" ? "production" : rawEnv === "sandbox" || rawEnv === "testnet" ? "sandbox" : "development";
 var apiKey = process.env.TATUM_API_KEY || "";
-var isTestnet = apiKey.startsWith("t-") || process.env.IS_TESTNET === "true";
+var isTestnet = process.env.IS_TESTNET !== void 0 ? process.env.IS_TESTNET === "true" : apiKey.startsWith("t-") || blockchainEnv !== "production";
+var baseUrl = process.env.TATUM_BASE_URL || "https://api.tatum.io";
 var blockchainConfig = {
+  env: blockchainEnv,
+  baseUrl,
   apiKey,
   isConfigured: !!apiKey,
   isTestnet,
   networks: {
     USDT_BEP20: {
-      contractAddress: process.env.USDT_BEP20_CONTRACT || (isTestnet ? "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd" : "0x55d398326f99059ff775485246999027b3197955"),
-      xpub: process.env.USDT_BEP20_XPUB || "",
-      hotPrivateKey: process.env.USDT_BEP20_HOT_PRIVATE_KEY || "",
-      chainName: "BSC"
+      contractAddress: process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT || (isTestnet ? "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd" : "0x55d398326f99059ff775485246999027b3197955"),
+      xpub: process.env.USDT_BEP20_XPUB || process.env.USDT_XPUB || "",
+      hotPrivateKey: process.env.USDT_BEP20_HOT_PRIVATE_KEY || process.env.HOT_WALLET_PRIVATE_KEY || "",
+      hotAddress: process.env.USDT_BEP20_HOT_ADDRESS || process.env.HOT_WALLET_ADDRESS || "",
+      chainName: "BSC",
+      decimals: parseInt(process.env.USDT_BEP20_DECIMALS || process.env.USDT_DECIMALS || "18", 10)
     },
     USDT_POLYGON: {
       contractAddress: process.env.USDT_POLYGON_CONTRACT || (isTestnet ? "0x41e94eb019c0762f9bfcf9fb1e58725bfb01728b" : "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"),
       xpub: process.env.USDT_POLYGON_XPUB || "",
       hotPrivateKey: process.env.USDT_POLYGON_HOT_PRIVATE_KEY || "",
-      chainName: "POLYGON"
+      hotAddress: process.env.USDT_POLYGON_HOT_ADDRESS || "",
+      chainName: "POLYGON",
+      decimals: parseInt(process.env.USDT_POLYGON_DECIMALS || "6", 10)
     },
     USDT_TRC20: {
       contractAddress: process.env.USDT_TRC20_CONTRACT || (isTestnet ? "TXYZdfUrW2Dx79gSStj7Q47S8oexuF3pC3" : "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"),
       xpub: process.env.USDT_TRC20_XPUB || "",
       hotPrivateKey: process.env.USDT_TRC20_HOT_PRIVATE_KEY || "",
-      chainName: "TRON"
+      hotAddress: process.env.USDT_TRC20_HOT_ADDRESS || "",
+      chainName: "TRON",
+      decimals: parseInt(process.env.USDT_TRC20_DECIMALS || "6", 10)
     }
   }
 };
@@ -4466,6 +4477,50 @@ var ProviderError = class extends BlockchainError {
   }
 };
 
+// server/blockchain/utils/amountUtils.ts
+function formatTokenAmount(rawBigInt, decimals = 18) {
+  if (rawBigInt <= 0n) return "0.00000000";
+  const divisor = BigInt(10 ** decimals);
+  const integerPart = rawBigInt / divisor;
+  const remainderPart = rawBigInt % divisor;
+  if (remainderPart === 0n) {
+    return `${integerPart.toString()}.00000000`;
+  }
+  let remainderStr = remainderPart.toString().padStart(decimals, "0");
+  if (decimals > 8) {
+    remainderStr = remainderStr.slice(0, 8);
+  } else if (decimals < 8) {
+    remainderStr = remainderStr.padEnd(8, "0");
+  }
+  return `${integerPart.toString()}.${remainderStr}`;
+}
+function normalizeAmount(rawAmount, decimals = 18) {
+  if (rawAmount === void 0 || rawAmount === null || rawAmount === "") {
+    return "0.00000000";
+  }
+  const strAmount = String(rawAmount).trim();
+  if (strAmount.startsWith("0x") || strAmount.startsWith("0X")) {
+    try {
+      return formatTokenAmount(BigInt(strAmount), decimals);
+    } catch (_) {
+      return "0.00000000";
+    }
+  }
+  if (!strAmount.includes(".") && !strAmount.includes("e") && !strAmount.includes("E")) {
+    try {
+      const rawBigInt = BigInt(strAmount);
+      const threshold = BigInt(10 ** Math.max(0, decimals - 2));
+      if (rawBigInt > threshold) {
+        return formatTokenAmount(rawBigInt, decimals);
+      }
+    } catch (_) {
+    }
+  }
+  const parsed = parseFloat(strAmount);
+  if (isNaN(parsed) || parsed <= 0) return "0.00000000";
+  return parsed.toFixed(8);
+}
+
 // server/blockchain/providers/TatumProvider.ts
 var TatumProvider = class {
   constructor() {
@@ -4479,7 +4534,7 @@ var TatumProvider = class {
    * Helper to perform GET requests with proper Tatum headers
    */
   async getRequest(path2) {
-    const url = `https://api.tatum.io${path2}`;
+    const url = `${blockchainConfig.baseUrl}${path2}`;
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -4497,7 +4552,7 @@ var TatumProvider = class {
    * Helper to perform POST requests with proper Tatum headers
    */
   async postRequest(path2, body) {
-    const url = `https://api.tatum.io${path2}`;
+    const url = `${blockchainConfig.baseUrl}${path2}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -4613,6 +4668,7 @@ var TatumProvider = class {
       try {
         const netConfig = blockchainConfig.networks[network];
         let chain = netConfig?.chainName || "BSC";
+        const decimals = netConfig?.decimals ?? (network === "USDT_BEP20" ? 18 : 6);
         try {
           const tokenTxUrl = `/v3/blockchain/token/transaction/${chain}/${txHash}`;
           const parsedTx = await this.getRequest(tokenTxUrl);
@@ -4622,7 +4678,7 @@ var TatumProvider = class {
             const confirmations = blockHeight - txBlock + 1;
             return {
               hash: txHash,
-              amount: parsedTx.amount || "0.00000000",
+              amount: normalizeAmount(parsedTx.amount || parsedTx.value || "0", decimals),
               sender: parsedTx.from || "",
               receiver: parsedTx.to || "",
               confirmations: Math.max(1, confirmations),
@@ -4656,15 +4712,22 @@ var TatumProvider = class {
               if (topics[0] === "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef") {
                 if (topics[1]) from = "0x" + topics[1].slice(-40);
                 if (topics[2]) to = "0x" + topics[2].slice(-40);
-                if (log.data) {
+                if (log.data && log.data !== "0x") {
                   const hexVal = log.data.replace(/^0x/, "");
-                  amount = (parseInt(hexVal, 16) / 1e6).toFixed(8);
+                  if (hexVal) {
+                    try {
+                      const rawBigInt = BigInt("0x" + hexVal);
+                      amount = formatTokenAmount(rawBigInt, decimals);
+                    } catch (err) {
+                      console.error("[TatumProvider] Error parsing BigInt token transfer amount:", err);
+                    }
+                  }
                 }
               }
             }
             return {
               hash: txHash,
-              amount: amount !== "0.00000000" ? amount : rawTx.value || "0.00000000",
+              amount: amount !== "0.00000000" ? amount : normalizeAmount(rawTx.value || "0", decimals),
               sender: from,
               receiver: to,
               confirmations: Math.max(1, confirmations),
@@ -9886,6 +9949,29 @@ var TatumWebhookHandler = class {
     }
     const userId = addressRecord.userId;
     const network = addressRecord.network;
+    const networkConfig = blockchainConfig.networks[network];
+    const expectedContractAddress = networkConfig?.contractAddress;
+    const incomingContractAddress = payload.contractAddress || payload.tokenAddress || payload.contract;
+    if (!networkConfig || !expectedContractAddress) {
+      logger.warn(
+        `[TatumWebhookHandler] SECURITY REJECTION: Missing network configuration for network=${network}. txHash=${txId}, network=${network}, incomingContractAddress=${incomingContractAddress || "MISSING"}, expectedContractAddress=NONE, depositAddress=${address}`
+      );
+      return { status: "rejected", reason: "missing_network_config" };
+    }
+    if (!incomingContractAddress) {
+      logger.warn(
+        `[TatumWebhookHandler] SECURITY REJECTION: Missing contract address in webhook payload. txHash=${txId}, network=${network}, incomingContractAddress=MISSING, expectedContractAddress=${expectedContractAddress}, depositAddress=${address}`
+      );
+      return { status: "rejected", reason: "missing_contract_address" };
+    }
+    const isTron = network === "USDT_TRC20";
+    const isContractValid = isTron ? incomingContractAddress === expectedContractAddress : incomingContractAddress.toLowerCase() === expectedContractAddress.toLowerCase();
+    if (!isContractValid) {
+      logger.warn(
+        `[TatumWebhookHandler] SECURITY REJECTION: Fake or mismatched token contract address detected! txHash=${txId}, network=${network}, incomingContractAddress=${incomingContractAddress}, expectedContractAddress=${expectedContractAddress}, depositAddress=${address}`
+      );
+      return { status: "rejected", reason: "contract_address_mismatch" };
+    }
     const existingDeposit = await depositRepository.findByTxHash(txId);
     if (existingDeposit) {
       if (existingDeposit.status === "COMPLETED") {
@@ -9896,8 +9982,10 @@ var TatumWebhookHandler = class {
       await depositService.processSuccessfulDeposit(existingDeposit.id, txId, "SYSTEM");
       return { status: "completed", depositId: existingDeposit.id };
     }
-    logger.info(`[TatumWebhookHandler] Generating new deposit record for user ${userId} of ${amount} USDT via webhook.`);
-    const newDeposit = await depositService.createDeposit(userId, amount, network, address, txId);
+    const networkDecimals = networkConfig?.decimals ?? (network === "USDT_BEP20" ? 18 : 6);
+    const normalizedAmount = normalizeAmount(amount, networkDecimals);
+    logger.info(`[TatumWebhookHandler] Generating new deposit record for user ${userId} of ${normalizedAmount} USDT via webhook.`);
+    const newDeposit = await depositService.createDeposit(userId, normalizedAmount, network, address, txId);
     await depositService.processSuccessfulDeposit(newDeposit.id, txId, "SYSTEM");
     return { status: "created_and_completed", depositId: newDeposit.id };
   }
