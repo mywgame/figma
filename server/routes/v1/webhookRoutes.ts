@@ -53,11 +53,11 @@ function verifyWebhookSignature(req: Request, res: Response, next: NextFunction)
       const hmac = crypto.createHmac('sha512', WEBHOOK_SECRET);
       const computedSignature = hmac.update(rawBody).digest('hex');
 
-      // Use constant-time comparison to prevent timing attacks
-      const isSignatureValid = crypto.timingSafeEqual(
-        Buffer.from(computedSignature),
-        Buffer.from(signature)
-      );
+      const computedBuf = Buffer.from(computedSignature, 'hex');
+      const sigBuf = Buffer.from(signature.trim(), 'hex');
+
+      // Use constant-time comparison to prevent timing attacks, checking equal lengths first
+      const isSignatureValid = computedBuf.length === sigBuf.length && crypto.timingSafeEqual(computedBuf, sigBuf);
 
       if (!isSignatureValid) {
         logger.warn('[Webhook] Request rejected: signature verification failed (forged payload).');
@@ -83,13 +83,24 @@ router.post('/tatum', verifyWebhookSignature, async (req: Request, res: Response
   try {
     const payload = req.body;
     
-    // Basic validation of the payload structure
-    if (!payload || !payload.address || !payload.txId || !payload.amount) {
+    // Flexible extraction of payload fields sent by Tatum notifications
+    const address = payload?.address || payload?.account || payload?.to || payload?.counterAddress;
+    const txId = payload?.txId || payload?.txHash || payload?.hash || payload?.transactionId;
+    const amount = payload?.amount || payload?.value;
+
+    if (!payload || !address || !txId) {
       logger.warn(`[Webhook] Rejected invalid payload format: ${JSON.stringify(payload)}`);
-      return res.status(400).json({ error: 'Invalid payload structure. Required: address, txId, amount' });
+      return res.status(400).json({ error: 'Invalid payload structure. Required: address, txId/txHash' });
     }
 
-    const result = await tatumWebhookHandler.handleIncomingNotification(payload);
+    const normalizedPayload = {
+      ...payload,
+      address,
+      txId,
+      amount: amount !== undefined ? String(amount) : '0',
+    };
+
+    const result = await tatumWebhookHandler.handleIncomingNotification(normalizedPayload);
     return res.status(200).json(result);
   } catch (err: any) {
     logger.error('[Webhook] Failed to process incoming Tatum webhook:', err.message);

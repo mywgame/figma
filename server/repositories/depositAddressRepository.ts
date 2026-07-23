@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { db } from '../../src/db/index.ts';
 import { depositAddresses } from '../../src/db/schema.ts';
 
@@ -50,11 +50,18 @@ export class DepositAddressRepository {
    * This maps incoming blockchain payments back to a specific user/account.
    */
   async findByAddress(address: string) {
+    if (!address) return null;
     try {
+      const lowerAddr = address.toLowerCase();
       const result = await db
         .select()
         .from(depositAddresses)
-        .where(eq(depositAddresses.address, address));
+        .where(
+          or(
+            eq(depositAddresses.address, address),
+            eq(sql`lower(${depositAddresses.address})`, lowerAddr)
+          )
+        );
       return result[0] || null;
     } catch (error) {
       console.error('Database query (findByAddress) failed:', error);
