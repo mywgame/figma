@@ -35,7 +35,12 @@ export const TopNav: React.FC<TopNavProps> = ({ identity, activeTab, onNavigate,
   return (
     <header className="flex justify-between items-center gap-4 py-2 px-4 sm:px-6 md:px-8 border-b border-transparent relative z-40" id="dashboard-header">
       {/* Logo: mobile shows the full wordmark, tablet/desktop keep mark + wordmark */}
-      <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => onNavigate('dashboard')}
+        className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity bg-transparent border-0 p-0 text-left focus:outline-none"
+        title="Go to Home Dashboard"
+      >
         <img
           src={logoImg}
           alt="MetaFirm"
@@ -47,7 +52,7 @@ export const TopNav: React.FC<TopNavProps> = ({ identity, activeTab, onNavigate,
           alt="MetaFirm"
           className={`h-7 object-contain hidden sm:block ${t.isDark ? 'brightness-0 invert' : ''}`}
         />
-      </div>
+      </button>
 
       {/* Right: theme switch + hamburger menu */}
       <div className="flex items-center gap-3 relative">

@@ -23,12 +23,20 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({
   onSuccessMsg,
   onBackToLogin,
 }) => {
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState(() => {
+    try { return sessionStorage.getItem('reset_otp') || ''; } catch (e) { return ''; }
+  });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const handleOtpChange = (val: string) => {
+    const clean = val.replace(/\D/g, '');
+    setOtp(clean);
+    try { sessionStorage.setItem('reset_otp', clean); } catch (e) {}
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,9 +119,9 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({
             type="text"
             maxLength={6}
             value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+            onChange={(e) => handleOtpChange(e.target.value)}
             placeholder="000000"
-            className="w-full max-w-[200px] mx-auto text-center tracking-[0.5em] font-mono text-2xl font-bold px-4 py-3.5 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-gray-50 text-gray-950 shadow-inner"
+            className="w-full max-w-[200px] mx-auto text-center tracking-[0.5em] font-mono text-2xl font-bold px-4 py-3.5 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-gray-50 text-gray-900 shadow-inner placeholder:text-gray-400"
             required
             autoFocus
             disabled={busy}
@@ -121,7 +129,7 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({
         </div>
 
         <div className="space-y-1.5 min-w-0 relative">
-          <label htmlFor="auth-password-reset-input" className="block text-xs font-semibold text-gray-700 tracking-wide">
+          <label htmlFor="auth-password-reset-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
             New Password
           </label>
           <div className="relative">
@@ -131,14 +139,14 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full pl-4 pr-10 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+              className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
               required
               disabled={busy}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-0"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
               disabled={busy}
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -147,7 +155,7 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({
         </div>
 
         <div className="space-y-1.5 min-w-0 relative">
-          <label htmlFor="auth-confirm-password-reset-input" className="block text-xs font-semibold text-gray-700 tracking-wide">
+          <label htmlFor="auth-confirm-password-reset-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
             Confirm New Password
           </label>
           <div className="relative">
@@ -157,14 +165,14 @@ export const ResetPassword: React.FC<ResetPasswordProps> = ({
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full pl-4 pr-10 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+              className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
               required
               disabled={busy}
             />
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-0"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
               disabled={busy}
             >
               {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

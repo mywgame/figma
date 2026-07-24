@@ -3045,7 +3045,7 @@ var UserService = class {
     return createdUser;
   }
   /**
-   * Lazy initialize user resources like wallets and vipStatus
+   * Initialize user resources like wallets and vipStatus
    */
   async ensureUserResources(userId) {
     try {
@@ -3958,7 +3958,7 @@ var DashboardService = class {
       recentActivities,
       trialFundInfo: {
         amount: trialAmountSetting ? trialAmountSetting.value : "100.00000000",
-        durationDays: trialDurationSetting ? parseInt(trialDurationSetting.value) : 7,
+        durationDays: trialDurationSetting ? parseInt(trialDurationSetting.value) : 3,
         activeTrialBalance: wallet.trialBalance
       }
     };
@@ -4569,6 +4569,19 @@ var TatumProvider = class {
     }
   }
   /**
+   * Helper to mask sensitive credentials (e.g. API keys, secrets) in logs and error messages
+   */
+  maskSensitive(text18) {
+    if (!text18) return "";
+    let result = text18;
+    if (this.apiKey) {
+      const escapedKey = this.apiKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      result = result.replace(new RegExp(escapedKey, "g"), "***MASKED_API_KEY***");
+    }
+    result = result.replace(/(x-api-key|apiKey|secret|password)["']?\s*[:=]\s*["']?([^"'&\s]+)/gi, "$1=***MASKED***");
+    return result;
+  }
+  /**
    * Helper to perform GET requests with proper Tatum headers
    */
   async getRequest(path2) {
@@ -4582,7 +4595,8 @@ var TatumProvider = class {
     });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new ProviderError(`Tatum API request failed on ${path2}: Status ${response.status} - ${errorText}`, response.status);
+      const safeError = this.maskSensitive(errorText);
+      throw new ProviderError(`Tatum API request failed on ${path2}: Status ${response.status} - ${safeError}`, response.status);
     }
     return response.json();
   }
@@ -4601,7 +4615,8 @@ var TatumProvider = class {
     });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new ProviderError(`Tatum API POST request failed on ${path2}: Status ${response.status} - ${errorText}`, response.status);
+      const safeError = this.maskSensitive(errorText);
+      throw new ProviderError(`Tatum API POST request failed on ${path2}: Status ${response.status} - ${safeError}`, response.status);
     }
     return response.json();
   }
@@ -4951,7 +4966,7 @@ var TatumProvider = class {
       else chain = "BSC";
     }
     const requestBody = {
-      type: "INCOMING_FUNGIBLE_TX",
+      type: "ADDRESS_TRANSACTION",
       attr: {
         address,
         chain,
@@ -4964,12 +4979,13 @@ var TatumProvider = class {
       console.log(`[TatumProvider] Tatum subscription created successfully. Subscription ID: ${result?.id}`);
       return true;
     } catch (error) {
-      if (error.message && (error.message.includes("already exists") || error.message.includes("already subscribed"))) {
+      const safeMsg = this.maskSensitive(error.message || String(error));
+      if (safeMsg.includes("already exists") || safeMsg.includes("already subscribed")) {
         console.log(`[TatumProvider] Address ${address} is already subscribed on Tatum.`);
         return true;
       }
-      console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, error.message);
-      throw new Error(`Tatum webhook subscription failed: ${error.message}`);
+      console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, safeMsg);
+      throw new Error(`Tatum webhook subscription failed: ${safeMsg}`);
     }
   }
 };
@@ -8166,6 +8182,7 @@ var AuthService = class {
       parentReferralId: pendingData.parentReferralId,
       status: "ACTIVE"
     });
+    await userService.ensureUserResources(user.id);
     this.deletePendingRegistration(trimmedEmail);
     try {
       await emailService.sendWelcomeEmail(trimmedEmail, user.username || "Investor");

@@ -90,7 +90,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <span>MetaFirm Secure Gateway</span>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-display font-extrabold text-gray-950 tracking-tight leading-none pt-1">
+          <h2 className="text-xl sm:text-2xl font-display font-extrabold text-gray-900 tracking-tight leading-none pt-1">
             {activeView === 'login' && 'Sign In'}
             {activeView === 'register' && 'Create Account'}
             {activeView === 'otp-verify' && 'Verify Your Email'}
@@ -98,7 +98,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {activeView === 'reset-password' && 'Set New Password'}
           </h2>
 
-          <p className="text-xs text-gray-500 leading-relaxed font-sans pt-0.5">
+          <p className="text-xs text-gray-600 leading-relaxed font-sans font-normal pt-0.5">
             {activeView === 'login' && 'Access your secure ledger balance, team statistics, and automated payout channels.'}
             {activeView === 'register' && 'Open an institutional-grade account with real-time reserve auditing and compound yields.'}
             {activeView === 'otp-verify' && `We sent a secure 6-digit confirmation code to ${email || 'your email'}.`}
@@ -189,16 +189,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </AnimatePresence>
 
         {/* Bottom Switch Links */}
-        <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+        <div className="mt-4 pt-4 border-t border-gray-200 text-center">
           {activeView === 'login' && (
-            <p className="text-xs text-gray-500 font-sans">
+            <p className="text-xs text-gray-600 font-medium font-sans">
               New to MetaFirm?
               <button
                 onClick={() => {
                   resetMessages();
                   setActiveView('register');
                 }}
-                className="ml-1.5 font-bold text-blue-600 hover:underline inline-flex items-center space-x-0.5 cursor-pointer font-mono text-[11px] focus:outline-none"
+                className="ml-1.5 font-bold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center space-x-0.5 cursor-pointer font-mono text-[11px] focus:outline-none"
                 id="auth-toggle-mode-btn"
               >
                 <UserPlus className="w-3.5 h-3.5 mr-1" /> Create Account
@@ -207,14 +207,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {activeView === 'register' && (
-            <p className="text-xs text-gray-500 font-sans">
+            <p className="text-xs text-gray-600 font-medium font-sans">
               Already have an account?
               <button
                 onClick={() => {
                   resetMessages();
                   setActiveView('login');
                 }}
-                className="ml-1.5 font-bold text-blue-600 hover:underline inline-flex items-center space-x-0.5 cursor-pointer font-mono text-[11px] focus:outline-none"
+                className="ml-1.5 font-bold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center space-x-0.5 cursor-pointer font-mono text-[11px] focus:outline-none"
                 id="auth-toggle-mode-btn"
               >
                 Sign In
@@ -223,14 +223,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {activeView === 'otp-verify' && (
-            <p className="text-xs text-gray-500 font-sans">
+            <p className="text-xs text-gray-600 font-medium font-sans">
               Wrong email address or want to start over?
               <button
                 onClick={() => {
                   resetMessages();
                   setActiveView('register');
                 }}
-                className="ml-1.5 font-bold text-blue-600 hover:underline cursor-pointer font-mono text-[11px] focus:outline-none"
+                className="ml-1.5 font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer font-mono text-[11px] focus:outline-none"
               >
                 Back to Registration
               </button>
@@ -238,14 +238,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {activeView === 'forgot-password' && (
-            <p className="text-xs text-gray-500 font-sans">
+            <p className="text-xs text-gray-600 font-medium font-sans">
               Remembered your password?
               <button
                 onClick={() => {
                   resetMessages();
                   setActiveView('login');
                 }}
-                className="ml-1.5 font-bold text-blue-600 hover:underline cursor-pointer font-mono text-[11px] focus:outline-none"
+                className="ml-1.5 font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer font-mono text-[11px] focus:outline-none"
               >
                 Back to Sign In
               </button>
@@ -253,14 +253,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {activeView === 'reset-password' && (
-            <p className="text-xs text-gray-500 font-sans">
+            <p className="text-xs text-gray-600 font-medium font-sans">
               Want to change email?
               <button
                 onClick={() => {
                   resetMessages();
                   setActiveView('forgot-password');
                 }}
-                className="ml-1.5 font-bold text-blue-600 hover:underline cursor-pointer font-mono text-[11px] focus:outline-none"
+                className="ml-1.5 font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer font-mono text-[11px] focus:outline-none"
               >
                 Change Email Address
               </button>

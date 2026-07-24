@@ -45,6 +45,7 @@ export const DepositView: React.FC<DepositViewProps> = ({
   // Address generation/retrieval states
   const [localAddresses, setLocalAddresses] = useState<Record<string, string>>({});
   const [generatingAddress, setGeneratingAddress] = useState(false);
+  const [addressGenError, setAddressGenError] = useState('');
 
   // Fetch real deposit history
   const fetchDepositHistory = async () => {
@@ -90,7 +91,9 @@ export const DepositView: React.FC<DepositViewProps> = ({
   }, [depositNetwork, currentAddress]);
 
   const handleGenerateAddress = async () => {
+    if (generatingAddress) return;
     setGeneratingAddress(true);
+    setAddressGenError('');
     try {
       const res = await fetch('/api/v1/users/deposits/address', {
         method: 'POST',
@@ -102,7 +105,7 @@ export const DepositView: React.FC<DepositViewProps> = ({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message || 'Failed to generate deposit address');
+        throw new Error(data.error?.message || data.message || 'Failed to generate deposit address. Please try again.');
       }
       
       const newAddress = data.data.address;
@@ -112,7 +115,9 @@ export const DepositView: React.FC<DepositViewProps> = ({
       }));
       showToast('Deposit address successfully generated!');
     } catch (err: any) {
-      showToast(err.message || 'Error generating deposit address.');
+      const msg = err.message || 'Error generating deposit address.';
+      setAddressGenError(msg);
+      showToast(msg);
     } finally {
       setGeneratingAddress(false);
     }
@@ -213,6 +218,11 @@ export const DepositView: React.FC<DepositViewProps> = ({
                 To deposit USDT via this network, you must first generate your permanent deposit address.
               </p>
             </div>
+            {addressGenError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs text-center font-medium">
+                {addressGenError}
+              </div>
+            )}
             <button
               type="button"
               disabled={generatingAddress}

@@ -22,6 +22,20 @@ export class TatumProvider implements BlockchainProvider {
   }
 
   /**
+   * Helper to mask sensitive credentials (e.g. API keys, secrets) in logs and error messages
+   */
+  private maskSensitive(text: string): string {
+    if (!text) return '';
+    let result = text;
+    if (this.apiKey) {
+      const escapedKey = this.apiKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(escapedKey, 'g'), '***MASKED_API_KEY***');
+    }
+    result = result.replace(/(x-api-key|apiKey|secret|password)["']?\s*[:=]\s*["']?([^"'&\s]+)/gi, '$1=***MASKED***');
+    return result;
+  }
+
+  /**
    * Helper to perform GET requests with proper Tatum headers
    */
   private async getRequest<T>(path: string): Promise<T> {
@@ -36,7 +50,8 @@ export class TatumProvider implements BlockchainProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new ProviderError(`Tatum API request failed on ${path}: Status ${response.status} - ${errorText}`, response.status);
+      const safeError = this.maskSensitive(errorText);
+      throw new ProviderError(`Tatum API request failed on ${path}: Status ${response.status} - ${safeError}`, response.status);
     }
 
     return response.json() as Promise<T>;
@@ -58,7 +73,8 @@ export class TatumProvider implements BlockchainProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new ProviderError(`Tatum API POST request failed on ${path}: Status ${response.status} - ${errorText}`, response.status);
+      const safeError = this.maskSensitive(errorText);
+      throw new ProviderError(`Tatum API POST request failed on ${path}: Status ${response.status} - ${safeError}`, response.status);
     }
 
     return response.json() as Promise<T>;
@@ -472,7 +488,7 @@ export class TatumProvider implements BlockchainProvider {
     }
 
     const requestBody = {
-      type: 'INCOMING_FUNGIBLE_TX',
+      type: 'ADDRESS_TRANSACTION',
       attr: {
         address: address,
         chain: chain,
@@ -486,13 +502,14 @@ export class TatumProvider implements BlockchainProvider {
       console.log(`[TatumProvider] Tatum subscription created successfully. Subscription ID: ${result?.id}`);
       return true;
     } catch (error: any) {
+      const safeMsg = this.maskSensitive(error.message || String(error));
       // If Tatum indicates subscription already exists, treat as non-fatal success
-      if (error.message && (error.message.includes('already exists') || error.message.includes('already subscribed'))) {
+      if (safeMsg.includes('already exists') || safeMsg.includes('already subscribed')) {
         console.log(`[TatumProvider] Address ${address} is already subscribed on Tatum.`);
         return true;
       }
-      console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, error.message);
-      throw new Error(`Tatum webhook subscription failed: ${error.message}`);
+      console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, safeMsg);
+      throw new Error(`Tatum webhook subscription failed: ${safeMsg}`);
     }
   }
 }

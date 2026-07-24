@@ -44,9 +44,9 @@ export class UserService {
   }
 
   /**
-   * Lazy initialize user resources like wallets and vipStatus
+   * Initialize user resources like wallets and vipStatus
    */
-  private async ensureUserResources(userId: string) {
+  public async ensureUserResources(userId: string) {
     try {
       const existingWallet = await walletRepository.findByUserId(userId);
       if (!existingWallet) {

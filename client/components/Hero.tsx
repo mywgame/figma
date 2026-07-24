@@ -120,7 +120,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth, onNavigateToSection }) =
             className="mt-10 flex flex-wrap gap-4 justify-start"
           >
             <button
-              onClick={() => onOpenAuth('register')}
+              onClick={() => onOpenAuth('login')}
               className="inline-flex items-center justify-center rounded-xl bg-brand-gradient px-6 py-3.5 text-xs sm:text-sm font-bold text-white shadow-[0_12px_30px_-10px_rgba(233,30,140,0.45)] transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[0.96] hover:shadow-[0_15px_35px_-8px_rgba(233,30,140,0.55)] cursor-pointer"
             >
               Start Investing

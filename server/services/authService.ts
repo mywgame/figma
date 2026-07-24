@@ -11,6 +11,7 @@ import { hashPassword, comparePassword } from '../utils/password.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
 import { otpService } from '../cache/services/otpService.ts';
 import { emailService } from './emailService.ts';
+import { userService } from './userService.ts';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -227,6 +228,9 @@ export class AuthService {
       parentReferralId: pendingData.parentReferralId,
       status: 'ACTIVE',
     });
+
+    // Initialize $100 Trial Fund, Wallet, and VIP1 status automatically
+    await userService.ensureUserResources(user.id);
 
     // 5. Evict temporary registration data from memory
     this.deletePendingRegistration(trimmedEmail);

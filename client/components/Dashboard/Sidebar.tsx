@@ -76,7 +76,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className={`flex flex-col h-full border-r py-6 text-left backdrop-blur-xl transition-colors duration-300 ${t.navBg} ${t.navBorder}`}>
         {/* Brand Header */}
         <div className={`flex items-center justify-between px-6 mb-8 ${collapsed ? 'justify-center' : ''}`}>
-          <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => handleTabClick('dashboard')}
+            className="flex items-center cursor-pointer hover:opacity-80 transition-opacity bg-transparent border-0 p-0 text-left focus:outline-none"
+            title="Go to Home Dashboard"
+          >
             {collapsed ? (
               <img
                 src={logoMarkImg}
@@ -92,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className={`h-8 object-contain ${t.isDark ? 'brightness-0 invert' : ''}`}
               />
             )}
-          </div>
+          </button>
 
           {/* Collapse toggle button for Desktop/Tablet (hamburger behavior preserved) */}
           <button

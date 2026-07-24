@@ -21,8 +21,16 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
   onError,
   onSuccessMsg,
 }) => {
-  const [resetEmail, setResetEmail] = useState(initialEmail);
+  const [resetEmail, setResetEmail] = useState(() => {
+    if (initialEmail) return initialEmail;
+    try { return sessionStorage.getItem('forgot_email') || ''; } catch (e) { return ''; }
+  });
   const [busy, setBusy] = useState(false);
+
+  const handleEmailChange = (val: string) => {
+    setResetEmail(val);
+    try { sessionStorage.setItem('forgot_email', val); } catch (e) {}
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +76,7 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
           label="Registered Email Address"
           type="email"
           value={resetEmail}
-          onChange={(e) => setResetEmail(e.target.value)}
+          onChange={(e) => handleEmailChange(e.target.value)}
           placeholder="investor@metafirm.io"
           id="auth-forgot-email-input"
           required

@@ -50,20 +50,39 @@ export const Register: React.FC<RegisterProps> = ({
   onSuccessMsg,
   initialReferralCode,
 }) => {
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [country, setCountry] = useState('United States');
-  const [countryCode, setCountryCode] = useState('+1');
-  const [mobileNumber, setMobileNumber] = useState('');
+  const [fullName, setFullName] = useState(() => {
+    try { return sessionStorage.getItem('reg_fullName') || ''; } catch (e) { return ''; }
+  });
+  const [username, setUsername] = useState(() => {
+    try { return sessionStorage.getItem('reg_username') || ''; } catch (e) { return ''; }
+  });
+  const [email, setEmail] = useState(() => {
+    try { return sessionStorage.getItem('reg_email') || ''; } catch (e) { return ''; }
+  });
+  const [country, setCountry] = useState(() => {
+    try { return sessionStorage.getItem('reg_country') || 'United States'; } catch (e) { return 'United States'; }
+  });
+  const [countryCode, setCountryCode] = useState(() => {
+    const saved = (() => { try { return sessionStorage.getItem('reg_country'); } catch (e) { return null; } })();
+    const info = COUNTRY_DATA[saved || 'United States'] || { flag: "🏳️", code: "+1" };
+    return info.code;
+  });
+  const [mobileNumber, setMobileNumber] = useState(() => {
+    try { return sessionStorage.getItem('reg_mobile') || ''; } catch (e) { return ''; }
+  });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [referralCode, setReferralCode] = useState(() => initialReferralCode || getPendingReferralCode() || '');
+  const [referralCode, setReferralCode] = useState(() => {
+    const code = initialReferralCode || getPendingReferralCode();
+    if (code) return code;
+    try { return sessionStorage.getItem('reg_referralCode') || ''; } catch (e) { return ''; }
+  });
 
   useEffect(() => {
     const code = initialReferralCode || getPendingReferralCode();
     if (code && !referralCode) {
       setReferralCode(code);
+      try { sessionStorage.setItem('reg_referralCode', code); } catch (e) {}
     }
   }, [initialReferralCode]);
 
@@ -71,8 +90,14 @@ export const Register: React.FC<RegisterProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const updateField = (key: string, val: string, setter: (v: string) => void) => {
+    setter(val);
+    try { sessionStorage.setItem(key, val); } catch (e) {}
+  };
+
   const handleCountryChange = (selectedCountry: string) => {
     setCountry(selectedCountry);
+    try { sessionStorage.setItem('reg_country', selectedCountry); } catch (e) {}
     const info = COUNTRY_DATA[selectedCountry] || { flag: "🏳️", code: "+1" };
     setCountryCode(info.code);
   };
@@ -172,7 +197,7 @@ export const Register: React.FC<RegisterProps> = ({
               label="Full Name"
               type="text"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => updateField('reg_fullName', e.target.value, setFullName)}
               placeholder="John Doe"
               id="auth-name-input"
               required
@@ -184,7 +209,7 @@ export const Register: React.FC<RegisterProps> = ({
               label="Username"
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => updateField('reg_username', e.target.value, setUsername)}
               placeholder="johndoe"
               id="auth-username-input"
               required
@@ -196,7 +221,7 @@ export const Register: React.FC<RegisterProps> = ({
               label="Email Address"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => updateField('reg_email', e.target.value, setEmail)}
               placeholder="investor@metafirm.io"
               id="auth-email-input"
               required
@@ -205,18 +230,18 @@ export const Register: React.FC<RegisterProps> = ({
 
           {/* Country Selector */}
           <div className="space-y-1.5 min-w-0">
-            <label htmlFor="auth-country-select" className="block text-xs font-semibold text-gray-700 tracking-wide">
+            <label htmlFor="auth-country-select" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
               Country
             </label>
             <select
               id="auth-country-select"
               value={country}
               onChange={(e) => handleCountryChange(e.target.value)}
-              className="w-full max-w-full min-w-0 px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 transition-all duration-150 focus-visible:outline-none"
+              className="w-full max-w-full min-w-0 px-4 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 transition-all duration-150 focus-visible:outline-none cursor-pointer"
             >
               {COUNTRIES.map((c) => {
                 return (
-                  <option key={c} value={c} className="text-gray-900 bg-white">
+                  <option key={c} value={c} className="text-gray-900 bg-white font-medium">
                     {c}
                   </option>
                 );
@@ -226,7 +251,7 @@ export const Register: React.FC<RegisterProps> = ({
 
           {/* Country Code + Mobile Number */}
           <div className="space-y-1.5 md:col-span-2 min-w-0">
-            <label htmlFor="auth-mobile-input" className="block text-xs font-semibold text-gray-700 tracking-wide">
+            <label htmlFor="auth-mobile-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
               Mobile Number
             </label>
             <div className="flex space-x-2 min-w-0">
@@ -236,23 +261,23 @@ export const Register: React.FC<RegisterProps> = ({
                 value={countryCode}
                 readOnly
                 placeholder="+1"
-                className="w-20 flex-shrink-0 px-3 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none bg-gray-50 text-gray-500 text-center transition-all duration-150 focus-visible:outline-none cursor-not-allowed font-medium"
+                className="w-20 flex-shrink-0 px-3 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none bg-gray-100 text-gray-700 text-center transition-all duration-150 focus-visible:outline-none cursor-not-allowed font-bold"
                 required
               />
               <input
                 type="tel"
                 id="auth-mobile-input"
                 value={mobileNumber}
-                onChange={(e) => setMobileNumber(e.target.value)}
+                onChange={(e) => updateField('reg_mobile', e.target.value, setMobileNumber)}
                 placeholder="555-0199"
-                className="flex-1 min-w-0 px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="flex-1 min-w-0 px-4 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
                 required
               />
             </div>
           </div>
 
           <div className="space-y-1.5 min-w-0 relative">
-            <label htmlFor="auth-password-input-reg" className="block text-xs font-semibold text-gray-700 tracking-wide">
+            <label htmlFor="auth-password-input-reg" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
               Password
             </label>
             <div className="relative">
@@ -262,13 +287,13 @@ export const Register: React.FC<RegisterProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-4 pr-10 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-0"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -276,7 +301,7 @@ export const Register: React.FC<RegisterProps> = ({
           </div>
 
           <div className="space-y-1.5 min-w-0 relative">
-            <label htmlFor="auth-confirm-password-input" className="block text-xs font-semibold text-gray-700 tracking-wide">
+            <label htmlFor="auth-confirm-password-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
               Confirm Password
             </label>
             <div className="relative">
@@ -286,13 +311,13 @@ export const Register: React.FC<RegisterProps> = ({
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-4 pr-10 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-0"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -304,7 +329,7 @@ export const Register: React.FC<RegisterProps> = ({
               label="Referral Code (Optional)"
               type="text"
               value={referralCode}
-              onChange={(e) => setReferralCode(e.target.value)}
+              onChange={(e) => updateField('reg_referralCode', e.target.value, setReferralCode)}
               placeholder="e.g. PARTNER88"
               id="auth-referral-input"
             />

@@ -23,10 +23,17 @@ export const Login: React.FC<LoginProps> = ({
   onSuccessMsg,
 }) => {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    try { return sessionStorage.getItem('login_email') || ''; } catch (e) { return ''; }
+  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    try { sessionStorage.setItem('login_email', val); } catch (e) {}
+  };
 
   const handleLocalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +72,7 @@ export const Login: React.FC<LoginProps> = ({
             label="Username or Email Address"
             type="text"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => handleEmailChange(e.target.value)}
             placeholder="Username or email address"
             id="auth-email-input-login"
             required
@@ -74,7 +81,7 @@ export const Login: React.FC<LoginProps> = ({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label htmlFor="auth-password-input-login" className="block text-xs font-semibold text-gray-700 tracking-wide">
+              <label htmlFor="auth-password-input-login" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
                 Password
               </label>
               <button
@@ -84,7 +91,7 @@ export const Login: React.FC<LoginProps> = ({
                   onSuccessMsg(null);
                   onForgotPasswordClick(email);
                 }}
-                className="text-[10px] font-mono font-bold text-blue-600 hover:underline cursor-pointer focus:outline-none bg-transparent border-none p-0"
+                className="text-[11px] font-mono font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer focus:outline-none bg-transparent border-none p-0"
               >
                 Forgot password?
               </button>
@@ -97,13 +104,13 @@ export const Login: React.FC<LoginProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-4 pr-10 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-0"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
