@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../../hooks/useTheme.ts';
 import { DashboardLayout } from '../Layout/DashboardLayout.tsx';
 import { SearchInput } from '../../ui/Inputs/index.tsx';
@@ -13,6 +13,7 @@ import { TeamMember, ReferralLevel } from './types.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users2, ShieldCheck, Sparkles, UserPlus } from 'lucide-react';
 import { DashboardData } from '../../../types/index.ts';
+import { api } from '../../../services/api.ts';
 
 interface TeamViewProps {
   dashboardData: DashboardData | null;
@@ -22,8 +23,25 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
   const { t } = useTheme();
   const [selectedLevel, setSelectedLevel] = useState<ReferralLevel>('Level A');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dbMembers, setDbMembers] = useState<any[]>([]);
 
-  // Extract dynamic stats from live dashboardData if available, otherwise fallback to mock constants
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchMembers() {
+      try {
+        const response = await api.get<any[]>('/users/team/members');
+        if (response.success && response.data && isMounted) {
+          setDbMembers(response.data);
+        }
+      } catch (err) {
+        console.error('Failed to load team members:', err);
+      }
+    }
+    fetchMembers();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Extract dynamic stats from live dashboardData if available
   const totalMembers = useMemo(() => {
     if (dashboardData?.team) {
       return (
@@ -33,49 +51,45 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
         dashboardData.team.levelDCount
       );
     }
-    return 17; // Mock fallback
-  }, [dashboardData]);
+    return dbMembers.length;
+  }, [dashboardData, dbMembers]);
 
   const totalValidCount = useMemo(() => {
     if (dashboardData?.team) {
-      return dashboardData.team.teamTotalValidCount || dashboardData.team.levelAValidCount + dashboardData.team.levelBcdValidCount;
+      return dashboardData.team.teamTotalValidCount || (dashboardData.team.levelAValidCount + dashboardData.team.levelBcdValidCount);
     }
-    return 14; // Mock fallback
-  }, [dashboardData]);
+    return dbMembers.filter(m => parseFloat(m.totalDeposited || '0') >= 50).length;
+  }, [dashboardData, dbMembers]);
 
-  const levelACount = dashboardData?.team?.levelACount ?? 5;
-  const levelBCount = dashboardData?.team?.levelBCount ?? 5;
-  const levelCCount = dashboardData?.team?.levelCCount ?? 4;
-  const levelDCount = dashboardData?.team?.levelDCount ?? 3;
+  const levelACount = dashboardData?.team?.levelACount ?? dbMembers.filter(m => m.referralLevel === 1).length;
+  const levelBCount = dashboardData?.team?.levelBCount ?? dbMembers.filter(m => m.referralLevel === 2).length;
+  const levelCCount = dashboardData?.team?.levelCCount ?? dbMembers.filter(m => m.referralLevel === 3).length;
+  const levelDCount = dashboardData?.team?.levelDCount ?? dbMembers.filter(m => m.referralLevel === 4).length;
 
-  // High-fidelity privacy-compliant Team Member database (Only Username, VIP Rank, and Today's Income)
-  const allTeamMembers: Record<ReferralLevel, TeamMember[]> = {
-    'Level A': [
-      { username: 'cryptovisor', vipRank: 'VIP4', todaysIncome: '+$18.50' },
-      { username: 'alpha_whale', vipRank: 'VIP6', todaysIncome: '+$85.20' },
-      { username: 'solana_pro', vipRank: 'VIP3', todaysIncome: '+$6.45' },
-      { username: 'nodemaster_x', vipRank: 'VIP5', todaysIncome: '+$42.10' },
-      { username: 'yield_king', vipRank: 'VIP2', todaysIncome: '+$2.80' },
-    ],
-    'Level B': [
-      { username: 'matrix_trader', vipRank: 'VIP3', todaysIncome: '+$8.15' },
-      { username: 'hyperion_01', vipRank: 'VIP4', todaysIncome: '+$12.40' },
-      { username: 'meta_quantum', vipRank: 'VIP2', todaysIncome: '+$3.10' },
-      { username: 'nexus_node', vipRank: 'VIP1', todaysIncome: '+$0.00' },
-      { username: 'vortex_operator', vipRank: 'VIP5', todaysIncome: '+$38.50' },
-    ],
-    'Level C': [
-      { username: 'defi_pioneer', vipRank: 'VIP2', todaysIncome: '+$1.20' },
-      { username: 'luna_eclipse', vipRank: 'VIP1', todaysIncome: '+$0.00' },
-      { username: 'orbit_miner', vipRank: 'VIP3', todaysIncome: '+$7.30' },
-      { username: 'genesis_block', vipRank: 'VIP4', todaysIncome: '+$14.80' },
-    ],
-    'Level D': [
-      { username: 'stellar_tx', vipRank: 'VIP1', todaysIncome: '+$0.00' },
-      { username: 'nebula_staker', vipRank: 'VIP2', todaysIncome: '+$2.45' },
-      { username: 'apex_oracle', vipRank: 'VIP3', todaysIncome: '+$9.10' },
-    ],
-  };
+  // Map real database members by level
+  const allTeamMembers: Record<ReferralLevel, TeamMember[]> = useMemo(() => {
+    const grouped: Record<ReferralLevel, TeamMember[]> = {
+      'Level A': [],
+      'Level B': [],
+      'Level C': [],
+      'Level D': [],
+    };
+
+    dbMembers.forEach((m) => {
+      const levelKey: ReferralLevel =
+        m.referralLevel === 1 ? 'Level A' :
+        m.referralLevel === 2 ? 'Level B' :
+        m.referralLevel === 3 ? 'Level C' : 'Level D';
+
+      grouped[levelKey].push({
+        username: m.username,
+        vipRank: m.vipRank || 'VIP1',
+        todaysIncome: m.todaysIncome || '+$0.00',
+      });
+    });
+
+    return grouped;
+  }, [dbMembers]);
 
   // Calculate today's total commission generated
   const todaysTotalGeneration = useMemo(() => {
@@ -89,7 +103,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
       });
     });
     return `+$${total.toFixed(2)}`;
-  }, []);
+  }, [allTeamMembers]);
 
   // Filter members for active view
   const activeLevelMembers = useMemo(() => {

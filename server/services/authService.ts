@@ -12,6 +12,7 @@ import { SecurityLogger } from '../utils/securityLogger.ts';
 import { otpService } from '../cache/services/otpService.ts';
 import { emailService } from './emailService.ts';
 import { userService } from './userService.ts';
+import { referralService } from './referralService.ts';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -231,6 +232,15 @@ export class AuthService {
 
     // Initialize $100 Trial Fund, Wallet, and VIP1 status automatically
     await userService.ensureUserResources(user.id);
+
+    // Link referral relationship if registered via a referral link
+    if (pendingData.parentReferralId) {
+      try {
+        await referralService.linkReferral(user.id, pendingData.parentReferralId);
+      } catch (err) {
+        console.error('Failed to link referral relationship during registration:', err);
+      }
+    }
 
     // 5. Evict temporary registration data from memory
     this.deletePendingRegistration(trimmedEmail);

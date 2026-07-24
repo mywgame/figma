@@ -5,7 +5,7 @@
 
 import { eq, and, desc } from 'drizzle-orm';
 import { db } from '../../src/db/index.ts';
-import { referralRelationships, referralIncomeHistory } from '../../src/db/schema.ts';
+import { referralRelationships, referralIncomeHistory, users } from '../../src/db/schema.ts';
 
 export class ReferralRepository {
   /**
@@ -17,7 +17,24 @@ export class ReferralRepository {
         .select()
         .from(referralRelationships)
         .where(eq(referralRelationships.childId, childId));
-      return result[0] || null;
+      
+      if (result[0]) {
+        return result[0];
+      }
+
+      // Auto-heal fallback: if user record has parentReferralId set, create missing relationship entry
+      const userList = await db.select().from(users).where(eq(users.id, childId));
+      const childUser = userList[0];
+      if (childUser && childUser.parentReferralId) {
+        const newRel = await this.createRelationship({
+          parentId: childUser.parentReferralId,
+          childId: childUser.id,
+          referralLevel: 1,
+        });
+        return newRel;
+      }
+
+      return null;
     } catch (error) {
       console.error('Database query (findRelationshipByChildId) failed:', error);
       throw new Error('Failed to retrieve referral parent relationship.');

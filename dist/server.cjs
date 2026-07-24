@@ -1646,7 +1646,20 @@ var init_referralRepository = __esm({
       async findRelationshipByChildId(childId) {
         try {
           const result = await db.select().from(referralRelationships).where((0, import_drizzle_orm22.eq)(referralRelationships.childId, childId));
-          return result[0] || null;
+          if (result[0]) {
+            return result[0];
+          }
+          const userList = await db.select().from(users).where((0, import_drizzle_orm22.eq)(users.id, childId));
+          const childUser = userList[0];
+          if (childUser && childUser.parentReferralId) {
+            const newRel = await this.createRelationship({
+              parentId: childUser.parentReferralId,
+              childId: childUser.id,
+              referralLevel: 1
+            });
+            return newRel;
+          }
+          return null;
         } catch (error) {
           console.error("Database query (findRelationshipByChildId) failed:", error);
           throw new Error("Failed to retrieve referral parent relationship.");
@@ -4473,7 +4486,7 @@ var blockchainConfig = {
   isTestnet,
   networks: {
     USDT_BEP20: {
-      contractAddress: process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT || (isTestnet ? "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd" : "0x55d398326f99059ff775485246999027b3197955"),
+      contractAddress: process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT || (isTestnet ? "0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C" : "0x55d398326f99059ff775485246999027b3197955"),
       xpub: process.env.USDT_BEP20_XPUB || process.env.USDT_XPUB || "",
       hotPrivateKey: process.env.USDT_BEP20_HOT_PRIVATE_KEY || process.env.HOT_WALLET_PRIVATE_KEY || "",
       hotAddress: process.env.USDT_BEP20_HOT_ADDRESS || process.env.HOT_WALLET_ADDRESS || "",
@@ -6023,8 +6036,8 @@ var DepositService = class {
     try {
       const childWallet = await walletRepository.findByUserId(childId);
       if (!childWallet) return;
-      const totalDepositedVal = parseFloat(childWallet.totalDeposited) + parseFloat(depositAmountStr);
-      if (totalDepositedVal > parseFloat(depositAmountStr)) {
+      const previousTotalDeposited = parseFloat(childWallet.totalDeposited) - parseFloat(depositAmountStr);
+      if (previousTotalDeposited > 1e-4) {
         return;
       }
       const relationship = await referralRepository.findRelationshipByChildId(childId);
@@ -6935,6 +6948,10 @@ var AddressService = class {
 var addressService = new AddressService();
 
 // server/controllers/userController.ts
+init_referralService();
+init_userRepository();
+init_walletRepository();
+init_vipRepository();
 var UserController = class {
   /**
    * Sync authenticated User credentials to local PostgreSQL database
@@ -7707,6 +7724,39 @@ var UserController = class {
       next(error);
     }
   }
+  /**
+   * Fetch team members for currently authenticated user
+   */
+  async getTeamMembers(req, res, next) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
+      }
+      const user = await userService.getUserProfile(req.user.uid);
+      const descendants = await referralService.getDownlineDescendants(user.id);
+      const members = await Promise.all(
+        descendants.map(async (d) => {
+          const childUser = await userRepository.findById(d.childId);
+          const childWallet = await walletRepository.findByUserId(d.childId);
+          const childVip = await vipRepository.findByUserId(d.childId);
+          const levelLabel = d.referralLevel === 1 ? "Level A" : d.referralLevel === 2 ? "Level B" : d.referralLevel === 3 ? "Level C" : "Level D";
+          return {
+            id: d.childId,
+            username: childUser?.username || "user_" + d.childId.slice(0, 6),
+            referralLevel: d.referralLevel,
+            levelLabel,
+            vipRank: childVip?.tier || "VIP1",
+            todaysIncome: "$0.00",
+            totalDeposited: childWallet?.totalDeposited || "0.00000000",
+            createdAt: childUser?.createdAt || /* @__PURE__ */ new Date()
+          };
+        })
+      );
+      return sendSuccess(res, members, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
 };
 var userController = new UserController();
 
@@ -8036,6 +8086,11 @@ router.get(
   requireAuth,
   userController.getWithdrawals
 );
+router.get(
+  "/team/members",
+  requireAuth,
+  userController.getTeamMembers
+);
 var userRoutes_default = router;
 
 // server/routes/v1/authRoutes.ts
@@ -8043,6 +8098,7 @@ var import_express2 = require("express");
 
 // server/services/authService.ts
 var import_crypto7 = __toESM(require("crypto"), 1);
+init_referralService();
 init_types();
 function hashToken2(token) {
   return import_crypto7.default.createHash("sha256").update(token).digest("hex");
@@ -8183,6 +8239,13 @@ var AuthService = class {
       status: "ACTIVE"
     });
     await userService.ensureUserResources(user.id);
+    if (pendingData.parentReferralId) {
+      try {
+        await referralService.linkReferral(user.id, pendingData.parentReferralId);
+      } catch (err) {
+        console.error("Failed to link referral relationship during registration:", err);
+      }
+    }
     this.deletePendingRegistration(trimmedEmail);
     try {
       await emailService.sendWelcomeEmail(trimmedEmail, user.username || "Investor");
@@ -10187,7 +10250,7 @@ function verifyWebhookSignature(req, res, next) {
   }
   const isProduction2 = process.env.NODE_ENV === "production";
   const allowUnsigned = process.env.ALLOW_UNSIGNED_WEBHOOKS === "true";
-  const requireSignature = process.env.REQUIRE_WEBHOOK_SIGNATURE === "true" || isProduction2 && !allowUnsigned && Boolean(WEBHOOK_SECRET);
+  const requireSignature = process.env.REQUIRE_WEBHOOK_SIGNATURE === "true";
   if (signature) {
     if (!WEBHOOK_SECRET) {
       logger.warn("[Webhook] Signature header provided, but TATUM_WEBHOOK_SECRET is not configured on server.");

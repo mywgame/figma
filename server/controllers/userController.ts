@@ -28,6 +28,10 @@ import { emailService } from '../services/emailService.ts';
 import { totp } from '../utils/totp.ts';
 import { otpService } from '../cache/services/otpService.ts';
 import { addressService } from '../blockchain/services/AddressService.ts';
+import { referralService } from '../services/referralService.ts';
+import { userRepository } from '../repositories/userRepository.ts';
+import { walletRepository } from '../repositories/walletRepository.ts';
+import { vipRepository } from '../repositories/vipRepository.ts';
 
 export class UserController {
   /**
@@ -945,6 +949,45 @@ export class UserController {
       const addressRecord = await addressService.getOrCreateDepositAddress(user.id, network);
 
       return sendSuccess(res, addressRecord, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fetch team members for currently authenticated user
+   */
+  async getTeamMembers(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      const descendants = await referralService.getDownlineDescendants(user.id);
+
+      const members = await Promise.all(
+        descendants.map(async (d) => {
+          const childUser = await userRepository.findById(d.childId);
+          const childWallet = await walletRepository.findByUserId(d.childId);
+          const childVip = await vipRepository.findByUserId(d.childId);
+
+          const levelLabel = d.referralLevel === 1 ? 'Level A' : d.referralLevel === 2 ? 'Level B' : d.referralLevel === 3 ? 'Level C' : 'Level D';
+
+          return {
+            id: d.childId,
+            username: childUser?.username || 'user_' + d.childId.slice(0, 6),
+            referralLevel: d.referralLevel,
+            levelLabel,
+            vipRank: childVip?.tier || 'VIP1',
+            todaysIncome: '$0.00',
+            totalDeposited: childWallet?.totalDeposited || '0.00000000',
+            createdAt: childUser?.createdAt || new Date(),
+          };
+        })
+      );
+
+      return sendSuccess(res, members, 200);
     } catch (error) {
       next(error);
     }

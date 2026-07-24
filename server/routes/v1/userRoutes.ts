@@ -413,4 +413,15 @@ router.get(
   userController.getWithdrawals
 );
 
+/**
+ * @route GET /api/v1/users/team/members
+ * @desc Get list of own team members
+ * @access Private
+ */
+router.get(
+  '/team/members',
+  requireAuth,
+  userController.getTeamMembers
+);
+
 export default router;

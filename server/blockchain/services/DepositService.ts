@@ -181,9 +181,9 @@ export class DepositService {
       const childWallet = await walletRepository.findByUserId(childId);
       if (!childWallet) return;
 
-      // Ensure it is indeed their first successful deposit
-      const totalDepositedVal = parseFloat(childWallet.totalDeposited) + parseFloat(depositAmountStr);
-      if (totalDepositedVal > parseFloat(depositAmountStr)) {
+      // Ensure it is indeed their first successful deposit (totalDeposited has already been incremented by depositAmountStr)
+      const previousTotalDeposited = parseFloat(childWallet.totalDeposited) - parseFloat(depositAmountStr);
+      if (previousTotalDeposited > 0.0001) {
         // Already deposited in the past
         return;
       }

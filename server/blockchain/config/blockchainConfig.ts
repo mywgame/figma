@@ -65,7 +65,7 @@ export const blockchainConfig = {
         process.env.USDT_BEP20_CONTRACT ||
         process.env.USDT_CONTRACT ||
         (isTestnet
-          ? '0x337610d27c682E347C9cD60BD4b3b107C9d34dDd'
+          ? '0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C'
           : '0x55d398326f99059ff775485246999027b3197955'),
       xpub: process.env.USDT_BEP20_XPUB || process.env.USDT_XPUB || '',
       hotPrivateKey:

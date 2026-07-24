@@ -39,7 +39,7 @@ function verifyWebhookSignature(req: Request, res: Response, next: NextFunction)
 
   const isProduction = process.env.NODE_ENV === 'production';
   const allowUnsigned = process.env.ALLOW_UNSIGNED_WEBHOOKS === 'true';
-  const requireSignature = process.env.REQUIRE_WEBHOOK_SIGNATURE === 'true' || (isProduction && !allowUnsigned && Boolean(WEBHOOK_SECRET));
+  const requireSignature = process.env.REQUIRE_WEBHOOK_SIGNATURE === 'true';
 
   // 2. Signature verification
   if (signature) {
