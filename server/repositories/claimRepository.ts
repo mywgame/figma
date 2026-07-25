@@ -182,6 +182,29 @@ export class ClaimRepository {
       throw new Error('Failed to look up active claims in the current window.');
     }
   }
+
+  /**
+   * Find all claims for a user in a given date range
+   */
+  async findClaimsInDateRange(userId: string, startDate: Date, endDate: Date) {
+    try {
+      const result = await db
+        .select()
+        .from(claims)
+        .where(
+          and(
+            eq(claims.userId, userId),
+            gte(claims.claimWindowOpenTime, startDate),
+            lte(claims.claimWindowCloseTime, endDate)
+          )
+        )
+        .orderBy(desc(claims.claimWindowOpenTime));
+      return result;
+    } catch (error) {
+      console.error('Database query (findClaimsInDateRange) failed:', error);
+      return [];
+    }
+  }
 }
 
 export const claimRepository = new ClaimRepository();

@@ -54,7 +54,16 @@ export interface DashboardData {
     amount: string;
     windowClose: string | null;
     status: string;
+    streakDays?: number;
+    history7Days?: Array<{
+      date: string;
+      status: 'CLAIMED' | 'MISSED' | 'PENDING' | 'NONE';
+    }>;
   };
+  earningsHistory?: Array<{
+    date: string;
+    earnings: number;
+  }>;
   recentTransactions: any[];
   recentActivities: any[];
   trialFundInfo: {

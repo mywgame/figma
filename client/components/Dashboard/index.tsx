@@ -14,7 +14,6 @@ import { BottomNav } from './BottomNav.tsx';
 import { GradientOrbs } from './GradientOrbs.tsx';
 import { api } from '../../services/api.ts';
 import { DashboardData } from '../../types/index.ts';
-import { mockIdentity } from '../../mocks/dashboardMockData.ts';
 
 const VIP_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   VIP1: { label: 'VIP1', color: '#94a3b8', bg: 'from-slate-400/30 to-slate-500/30', icon: '🥈' },
@@ -99,7 +98,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
     rankColor: currentVip.color,
     rankBg: currentVip.bg,
     rankIcon: currentVip.icon,
-    streakDays: dashboardData?.team?.totalReferralCount > 0 ? 7 : 0,
+    streakDays: dashboardData?.dailyClaim?.streakDays ?? 0,
     online: true,
   };
 

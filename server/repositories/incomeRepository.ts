@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, gte } from 'drizzle-orm';
 import { db } from '../../src/db/index.ts';
 import { incomeHistory } from '../../src/db/schema.ts';
 
@@ -107,6 +107,37 @@ export class IncomeRepository {
     } catch (error) {
       console.error('Database query (getIncomeSummaryByUserId) failed:', error);
       throw new Error('Failed to compute user income aggregation.');
+    }
+  }
+
+  /**
+   * Get daily earnings history aggregated across all income types over the given number of days
+   */
+  async getDailyEarningsHistory(userId: string, daysCount: number = 30) {
+    try {
+      const startDate = new Date();
+      startDate.setUTCDate(startDate.getUTCDate() - daysCount);
+      startDate.setUTCHours(0, 0, 0, 0);
+
+      const result = await db
+        .select({
+          dateStr: sql<string>`DATE_TRUNC('day', ${incomeHistory.createdAt})::date::text`,
+          totalAmount: sql<string>`sum(${incomeHistory.amount})`,
+        })
+        .from(incomeHistory)
+        .where(
+          and(
+            eq(incomeHistory.userId, userId),
+            gte(incomeHistory.createdAt, startDate)
+          )
+        )
+        .groupBy(sql`DATE_TRUNC('day', ${incomeHistory.createdAt})::date`)
+        .orderBy(sql`DATE_TRUNC('day', ${incomeHistory.createdAt})::date`);
+
+      return result;
+    } catch (error) {
+      console.error('Database query (getDailyEarningsHistory) failed:', error);
+      return [];
     }
   }
 }

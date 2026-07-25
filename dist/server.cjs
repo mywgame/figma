@@ -1813,6 +1813,29 @@ var init_incomeRepository = __esm({
           throw new Error("Failed to compute user income aggregation.");
         }
       }
+      /**
+       * Get daily earnings history aggregated across all income types over the given number of days
+       */
+      async getDailyEarningsHistory(userId, daysCount = 30) {
+        try {
+          const startDate = /* @__PURE__ */ new Date();
+          startDate.setUTCDate(startDate.getUTCDate() - daysCount);
+          startDate.setUTCHours(0, 0, 0, 0);
+          const result = await db.select({
+            dateStr: import_drizzle_orm23.sql`DATE_TRUNC('day', ${incomeHistory.createdAt})::date::text`,
+            totalAmount: import_drizzle_orm23.sql`sum(${incomeHistory.amount})`
+          }).from(incomeHistory).where(
+            (0, import_drizzle_orm23.and)(
+              (0, import_drizzle_orm23.eq)(incomeHistory.userId, userId),
+              (0, import_drizzle_orm23.gte)(incomeHistory.createdAt, startDate)
+            )
+          ).groupBy(import_drizzle_orm23.sql`DATE_TRUNC('day', ${incomeHistory.createdAt})::date`).orderBy(import_drizzle_orm23.sql`DATE_TRUNC('day', ${incomeHistory.createdAt})::date`);
+          return result;
+        } catch (error) {
+          console.error("Database query (getDailyEarningsHistory) failed:", error);
+          return [];
+        }
+      }
     };
     incomeRepository = new IncomeRepository();
   }
@@ -3615,6 +3638,24 @@ var ClaimRepository = class {
       throw new Error("Failed to look up active claims in the current window.");
     }
   }
+  /**
+   * Find all claims for a user in a given date range
+   */
+  async findClaimsInDateRange(userId, startDate, endDate) {
+    try {
+      const result = await db.select().from(claims).where(
+        (0, import_drizzle_orm26.and)(
+          (0, import_drizzle_orm26.eq)(claims.userId, userId),
+          (0, import_drizzle_orm26.gte)(claims.claimWindowOpenTime, startDate),
+          (0, import_drizzle_orm26.lte)(claims.claimWindowCloseTime, endDate)
+        )
+      ).orderBy((0, import_drizzle_orm26.desc)(claims.claimWindowOpenTime));
+      return result;
+    } catch (error) {
+      console.error("Database query (findClaimsInDateRange) failed:", error);
+      return [];
+    }
+  }
 };
 var claimRepository = new ClaimRepository();
 
@@ -3866,6 +3907,8 @@ var ClaimService = class {
 var claimService = new ClaimService();
 
 // server/services/dashboardService.ts
+init_userRepository();
+init_incomeRepository();
 var DashboardService = class {
   /**
    * Aggregate all metrics and states to compile the comprehensive user dashboard payload
@@ -3934,6 +3977,80 @@ var DashboardService = class {
     const trialAmountSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_AMOUNT");
     const trialDurationSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_DURATION_DAYS");
     const depositAddressesList = await depositAddressRepository.findByUserId(userId);
+    const rawDailyEarnings = await incomeRepository.getDailyEarningsHistory(userId, 14);
+    const earningsMap = /* @__PURE__ */ new Map();
+    rawDailyEarnings.forEach((row) => {
+      if (row.dateStr) {
+        earningsMap.set(row.dateStr, parseFloat(row.totalAmount || "0"));
+      }
+    });
+    const earningsHistory = [];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+      const yearStr = d.getUTCFullYear();
+      const monthStr = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const dayStr = String(d.getUTCDate()).padStart(2, "0");
+      const isoDate = `${yearStr}-${monthStr}-${dayStr}`;
+      const label = `${d.getUTCDate()} ${monthNames[d.getUTCMonth()]}`;
+      const earningsValue = earningsMap.get(isoDate) || 0;
+      earningsHistory.push({
+        date: label,
+        earnings: Math.round(earningsValue * 100) / 100
+      });
+    }
+    const userRecord = await userRepository.findById(userId);
+    const userCreatedAt = userRecord ? new Date(userRecord.createdAt) : /* @__PURE__ */ new Date(0);
+    const sevenDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6, 0, 0, 0, 0));
+    const endOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+    const rangeClaims = await claimRepository.findClaimsInDateRange(userId, sevenDaysAgo, endOfToday);
+    const history7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+      const dayOpen = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+      const dayClose = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+      const matchingClaim = rangeClaims.find((c) => {
+        const claimOpen = new Date(c.claimWindowOpenTime).getTime();
+        return claimOpen >= dayOpen.getTime() && claimOpen <= dayClose.getTime();
+      });
+      let dayStatus = "NONE";
+      const label = `${d.getUTCDate()} ${monthNames[d.getUTCMonth()]}`;
+      if (matchingClaim) {
+        if (matchingClaim.claimStatus === "CLAIMED") {
+          dayStatus = "CLAIMED";
+        } else if (matchingClaim.claimStatus === "EXPIRED" || matchingClaim.claimStatus === "FORFEITED") {
+          dayStatus = "MISSED";
+        } else {
+          if (i === 0) {
+            dayStatus = "PENDING";
+          } else {
+            dayStatus = "MISSED";
+          }
+        }
+      } else {
+        if (i === 0) {
+          dayStatus = "PENDING";
+        } else {
+          if (dayClose.getTime() >= userCreatedAt.getTime()) {
+            dayStatus = "MISSED";
+          } else {
+            dayStatus = "NONE";
+          }
+        }
+      }
+      history7Days.push({ date: label, status: dayStatus });
+    }
+    let streakDays = 0;
+    for (let i = history7Days.length - 1; i >= 0; i--) {
+      const item = history7Days[i];
+      if (item.status === "CLAIMED") {
+        streakDays++;
+      } else if (item.status === "PENDING" && i === history7Days.length - 1) {
+        continue;
+      } else {
+        break;
+      }
+    }
     return {
       wallet: {
         id: wallet.id,
@@ -3950,6 +4067,7 @@ var DashboardService = class {
         address: da.address
       })),
       earnings,
+      earningsHistory,
       vip: {
         tier: vip.tier,
         points: vip.points,
@@ -3973,7 +4091,9 @@ var DashboardService = class {
         claimId: pendingClaim ? pendingClaim.id : null,
         amount: pendingClaim ? pendingClaim.rewardAmount : "0.00000000",
         windowClose: pendingClaim ? pendingClaim.claimWindowCloseTime : null,
-        status: pendingClaim ? pendingClaim.claimStatus : "PENDING"
+        status: pendingClaim ? pendingClaim.claimStatus : "PENDING",
+        streakDays,
+        history7Days
       },
       recentTransactions,
       recentActivities,

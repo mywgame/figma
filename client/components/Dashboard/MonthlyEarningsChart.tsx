@@ -6,10 +6,13 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTheme } from '../../hooks/useTheme.ts';
-import { MockEarningsPoint } from '../../mocks/dashboardMockData.ts';
+interface EarningsPoint {
+  date: string;
+  earnings: number;
+}
 
 interface MonthlyEarningsChartProps {
-  data: MockEarningsPoint[];
+  data: EarningsPoint[];
 }
 
 /**
@@ -24,9 +27,9 @@ export const MonthlyEarningsChart: React.FC<MonthlyEarningsChartProps> = ({ data
   return (
     <div className={`backdrop-blur-lg rounded-2xl p-5 border transition-all duration-300 lg:col-span-2 flex flex-col ${t.card}`}>
       <h3 className={`text-base font-semibold mb-2 shrink-0 ${t.text}`}>Monthly Earnings</h3>
-      <div className="flex-1 min-h-[260px] -ml-4 -mr-2">
-        <ResponsiveContainer width="100%" height="100%" minHeight={260}>
-          <AreaChart data={data} margin={{ top: 14, right: 12, left: 4, bottom: 0 }}>
+      <div className="flex-1 w-full min-h-[250px] pt-1">
+        <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+          <AreaChart data={data} margin={{ top: 12, right: 12, left: -10, bottom: 12 }}>
             <defs>
               <linearGradient id="earningsGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.5} />
@@ -40,15 +43,14 @@ export const MonthlyEarningsChart: React.FC<MonthlyEarningsChartProps> = ({ data
               tick={{ fill: t.chartTick, fontSize: 11 }}
               tickLine={false}
               axisLine={false}
-              dy={-16}
+              dy={8}
             />
             <YAxis
               stroke={t.chartAxis}
               tick={{ fill: t.chartTick, fontSize: 11 }}
               tickLine={false}
               axisLine={false}
-              width={46}
-              dx={28}
+              width={45}
               tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
             />
             <Tooltip

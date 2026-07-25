@@ -9,6 +9,7 @@ import { useTheme } from '../../hooks/useTheme.ts';
 import { useAvatar } from '../../hooks/useAvatar.ts';
 import { Copy, Check, Mail, Calendar, Phone, Pencil, Save, X, AtSign, Fingerprint, Link as LinkIcon } from 'lucide-react';
 import { AvatarPicker } from '../ui/AvatarPicker.tsx';
+import { getReferralLink } from '../../utils/referral.ts';
 
 // TODO(Phase 2 — backend integration): Name / Username / User ID edits below
 // are held in local mock state only (no PATCH /users/profile endpoint exists
@@ -27,10 +28,8 @@ export const ProfileView: React.FC = () => {
   const [username, setUsername] = useState(user?.email ? user.email.split('@')[0] : 'member');
   const [userId, setUserId] = useState(user?.userId || 'MF-PENDING');
 
-  const referralCode = user?.referralCode || 'MF-742D9C';
-  const referralLink = typeof window !== 'undefined' 
-    ? `${window.location.origin}/register?ref=${referralCode}` 
-    : `https://metafirm.app/register?ref=${referralCode}`;
+  const referralCode = user?.referralCode || user?.userId || '';
+  const referralLink = getReferralLink(referralCode);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink);

@@ -259,7 +259,7 @@ function DashboardContent({ onBackToLanding }: { onBackToLanding: () => void }) 
  * MAIN APP CONTAINER WITH EMBEDDED PHASE 4 WEBSITE
  */
 function MainAppContent() {
-  const { user, token, syncProfile } = useAuth();
+  const { user, token, loading: authLoading, syncProfile } = useAuth();
   const [currentView, setCurrentView] = useState<'landing' | 'dashboard' | 'admin'>('landing');
   const [activeSection, setActiveSection] = useState('hero');
   const [isAppLoading, setIsAppLoading] = useState(true);
@@ -298,6 +298,10 @@ function MainAppContent() {
         setCurrentView('admin');
       } else if (path === '/dashboard') {
         setCurrentView('dashboard');
+      } else if (path === '/login') {
+        setCurrentView('landing');
+        setAuthModalMode('login');
+        setIsAuthModalOpen(true);
       } else {
         setCurrentView('landing');
         // If route is /register or /ref/CODE or a referral code is present in URL query params, trigger registration modal
@@ -324,37 +328,40 @@ function MainAppContent() {
     } else if (currentView === 'dashboard' && currentPath !== '/dashboard') {
       window.history.pushState(null, '', '/dashboard');
     } else if (currentView === 'landing') {
-      if (currentPath !== '/' && currentPath !== '/register' && !currentPath.startsWith('/ref/')) {
+      if (currentPath !== '/' && currentPath !== '/register' && currentPath !== '/login' && !currentPath.startsWith('/ref/')) {
         window.history.pushState(null, '', '/');
       }
     }
   }, [currentView]);
 
-  // 2. Automatically navigate to correct destination after successful login
+  // 2. Redirect unauthenticated visitors trying to access protected routes
   useEffect(() => {
-    if (user && currentView === 'landing') {
-      const role = user.role.toLowerCase();
+    if (authLoading) return;
+
+    if (!user && (currentView === 'dashboard' || currentView === 'admin')) {
+      setCurrentView('landing');
+      setAuthModalMode('login');
+      setIsAuthModalOpen(true);
+      if (window.location.pathname !== '/login') {
+        window.history.replaceState(null, '', '/login');
+      }
+    }
+  }, [user, currentView, authLoading]);
+
+  // 3. Automatically transition to dashboard/admin upon successful login/registration from Auth Modal
+  const prevUserRef = React.useRef(user);
+  useEffect(() => {
+    if (!prevUserRef.current && user && isAuthModalOpen) {
+      setIsAuthModalOpen(false);
+      const role = (user.role || '').toLowerCase();
       if (['admin', 'superadmin', 'operator', 'support', 'finance', 'auditor'].includes(role)) {
         setCurrentView('admin');
       } else {
         setCurrentView('dashboard');
       }
     }
-  }, [user, currentView]);
-
-  // 3. Clear session and return to landing view on logout
-  useEffect(() => {
-    if (!user && (currentView === 'admin' || currentView === 'dashboard')) {
-      setCurrentView('landing');
-    }
-  }, [user, currentView]);
-
-  // 4. Automatically trigger login popup if unauthenticated visitor tries to access /admin
-  useEffect(() => {
-    if (currentView === 'admin' && !user) {
-      handleOpenAuth('login');
-    }
-  }, [currentView, user]);
+    prevUserRef.current = user;
+  }, [user, isAuthModalOpen]);
 
   // Section Tracking for Navbar Highlighter
   useEffect(() => {
@@ -540,6 +547,14 @@ function MainAppContent() {
   }
 
   if (currentView === 'dashboard') {
+    if (authLoading || !user) {
+      return (
+        <AnimatePresence>
+          <LoadingScreen />
+        </AnimatePresence>
+      );
+    }
+
     return (
       <>
         <AnimatePresence>

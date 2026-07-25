@@ -13,6 +13,8 @@ import { settingsRepository } from '../repositories/settingsRepository.ts';
 import { claimRepository } from '../repositories/claimRepository.ts';
 import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
 import { claimService } from './claimService.ts';
+import { userRepository } from '../repositories/userRepository.ts';
+import { incomeRepository } from '../repositories/incomeRepository.ts';
 
 export class DashboardService {
   /**
@@ -108,6 +110,94 @@ export class DashboardService {
     // 9. Fetch permanent deposit addresses
     const depositAddressesList = await depositAddressRepository.findByUserId(userId);
 
+    // 10. Fetch real daily earnings history for monthly chart (last 14 days)
+    const rawDailyEarnings = await incomeRepository.getDailyEarningsHistory(userId, 14);
+    const earningsMap = new Map<string, number>();
+    rawDailyEarnings.forEach(row => {
+      if (row.dateStr) {
+        earningsMap.set(row.dateStr, parseFloat(row.totalAmount || '0'));
+      }
+    });
+
+    const earningsHistory: Array<{ date: string; earnings: number }> = [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+      const yearStr = d.getUTCFullYear();
+      const monthStr = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const dayStr = String(d.getUTCDate()).padStart(2, '0');
+      const isoDate = `${yearStr}-${monthStr}-${dayStr}`;
+      
+      const label = `${d.getUTCDate()} ${monthNames[d.getUTCMonth()]}`;
+      const earningsValue = earningsMap.get(isoDate) || 0;
+      earningsHistory.push({
+        date: label,
+        earnings: Math.round(earningsValue * 100) / 100,
+      });
+    }
+
+    // 11. Calculate real 7-day claim history & streak
+    const userRecord = await userRepository.findById(userId);
+    const userCreatedAt = userRecord ? new Date(userRecord.createdAt) : new Date(0);
+
+    const sevenDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6, 0, 0, 0, 0));
+    const endOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+    const rangeClaims = await claimRepository.findClaimsInDateRange(userId, sevenDaysAgo, endOfToday);
+
+    const history7Days: Array<{ date: string; status: 'CLAIMED' | 'MISSED' | 'PENDING' | 'NONE' }> = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+      const dayOpen = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+      const dayClose = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+
+      const matchingClaim = rangeClaims.find(c => {
+        const claimOpen = new Date(c.claimWindowOpenTime).getTime();
+        return claimOpen >= dayOpen.getTime() && claimOpen <= dayClose.getTime();
+      });
+
+      let dayStatus: 'CLAIMED' | 'MISSED' | 'PENDING' | 'NONE' = 'NONE';
+      const label = `${d.getUTCDate()} ${monthNames[d.getUTCMonth()]}`;
+
+      if (matchingClaim) {
+        if (matchingClaim.claimStatus === 'CLAIMED') {
+          dayStatus = 'CLAIMED';
+        } else if (matchingClaim.claimStatus === 'EXPIRED' || matchingClaim.claimStatus === 'FORFEITED') {
+          dayStatus = 'MISSED';
+        } else {
+          if (i === 0) {
+            dayStatus = 'PENDING';
+          } else {
+            dayStatus = 'MISSED';
+          }
+        }
+      } else {
+        if (i === 0) {
+          dayStatus = 'PENDING';
+        } else {
+          if (dayClose.getTime() >= userCreatedAt.getTime()) {
+            dayStatus = 'MISSED';
+          } else {
+            dayStatus = 'NONE';
+          }
+        }
+      }
+
+      history7Days.push({ date: label, status: dayStatus });
+    }
+
+    let streakDays = 0;
+    for (let i = history7Days.length - 1; i >= 0; i--) {
+      const item = history7Days[i];
+      if (item.status === 'CLAIMED') {
+        streakDays++;
+      } else if (item.status === 'PENDING' && i === history7Days.length - 1) {
+        continue;
+      } else {
+        break;
+      }
+    }
+
     return {
       wallet: {
         id: wallet.id,
@@ -124,6 +214,7 @@ export class DashboardService {
         address: da.address,
       })),
       earnings,
+      earningsHistory,
       vip: {
         tier: vip.tier,
         points: vip.points,
@@ -148,6 +239,8 @@ export class DashboardService {
         amount: pendingClaim ? pendingClaim.rewardAmount : '0.00000000',
         windowClose: pendingClaim ? pendingClaim.claimWindowCloseTime : null,
         status: pendingClaim ? pendingClaim.claimStatus : 'PENDING',
+        streakDays,
+        history7Days,
       },
       recentTransactions,
       recentActivities,

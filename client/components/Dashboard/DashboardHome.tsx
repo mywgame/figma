@@ -5,10 +5,11 @@
 
 import React from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, Gift, DollarSign, Zap, Link as LinkIcon, Users, Award } from 'lucide-react';
-import { mockDashboardData, MockIncomeCard } from '../../mocks/dashboardMockData.ts';
 import { useAuth } from '../../hooks/useAuth.ts';
 import { api } from '../../services/api.ts';
 import { DashboardData } from '../../types/index.ts';
+import { DashboardSkeleton } from './Skeletons/DashboardSkeleton.tsx';
+import { getReferralLink } from '../../utils/referral.ts';
 
 import { Announcements } from './Announcements.tsx';
 import { DailyClaimCard } from './DailyClaimCard.tsx';
@@ -35,28 +36,19 @@ interface DashboardHomeProps {
   onQuickAction?: (actionType: 'deposit' | 'withdraw' | 'claim' | 'team' | 'invite') => void;
 }
 
-/**
- * DASHBOARD CONTAINER (Phase 1 — UI only).
- *
- * Data flow: Dashboard Container → Mock Dashboard Data → Components via Props.
- *
- * This component owns the single `mockDashboardData` object and distributes
- * slices of it to each presentational child purely via props. No component
- * below this one embeds its own mock values — which means Phase 2 only has
- * to swap this container's data source (mock → live `/users/dashboard`
- * response) without touching any child component's internals.
- */
 export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onRefresh, onQuickAction }) => {
   const { user } = useAuth();
-  const data = mockDashboardData;
 
-  if (dashboardData) {
-    const totalBalance = parseFloat(dashboardData.wallet.availableBalance);
-    const totalEarned = parseFloat(dashboardData.earnings.dailyYield) +
-                        parseFloat(dashboardData.earnings.referralIncome) +
-                        parseFloat(dashboardData.earnings.teamIncome) +
-                        parseFloat(dashboardData.earnings.incentiveIncome);
-    const totalWithdrawn = parseFloat(dashboardData.wallet.totalWithdrawn);
+  if (!dashboardData) {
+    return <DashboardSkeleton />;
+  }
+
+  const totalBalance = parseFloat(dashboardData.wallet.availableBalance);
+  const totalEarned = parseFloat(dashboardData.earnings.dailyYield) +
+                      parseFloat(dashboardData.earnings.referralIncome) +
+                      parseFloat(dashboardData.earnings.teamIncome) +
+                      parseFloat(dashboardData.earnings.incentiveIncome);
+  const totalWithdrawn = parseFloat(dashboardData.wallet.totalWithdrawn);
 
     const vipTier = dashboardData?.vip?.tier || user?.vipTier || 'VIP1';
     const currentVip = VIP_CONFIG[vipTier] || VIP_CONFIG['VIP1'];
@@ -82,7 +74,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
 
     const referralCode = user?.referralCode || '';
     const referralLink = referralCode 
-      ? (typeof window !== 'undefined' ? `${window.location.origin}/register?ref=${referralCode}` : `https://metafirm.app/register?ref=${referralCode}`)
+      ? getReferralLink(referralCode)
       : 'N/A';
 
     // Calculate seconds remaining until next UTC Midnight
@@ -107,7 +99,8 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
       secondsRemaining: secondsRemaining,
       rewardAmount: parseFloat(dashboardData.dailyClaim.amount),
       lastStatus: (dashboardData.dailyClaim.status === 'CLAIMED' ? 'success' : 'none') as 'success' | 'failed' | 'none',
-      streakDays: dashboardData.team?.totalReferralCount > 0 ? 7 : 0, // dynamic streak fallback
+      streakDays: dashboardData.dailyClaim.streakDays ?? 0,
+      history7Days: dashboardData.dailyClaim.history7Days || [],
       status: dashboardData.dailyClaim.status,
     };
 
@@ -129,7 +122,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
       { key: 'referralIncome', label: 'Referral Income', today: 0.00, total: parseFloat(dashboardData.earnings.referralIncome), icon: LinkIcon, accent: 'cyan' },
       { key: 'teamIncome', label: 'Team Income', today: 0.00, total: parseFloat(dashboardData.earnings.teamIncome), icon: Users, accent: 'purple' },
       { key: 'incentiveIncome', label: 'Incentive Income', today: 0.00, total: parseFloat(dashboardData.earnings.incentiveIncome), icon: Award, accent: 'amber' },
-    ] as MockIncomeCard[];
+    ];
 
     const realRecentTransactions = (dashboardData.recentTransactions || []).map((tx: any) => {
       const typeLower = (tx.type || 'deposit').toLowerCase();
@@ -215,7 +208,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
               }
             }} 
           />
-          <MonthlyEarningsChart data={data.earningsHistory} />
+          <MonthlyEarningsChart data={dashboardData.earningsHistory || []} />
         </div>
 
         {/* 5. Network Levels + Recent Transactions */}
@@ -231,87 +224,6 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
 
       </div>
     );
-  }
-
-  const fallbackVipTier = user?.vipTier || 'VIP1';
-  const fallbackVip = VIP_CONFIG[fallbackVipTier] || VIP_CONFIG['VIP1'];
-
-  return (
-    <div className="space-y-6 w-full text-left" id="metafirm-dashboard-home">
-
-      {/* 1. Total Balance Hero Card */}
-      <HeroBalanceCard
-        totalBalance={data.wallet.totalBalance}
-        totalEarned={data.wallet.totalEarned}
-        totalWithdrawn={data.wallet.totalWithdrawn}
-        identity={{
-          name: user?.name || user?.email?.split('@')[0] || 'User',
-          id: user?.userId || 'MF-N/A',
-          rankLabel: fallbackVip.label,
-          rankColor: fallbackVip.color,
-          rankBg: fallbackVip.bg,
-          rankIcon: fallbackVip.icon,
-        }}
-      />
-
-      {/* 2. Quick Action Buttons — always one row (mobile shrinks size, desktop untouched) */}
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-3" id="action-buttons-container">
-        <button
-          onClick={() => onQuickAction?.('deposit')}
-          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-emerald-900/10 active:scale-[0.98] cursor-pointer"
-        >
-          <ArrowDownToLine className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="truncate">Deposit</span>
-        </button>
-        <button
-          onClick={() => onQuickAction?.('withdraw')}
-          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-rose-500 to-red-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-rose-900/10 active:scale-[0.98] cursor-pointer"
-        >
-          <ArrowUpFromLine className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="truncate">Withdraw</span>
-        </button>
-        <button
-          onClick={() => onQuickAction?.('claim')}
-          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-blue-900/10 active:scale-[0.98] cursor-pointer"
-        >
-          <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="truncate">Rewards</span>
-        </button>
-        <button
-          onClick={() => onQuickAction?.('invite')}
-          className="flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white font-sans font-bold text-[9px] sm:text-xs tracking-wider uppercase transition-all shadow-lg shadow-purple-900/10 active:scale-[0.98] cursor-pointer"
-        >
-          <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-          <span className="truncate">Task</span>
-        </button>
-      </div>
-
-      {/* 3. Income Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="income-cards-container">
-        {data.incomeCards.map((card) => (
-          <IncomeStatCard key={card.key} label={card.label} today={card.today} total={card.total} icon={card.icon} accent={card.accent} />
-        ))}
-      </div>
-
-      {/* 4. Daily Claim + Monthly Earnings Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="yield-collection-container">
-        <DailyClaimCard dailyClaim={data.dailyClaim} onClaim={() => onQuickAction?.('claim')} />
-        <MonthlyEarningsChart data={data.earningsHistory} />
-      </div>
-
-      {/* 5. Network Levels + Recent Transactions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="recent-transactions-container">
-        <NetworkLevels network={data.network} />
-        <RecentActivity transactions={data.recentTransactions} onViewAll={() => onQuickAction?.('team')} />
-      </div>
-
-      {/* 6. Announcements (preserved from earlier phase; no figma equivalent) */}
-      <div className="w-full" id="announcements-container">
-        <Announcements />
-      </div>
-
-    </div>
-  );
 };
 
 export default DashboardHome;

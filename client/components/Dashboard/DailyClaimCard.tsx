@@ -17,6 +17,10 @@ interface DailyClaimCardProps {
     lastStatus: 'success' | 'failed' | 'none';
     streakDays: number;
     status?: string;
+    history7Days?: Array<{
+      date: string;
+      status: 'CLAIMED' | 'MISSED' | 'PENDING' | 'NONE';
+    }>;
   };
   onClaim?: () => Promise<any>;
 }
@@ -154,16 +158,32 @@ export const DailyClaimCard: React.FC<DailyClaimCardProps> = ({ dailyClaim, onCl
             <span className={`text-sm font-semibold ${t.text}`}>Daily Streak</span>
           </div>
           <div className="flex items-center gap-1">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div
-                key={i}
-                className={`w-3 h-3 rounded-full ${
-                  i < (dailyClaim.streakDays % 7) || dailyClaim.streakDays >= 7
-                    ? 'bg-orange-400'
-                    : t.isDark ? 'bg-white/15' : 'bg-black/12'
-                }`}
-              />
-            ))}
+            {(dailyClaim.history7Days && dailyClaim.history7Days.length > 0) ? (
+              dailyClaim.history7Days.map((day, i) => (
+                <div
+                  key={i}
+                  title={`${day.date}: ${day.status}`}
+                  className={`w-3 h-3 rounded-full transition-colors ${
+                    day.status === 'CLAIMED'
+                      ? 'bg-orange-400 shadow-sm shadow-orange-400/50'
+                      : day.status === 'MISSED'
+                      ? t.isDark ? 'bg-white/25' : 'bg-black/25'
+                      : t.isDark ? 'bg-white/10' : 'bg-black/10'
+                  }`}
+                />
+              ))
+            ) : (
+              Array.from({ length: 7 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-3 h-3 rounded-full ${
+                    i < (dailyClaim.streakDays % 7) || dailyClaim.streakDays >= 7
+                      ? 'bg-orange-400 shadow-sm shadow-orange-400/50'
+                      : t.isDark ? 'bg-white/15' : 'bg-black/12'
+                  }`}
+                />
+              ))
+            )}
             <span className="text-xs text-orange-400 font-bold ml-2">{dailyClaim.streakDays}d</span>
           </div>
         </div>
