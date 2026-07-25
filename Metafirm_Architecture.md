@@ -1,6 +1,5 @@
  # metafir_Architecture
 
-│   .env
 │   .env.example
 │   .gitignore
 │   bun.lock
@@ -28,39 +27,16 @@
 │   │       usdt-svg.svg
 │   │
 │   ├───images
-│   │   ├───backgrounds
-│   │   │   ├───admin
-│   │   │   │       .gitkeep
-│   │   │   │
-│   │   │   ├───auth
-│   │   │   │       .gitkeep
-│   │   │   │
-│   │   │   ├───dashboard
-│   │   │   │       .gitkeep
-│   │   │   │
-│   │   │   └───landing
-│   │   │           .gitkeep
-│   │   │
 │   │   ├───branding
 │   │   │       logo-mark.png
 │   │   │       logo.png
 │   │   │
-│   │   ├───illustrations
-│   │   │       gpu-farm-illustration.svg
-│   │   │       solar-farm-illustration.svg
-│   │   │
-│   │   └───placeholders
-│   │           .gitkeep
+│   │   └───illustrations
+│   │           gpu-farm-illustration.svg
+│   │           solar-farm-illustration.svg
 │   │
 │   └───video
-│       ├───admin
-│       │       .gitkeep
-│       │
-│       ├───dashboard
-│       │       .gitkeep
-│       │
 │       └───landing
-│               .gitkeep
 │               hero-background.mp4
 │
 ├───client
@@ -285,18 +261,7 @@
 │   └───utils
 │           index.ts
 │           landingData.ts
-│
-├───dist
-│   │   index.html
-│   │   server.cjs
-│   │   server.cjs.map
-│   │
-│   └───assets
-│           favicon-DzAemdKg.png
-│           index-CDQUSIp2.css
-│           index-Df0tYGZl.js
-│           logo-CPbukfqA.png
-│           logo-mark-CJjUW_hu.png
+│           referral.ts
 │
 ├───drizzle
 │   │   0000_eager_legion.sql
@@ -355,6 +320,7 @@
 │   │   │       WithdrawalService.ts
 │   │   │
 │   │   ├───utils
+│   │   │       amountUtils.ts
 │   │   │       blockchainUtils.ts
 │   │   │
 │   │   └───webhooks
@@ -497,4 +463,3 @@
     └───wallet-generator
             generator.ts
             README.md
-            

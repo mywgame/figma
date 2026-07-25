@@ -3,9 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BlockchainProvider } from '../interfaces/BlockchainProvider.ts';
+import type { BlockchainProvider } from '../interfaces/BlockchainProvider.ts';
+import { RpcProvider } from './RpcProvider.ts';
 import { TatumProvider } from './TatumProvider.ts';
 
-// Single provider instance adhering to BlockchainProvider interface
-export const activeBlockchainProvider: BlockchainProvider = new TatumProvider();
+const selectedProviderName = (process.env.BLOCKCHAIN_PROVIDER || 'rpc').trim().toLowerCase();
+
+export const activeBlockchainProvider: BlockchainProvider =
+  selectedProviderName === 'tatum' ? new TatumProvider() : new RpcProvider();
+
+console.log(`[BlockchainProvider] Active blockchain provider initialized: ${selectedProviderName.toUpperCase()}`);
+
 export default activeBlockchainProvider;

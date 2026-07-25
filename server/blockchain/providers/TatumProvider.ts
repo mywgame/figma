@@ -13,11 +13,36 @@ export class TatumProvider implements BlockchainProvider {
   private readonly apiKey: string;
   private readonly isConfigured: boolean;
 
+  // In-memory caches to prevent excessive Tatum API consumption
+  private blockHeightCache = new Map<string, { value: number; expiresAt: number }>();
+  private nativeBalanceCache = new Map<string, { value: string; expiresAt: number }>();
+  private tokenBalanceCache = new Map<string, { value: string; expiresAt: number }>();
+  private transactionCache = new Map<string, { value: BlockchainTransaction; expiresAt: number }>();
+
   constructor() {
     this.apiKey = blockchainConfig.apiKey;
     this.isConfigured = blockchainConfig.isConfigured;
     if (!this.isConfigured) {
       console.warn('[TatumProvider] Tatum API key is missing. Running in simulation mode with deterministic address/transaction fallbacks.');
+    }
+
+    // Periodically prune expired cache entries every 10 minutes
+    setInterval(() => this.pruneExpiredCaches(), 600000);
+  }
+
+  private pruneExpiredCaches(): void {
+    const now = Date.now();
+    for (const [key, item] of this.blockHeightCache.entries()) {
+      if (item.expiresAt <= now) this.blockHeightCache.delete(key);
+    }
+    for (const [key, item] of this.nativeBalanceCache.entries()) {
+      if (item.expiresAt <= now) this.nativeBalanceCache.delete(key);
+    }
+    for (const [key, item] of this.tokenBalanceCache.entries()) {
+      if (item.expiresAt <= now) this.tokenBalanceCache.delete(key);
+    }
+    for (const [key, item] of this.transactionCache.entries()) {
+      if (item.expiresAt <= now) this.transactionCache.delete(key);
     }
   }
 
@@ -131,21 +156,33 @@ export class TatumProvider implements BlockchainProvider {
   }
 
   /**
-   * Retrieve current blockchain height to calculate confirmations
+   * Retrieve current blockchain height to calculate confirmations (Cached with 30s TTL)
    */
   private async getCurrentBlockHeight(network: string): Promise<number> {
     if (!this.isConfigured) return 100;
+
+    const now = Date.now();
+    const cached = this.blockHeightCache.get(network);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+
     try {
+      let blockNumber = 100;
       if (network === 'USDT_BEP20') {
         const res = await this.getRequest<{ blockNumber: number }>('/v3/bsc/block/current');
-        return res.blockNumber;
+        blockNumber = res.blockNumber;
       } else if (network === 'USDT_POLYGON') {
         const res = await this.getRequest<{ blockNumber: number }>('/v3/polygon/block/current');
-        return res.blockNumber;
+        blockNumber = res.blockNumber;
       } else if (network === 'USDT_TRC20') {
         const res = await this.getRequest<{ blockNumber: number }>('/v3/tron/info');
-        return res.blockNumber;
+        blockNumber = res.blockNumber;
       }
+
+      // Cache block height for 30 seconds
+      this.blockHeightCache.set(network, { value: blockNumber, expiresAt: now + 30000 });
+      return blockNumber;
     } catch (e: any) {
       console.error(`[TatumProvider] Failed to get current block height for ${network}:`, e.message);
     }
@@ -153,19 +190,30 @@ export class TatumProvider implements BlockchainProvider {
   }
 
   /**
-   * Query token balance on-chain
+   * Query token balance on-chain (Cached with 60s TTL)
    */
   async getBalance(network: string, address: string): Promise<string> {
     if (!this.isConfigured) return '0.00000000';
     const netConfig = blockchainConfig.networks[network];
     if (!netConfig) return '0.00000000';
 
+    const cacheKey = `${network}:${address.toLowerCase()}`;
+    const now = Date.now();
+    const cached = this.tokenBalanceCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+
     try {
       const chain = netConfig.chainName;
       const contract = netConfig.contractAddress;
       const path = `/v3/blockchain/token/balance/${chain}/${contract}/${address}`;
       const result = await this.getRequest<{ balance: string }>(path);
-      return result?.balance || '0.00000000';
+      const balance = result?.balance || '0.00000000';
+
+      // Cache for 60 seconds
+      this.tokenBalanceCache.set(cacheKey, { value: balance, expiresAt: now + 60000 });
+      return balance;
     } catch (err: any) {
       console.error(`[TatumProvider] Failed to get balance for ${address} on ${network}:`, err.message);
       return '0.00000000';
@@ -186,14 +234,24 @@ export class TatumProvider implements BlockchainProvider {
   }
 
   /**
-   * Verify and fetch transaction details
+   * Verify and fetch transaction details (Cached with short/long TTL depending on status)
    */
   async getTransaction(network: string, txHash: string): Promise<BlockchainTransaction | null> {
+    const cacheKey = `${network}:${txHash.toLowerCase()}`;
+    const now = Date.now();
+    const cached = this.transactionCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+
     if (this.isConfigured) {
       try {
         const netConfig = blockchainConfig.networks[network];
         let chain = netConfig?.chainName || 'BSC';
         const decimals = netConfig?.decimals ?? (network === 'USDT_BEP20' ? 18 : 6);
+
+        // Fetch block height ONCE for calculation
+        const blockHeight = await this.getCurrentBlockHeight(network);
 
         // 1. Attempt to fetch structured token transfer record from Tatum
         try {
@@ -201,11 +259,10 @@ export class TatumProvider implements BlockchainProvider {
           const parsedTx = await this.getRequest<any>(tokenTxUrl);
           
           if (parsedTx) {
-            const blockHeight = await this.getCurrentBlockHeight(network);
             const txBlock = parsedTx.blockNumber || blockHeight;
             const confirmations = blockHeight - txBlock + 1;
 
-            return {
+            const resultObj: BlockchainTransaction = {
               hash: txHash,
               amount: normalizeAmount(parsedTx.amount || parsedTx.value || '0', decimals),
               sender: parsedTx.from || '',
@@ -213,6 +270,11 @@ export class TatumProvider implements BlockchainProvider {
               confirmations: Math.max(1, confirmations),
               isSuccessful: true,
             };
+
+            // Cache confirmed transactions for 10 minutes, unconfirmed for 30 seconds
+            const ttl = confirmations >= 6 ? 600000 : 30000;
+            this.transactionCache.set(cacheKey, { value: resultObj, expiresAt: now + ttl });
+            return resultObj;
           }
         } catch (tokenErr) {
           console.log(`[TatumProvider] Structured token transfer lookup failed or not found for ${txHash}. Trying raw transaction lookup.`);
@@ -231,7 +293,6 @@ export class TatumProvider implements BlockchainProvider {
         if (rawTxUrl) {
           const rawTx = await this.getRequest<any>(rawTxUrl);
           if (rawTx) {
-            const blockHeight = await this.getCurrentBlockHeight(network);
             const txBlock = rawTx.blockNumber || rawTx.block_num || blockHeight;
             const confirmations = blockHeight - txBlock + 1;
             const isSuccess = rawTx.status === true || rawTx.status === 1 || rawTx.status === undefined;
@@ -260,7 +321,7 @@ export class TatumProvider implements BlockchainProvider {
               }
             }
 
-            return {
+            const resultObj: BlockchainTransaction = {
               hash: txHash,
               amount: amount !== '0.00000000' ? amount : normalizeAmount(rawTx.value || '0', decimals),
               sender: from,
@@ -268,6 +329,10 @@ export class TatumProvider implements BlockchainProvider {
               confirmations: Math.max(1, confirmations),
               isSuccessful: isSuccess,
             };
+
+            const ttl = confirmations >= 6 ? 600000 : 30000;
+            this.transactionCache.set(cacheKey, { value: resultObj, expiresAt: now + ttl });
+            return resultObj;
           }
         }
       } catch (error: any) {
@@ -293,26 +358,39 @@ export class TatumProvider implements BlockchainProvider {
   }
 
   /**
-   * Fetch native blockchain balance (BNB, MATIC, TRX)
+   * Fetch native blockchain balance (BNB, MATIC, TRX) (Cached with 60s TTL)
    */
   async getNativeBalance(network: string, address: string): Promise<string> {
+    const cacheKey = `${network}:${address.toLowerCase()}`;
+    const now = Date.now();
+    const cached = this.nativeBalanceCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+
     if (this.isConfigured) {
       try {
         let path = '';
         if (network === 'USDT_BEP20') {
           path = `/v3/bsc/account/balance/${address}`;
           const res = await this.getRequest<{ balance: string }>(path);
-          return res.balance || '0.00000000';
+          const bal = res.balance || '0.00000000';
+          this.nativeBalanceCache.set(cacheKey, { value: bal, expiresAt: now + 60000 });
+          return bal;
         } else if (network === 'USDT_POLYGON') {
           path = `/v3/polygon/account/balance/${address}`;
           const res = await this.getRequest<{ balance: string }>(path);
-          return res.balance || '0.00000000';
+          const bal = res.balance || '0.00000000';
+          this.nativeBalanceCache.set(cacheKey, { value: bal, expiresAt: now + 60000 });
+          return bal;
         } else if (network === 'USDT_TRC20') {
           path = `/v3/tron/account/${address}`;
           const res = await this.getRequest<any>(path);
           // Tron returns balance in SUN (1 TRX = 1,000,000 SUN)
           const sun = res.balance || 0;
-          return (sun / 1000000).toFixed(6);
+          const bal = (sun / 1000000).toFixed(6);
+          this.nativeBalanceCache.set(cacheKey, { value: bal, expiresAt: now + 60000 });
+          return bal;
         }
       } catch (err: any) {
         console.error(`[TatumProvider] Failed to get native balance for ${address}:`, err.message);

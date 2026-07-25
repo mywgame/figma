@@ -4,7 +4,7 @@
  */
 
 import crypto from 'crypto';
-import { HDNodeWallet } from 'ethers';
+import { hdWalletEngine } from '../hd/HdWalletEngine.ts';
 
 /**
  * Interface representing a secret provider for future secret manager integrations.
@@ -31,39 +31,48 @@ export class KeyManager {
 
   /**
    * Sets a custom secret provider (e.g. Google Secret Manager, AWS Secrets Manager)
-   * to satisfy requirement 11 (Future Secret Management) without changing TreasuryService.
    */
   public setSecretProvider(provider: SecretProvider): void {
     this.secretProvider = provider;
   }
 
   /**
-   * Helper to retrieve master keys securely.
+   * Get master seed or network specific xpriv/xpub
    */
-  private async getMasterKey(network: string, type: 'XPUB' | 'XPRIV'): Promise<string> {
-    const cleanNetwork = network.toUpperCase();
-    const envKey = `USDT_${cleanNetwork.replace('USDT_', '')}_${type}`;
-    const value = await this.secretProvider.getSecret(envKey);
-    return value || '';
+  private async getMasterSecret(network: string): Promise<string> {
+    const masterMnemonic = await this.secretProvider.getSecret('MASTER_SEED_MNEMONIC');
+    if (masterMnemonic) return masterMnemonic.trim();
+
+    const masterSeed = await this.secretProvider.getSecret('MASTER_SEED_HEX');
+    if (masterSeed) return masterSeed.trim();
+
+    const cleanNetwork = network.toUpperCase().replace('USDT_', '');
+    const xpriv = await this.secretProvider.getSecret(`USDT_${cleanNetwork}_XPRIV`);
+    if (xpriv) return xpriv.trim();
+
+    const xpub = await this.secretProvider.getSecret(`USDT_${cleanNetwork}_XPUB`);
+    if (xpub) return xpub.trim();
+
+    return '';
   }
 
   /**
-   * Derive a child public address for a network and index.
+   * Derive a child public deposit address for a network and index.
    */
   public async deriveAddress(network: string, derivationIndex: number): Promise<string> {
-    const xpub = await this.getMasterKey(network, 'XPUB');
-    if (!xpub) {
-      // Deterministic fallback if not configured
+    const secret = await this.getMasterSecret(network);
+    if (!secret) {
       return this.generateDeterministicFallbackAddress(network, derivationIndex);
     }
 
     try {
-      // Try to use ethers to derive if possible
-      const wallet = HDNodeWallet.fromExtendedKey(xpub);
-      const child = wallet.deriveChild(derivationIndex);
-      return child.address;
+      if (network.toUpperCase().includes('TRC20') || network.toUpperCase().includes('TRON')) {
+        return hdWalletEngine.deriveTronAddress(secret, derivationIndex).address;
+      } else {
+        return hdWalletEngine.deriveEvmAddress(secret, derivationIndex).address;
+      }
     } catch (error: any) {
-      // If xpub is not a valid BIP32 string or ethers fails, we gracefully fall back
+      console.warn(`[KeyManager] HD derivation failed for ${network} at index ${derivationIndex}: ${error.message}. Using deterministic fallback.`);
       return this.generateDeterministicFallbackAddress(network, derivationIndex);
     }
   }
@@ -73,29 +82,29 @@ export class KeyManager {
    * Private keys are NEVER stored in the database or logs.
    */
   public async derivePrivateKey(network: string, derivationIndex: number): Promise<string> {
-    const xpriv = await this.getMasterKey(network, 'XPRIV');
-    if (!xpriv) {
-      // Deterministic fallback private key if not configured (for testing / simulation)
+    const secret = await this.getMasterSecret(network);
+    if (!secret) {
       return this.generateDeterministicFallbackPrivateKey(network, derivationIndex);
     }
 
     try {
-      const wallet = HDNodeWallet.fromExtendedKey(xpriv);
-      const child = wallet.deriveChild(derivationIndex) as HDNodeWallet;
-      return child.privateKey;
+      if (network.toUpperCase().includes('TRC20') || network.toUpperCase().includes('TRON')) {
+        return hdWalletEngine.deriveTronAddress(secret, derivationIndex).privateKey;
+      } else {
+        return hdWalletEngine.deriveEvmAddress(secret, derivationIndex).privateKey;
+      }
     } catch (error: any) {
-      // Handle invalid BIP32 extended key gracefully
-      console.warn(`[KeyManager] Invalid extended private key for ${network}. Using deterministic simulation key.`);
+      console.warn(`[KeyManager] HD private key derivation failed for ${network} at index ${derivationIndex}: ${error.message}. Using deterministic fallback.`);
       return this.generateDeterministicFallbackPrivateKey(network, derivationIndex);
     }
   }
 
   /**
-   * Helper to generate a deterministic fallback address (matching TatumProvider fallback logic)
+   * Helper to generate a deterministic fallback address for simulation mode
    */
-  private generateDeterministicFallbackAddress(network: string, derivationIndex: number): string {
+  public generateDeterministicFallbackAddress(network: string, derivationIndex: number): string {
     const cleanNetwork = network.toUpperCase();
-    if (cleanNetwork.includes('TRC20')) {
+    if (cleanNetwork.includes('TRC20') || cleanNetwork.includes('TRON')) {
       const hash = crypto.createHash('sha256').update(`tron:${derivationIndex}`).digest('hex');
       const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
       let derived = 'T';
@@ -111,10 +120,9 @@ export class KeyManager {
   }
 
   /**
-   * Helper to generate a deterministic fallback private key for testing/simulation
+   * Helper to generate a deterministic fallback private key for simulation mode
    */
-  private generateDeterministicFallbackPrivateKey(network: string, derivationIndex: number): string {
-    // Generate a secure looking deterministic hex key (32 bytes)
+  public generateDeterministicFallbackPrivateKey(network: string, derivationIndex: number): string {
     const seed = `metafirm:${network}:private:${derivationIndex}`;
     const hash = crypto.createHash('sha256').update(seed).digest('hex');
     return `0x${hash}`;

@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { eq, and, lte, or, sql, desc } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import { db } from '../../../src/db/index.ts';
 import { sweepQueue, treasuryWallets, depositAddresses, deposits } from '../../../src/db/schema.ts';
 import { activeBlockchainProvider } from '../providers/index.ts';
 import { logger } from '../../utils/logger.ts';
 import { auditRepository } from '../../repositories/auditRepository.ts';
-import { keyManager } from '../keys/KeyManager.ts';
 import { treasuryService } from './TreasuryService.ts';
 
 // Gas funding configuration thresholds
@@ -38,8 +37,8 @@ export class SweepQueueProcessor {
   public start() {
     if (this.intervalId) return;
     logger.info('[SweepQueueProcessor] Starting background sweep queue processing loop...');
-    // Poll every 20 seconds
-    this.intervalId = setInterval(() => this.processQueue(), 20000);
+    // Poll every 120 seconds (2 minutes) to conserve API credits while maintaining robust processing
+    this.intervalId = setInterval(() => this.processQueue(), 120000);
   }
 
   /**
@@ -61,6 +60,20 @@ export class SweepQueueProcessor {
     this.isProcessing = true;
 
     try {
+      // Ensure treasury configs exist
+      await treasuryService.ensureAllTreasuryWallets();
+
+      // Check if any active network is configured for AUTOMATIC or HYBRID sweep mode
+      const treasuryList = await db.select().from(treasuryWallets);
+      const hasAutoOrHybrid = treasuryList.some(
+        (t) => (t.sweepMode || 'AUTOMATIC') !== 'MANUAL' && !t.paused
+      );
+
+      if (!hasAutoOrHybrid) {
+        logger.info('[SweepQueueProcessor] Sweep Mode is MANUAL. Automatic sweep processing is disabled.');
+        return;
+      }
+
       // Find all active queue items that are not finished or cancelled
       const activeItems = await db
         .select()
@@ -76,6 +89,12 @@ export class SweepQueueProcessor {
         );
 
       for (const item of activeItems) {
+        // Skip items for networks in MANUAL mode or paused
+        const treasury = await treasuryService.getOrCreateTreasuryWallet(item.network);
+        if ((treasury.sweepMode || 'AUTOMATIC') === 'MANUAL' || treasury.paused) {
+          continue;
+        }
+
         // Prevent concurrent processing of the same deposit address
         if (this.activeLocks.has(item.depositAddress)) {
           continue;
@@ -136,30 +155,26 @@ export class SweepQueueProcessor {
       return; // Wait for delay to expire
     }
 
-    // Check Native Gas Balance
+    // Handle Manual mode
+    if (mode === 'MANUAL') {
+      if (item.status !== 'PENDING') {
+        await db
+          .update(sweepQueue)
+          .set({
+            status: 'PENDING',
+            updatedAt: new Date()
+          })
+          .where(eq(sweepQueue.id, item.id));
+      }
+      return; // Do nothing automatically in MANUAL mode; gas balance checked on demand in Admin dashboard
+    }
+
+    // Check Native Gas Balance for AUTOMATIC and HYBRID modes
     const nativeBalStr = await this.provider.getNativeBalance(item.network, item.depositAddress);
     const nativeBal = parseFloat(nativeBalStr);
     const minGas = parseFloat(MIN_GAS_REQUIRED[item.network] || '0');
 
     const hasSufficientGas = nativeBal >= minGas;
-
-    // Handle Manual mode
-    if (mode === 'MANUAL') {
-      const targetStatus = hasSufficientGas ? 'READY_TO_SWEEP' : 'WAITING_GAS';
-      const targetGasStatus = hasSufficientGas ? 'OK' : 'LOW';
-
-      if (item.status !== 'PENDING' && item.status !== targetStatus) {
-        await db
-          .update(sweepQueue)
-          .set({
-            status: 'PENDING',
-            gasStatus: targetGasStatus,
-            updatedAt: new Date()
-          })
-          .where(eq(sweepQueue.id, item.id));
-      }
-      return; // Do nothing automatically in MANUAL mode
-    }
 
     // State machine logic for AUTOMATIC and HYBRID modes
     switch (item.status) {

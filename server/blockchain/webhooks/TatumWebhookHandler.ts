@@ -9,7 +9,7 @@ import { depositService } from '../services/DepositService.ts';
 import { logger } from '../../utils/logger.ts';
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 import { normalizeAmount } from '../utils/amountUtils.ts';
-import { blockchainProvider } from '../../services/blockchainProvider.ts';
+import { activeBlockchainProvider } from '../providers/index.ts';
 
 export interface TatumWebhookPayload {
   address: string;
@@ -95,7 +95,7 @@ export class TatumWebhookHandler {
 
     // 4. On-Chain Verification Fallback: Always query the blockchain via provider to verify tx on-chain
     try {
-      const onChainTx = await blockchainProvider.getTransaction(network, txId);
+      const onChainTx = await activeBlockchainProvider.getTransaction(network, txId);
       if (onChainTx) {
         if (!onChainTx.isSuccessful) {
           logger.warn(`[TatumWebhookHandler] Webhook tx ${txId} failed on-chain. Rejecting.`);

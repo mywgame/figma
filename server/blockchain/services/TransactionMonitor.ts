@@ -26,7 +26,7 @@ export class TransactionMonitor {
   /**
    * Start background transaction monitor loop
    */
-  start(intervalMs = 30000) {
+  start(intervalMs = 120000) {
     if (this.timer) {
       logger.info('Transaction monitor is already running.');
       return;
@@ -68,6 +68,15 @@ export class TransactionMonitor {
       
       // Filter those with txHash
       const withTxHash = pendingDeposits.filter((d) => !!d.txHash);
+
+      // Prune queryAttempts keys for deposit IDs that are no longer pending
+      const activeDepositIds = new Set(withTxHash.map((d) => d.id));
+      for (const id of Object.keys(this.queryAttempts)) {
+        if (!activeDepositIds.has(id)) {
+          delete this.queryAttempts[id];
+        }
+      }
+
       if (withTxHash.length === 0) {
         this.isChecking = false;
         return;

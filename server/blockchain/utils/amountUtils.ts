@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ethers } from 'ethers';
+
 /**
  * Format raw token BigInt atomic units into standardized 8-decimal string
  * @param rawBigInt The raw token value (wei/atomic units)
@@ -65,4 +67,17 @@ export function normalizeAmount(rawAmount: string | number, decimals: number = 1
   const parsed = parseFloat(strAmount);
   if (isNaN(parsed) || parsed <= 0) return '0.00000000';
   return parsed.toFixed(8);
+}
+
+/**
+ * Converts human readable amount string (e.g., "100.5") into BigInt atomic units
+ */
+export function denormalizeAmount(humanAmount: string | number, decimals: number = 18): bigint {
+  if (!humanAmount) return 0n;
+  try {
+    const cleanAmount = String(humanAmount).trim();
+    return ethers.parseUnits(cleanAmount, decimals);
+  } catch {
+    return 0n;
+  }
 }

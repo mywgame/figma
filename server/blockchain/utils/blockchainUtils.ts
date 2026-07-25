@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { normalizeAmount } from './amountUtils.ts';
+
 /**
  * Mask the middle part of a blockchain address for privacy/display
  */
@@ -36,7 +38,5 @@ export function isValidTxHash(txHash: string, network: string): boolean {
  * Standardize USDT amounts to 8 decimal places string representation
  */
 export function formatUSDTAmount(amount: string | number): string {
-  const numeric = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (isNaN(numeric)) return '0.00000000';
-  return numeric.toFixed(8);
+  return normalizeAmount(amount, 8);
 }

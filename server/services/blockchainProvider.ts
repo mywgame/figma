@@ -14,7 +14,7 @@ export interface BlockchainTransaction {
   isSuccessful: boolean;
 }
 
-export class TatumProvider {
+export class GenericBlockchainProviderService {
   async generateAddress(network: string, derivationIndex: number): Promise<string> {
     return activeBlockchainProvider.generateDepositAddress(network, derivationIndex);
   }
@@ -28,5 +28,5 @@ export class TatumProvider {
   }
 }
 
-export const blockchainProvider = new TatumProvider();
+export const blockchainProvider = new GenericBlockchainProviderService();
 export default blockchainProvider;
