@@ -40,6 +40,7 @@ export class IncomeService {
    * - Incentive Income (INCENTIVE, SALARY, Weekly Salary, Rewards, etc.)
    */
   async getUserIncomeSummary(userId: string) {
+    const wallet = await walletRepository.findByUserId(userId);
     const summaryList = await incomeRepository.getIncomeSummaryByUserId(userId);
     
     let referralIncome = 0;
@@ -65,6 +66,13 @@ export class IncomeService {
           incentiveIncome += amount;
           break;
       }
+    }
+
+    if (wallet) {
+      referralIncome = Math.max(referralIncome, parseFloat(wallet.referralIncome || '0'));
+      dailyYield = Math.max(dailyYield, parseFloat(wallet.dailyYield || '0'));
+      teamIncome = Math.max(teamIncome, parseFloat(wallet.teamIncome || '0'));
+      incentiveIncome = Math.max(incentiveIncome, parseFloat(wallet.incentiveIncome || '0'));
     }
 
     return {

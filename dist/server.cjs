@@ -3428,6 +3428,7 @@ init_referralService();
 
 // server/services/incomeService.ts
 init_incomeRepository();
+init_walletRepository();
 var IncomeService = class {
   /**
    * Helper to write a new income log entry for auditing and analytics grouping
@@ -3450,6 +3451,7 @@ var IncomeService = class {
    * - Incentive Income (INCENTIVE, SALARY, Weekly Salary, Rewards, etc.)
    */
   async getUserIncomeSummary(userId) {
+    const wallet = await walletRepository.findByUserId(userId);
     const summaryList = await incomeRepository.getIncomeSummaryByUserId(userId);
     let referralIncome = 0;
     let dailyYield = 0;
@@ -3471,6 +3473,12 @@ var IncomeService = class {
           incentiveIncome += amount;
           break;
       }
+    }
+    if (wallet) {
+      referralIncome = Math.max(referralIncome, parseFloat(wallet.referralIncome || "0"));
+      dailyYield = Math.max(dailyYield, parseFloat(wallet.dailyYield || "0"));
+      teamIncome = Math.max(teamIncome, parseFloat(wallet.teamIncome || "0"));
+      incentiveIncome = Math.max(incentiveIncome, parseFloat(wallet.incentiveIncome || "0"));
     }
     return {
       referralIncome: referralIncome.toFixed(8),
@@ -4444,6 +4452,7 @@ var depositRepository = new DepositRepository();
 init_walletRepository();
 init_transactionRepository();
 init_referralRepository();
+init_incomeRepository();
 init_notificationService();
 init_vipService();
 init_auditRepository();
@@ -6079,6 +6088,14 @@ var DepositService = class {
         depositId,
         amount: rewardAmountStr,
         level: relationship.referralLevel,
+        transactionId: parentTxn.id
+      });
+      await incomeRepository.createIncome({
+        userId: parentId,
+        walletId: parentWallet.id,
+        type: "REFERRAL",
+        amount: rewardAmountStr,
+        description: `Referral commission from first deposit of downline (Level ${relationship.referralLevel}).`,
         transactionId: parentTxn.id
       });
       await notificationService.createStructuredNotification(parentId, {

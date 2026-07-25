@@ -7,6 +7,7 @@ import { depositRepository } from '../../repositories/depositRepository.ts';
 import { walletRepository } from '../../repositories/walletRepository.ts';
 import { transactionRepository } from '../../repositories/transactionRepository.ts';
 import { referralRepository } from '../../repositories/referralRepository.ts';
+import { incomeRepository } from '../../repositories/incomeRepository.ts';
 import { notificationService } from '../../services/notificationService.ts';
 import { settingsRepository } from '../../repositories/settingsRepository.ts';
 import { userRepository } from '../../repositories/userRepository.ts';
@@ -241,6 +242,16 @@ export class DepositService {
         depositId,
         amount: rewardAmountStr,
         level: relationship.referralLevel,
+        transactionId: parentTxn.id,
+      });
+
+      // Record into incomeHistory table for income logs & dashboard aggregation
+      await incomeRepository.createIncome({
+        userId: parentId,
+        walletId: parentWallet.id,
+        type: 'REFERRAL',
+        amount: rewardAmountStr,
+        description: `Referral commission from first deposit of downline (Level ${relationship.referralLevel}).`,
         transactionId: parentTxn.id,
       });
 
