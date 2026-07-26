@@ -10,6 +10,8 @@ import { vipRepository } from '../repositories/vipRepository.ts';
 import { activityRepository } from '../repositories/activityRepository.ts';
 import { sessionRepository } from '../repositories/sessionRepository.ts';
 import { settingsRepository } from '../repositories/settingsRepository.ts';
+import { transactionRepository } from '../repositories/transactionRepository.ts';
+import { notificationRepository } from '../repositories/notificationRepository.ts';
 import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
 import { notificationService } from './notificationService.ts';
 import { blockchainProvider } from './blockchainProvider.ts';
@@ -48,17 +50,112 @@ export class UserService {
    */
   public async ensureUserResources(userId: string) {
     try {
+      const user = await userRepository.findById(userId);
+      const userCreatedAt = user ? new Date(user.createdAt).getTime() : Date.now();
+
+      const trialAmountSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_AMOUNT');
+      const trialDurationSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_DURATION_DAYS');
+      const trialEnabledSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_ENABLED');
+
+      const isEnabled = trialEnabledSetting ? trialEnabledSetting.value !== 'false' : true;
+      const rawAmount = trialAmountSetting ? trialAmountSetting.value : '100.00000000';
+      const durationDays = trialDurationSetting ? parseInt(trialDurationSetting.value) || 3 : 3;
+
+      const parsedAmt = parseFloat(rawAmount);
+      const trialAmount = isEnabled && !isNaN(parsedAmt) && parsedAmt > 0 ? parsedAmt.toFixed(8) : '0.00000000';
+
+      const expiryTime = userCreatedAt + durationDays * 86400 * 1000;
+      const isExpired = Date.now() > expiryTime;
+
       const existingWallet = await walletRepository.findByUserId(userId);
       if (!existingWallet) {
-        const trialAmountSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_AMOUNT');
-        const trialAmount = trialAmountSetting ? trialAmountSetting.value : '100.00000000';
+        const initialTrialBalance = isExpired ? '0.00000000' : trialAmount;
 
-        await walletRepository.createWallet({
+        const createdWallet = await walletRepository.createWallet({
           userId,
           availableBalance: '0.00000000',
           lockedBalance: '0.00000000',
-          trialBalance: trialAmount,
+          trialBalance: initialTrialBalance,
         });
+
+        if (isEnabled && parseFloat(initialTrialBalance) > 0 && createdWallet) {
+          try {
+            await transactionRepository.createTransaction({
+              userId,
+              walletId: createdWallet.id,
+              type: 'TRIAL_FUND',
+              referenceId: `TRIAL-${userId}`,
+              status: 'COMPLETED',
+              description: `Trial Fund credited automatically on registration (${initialTrialBalance} USDT for ${durationDays} days)`,
+              amount: initialTrialBalance,
+              balanceBefore: '0.00000000',
+              balanceAfter: initialTrialBalance,
+            });
+
+            await notificationRepository.createNotification({
+              userId,
+              priority: 'HIGH',
+              message: JSON.stringify({
+                title: 'Trial Fund Credited',
+                description: `Welcome! A Trial Fund of $${parseFloat(initialTrialBalance).toFixed(2)} USDT (${durationDays}-day trial) has been credited to your account.`,
+                icon: 'Sparkles',
+                type: 'trial_fund',
+              }),
+            });
+          } catch (logErr) {
+            console.error('Failed to log trial fund transaction/notification:', logErr);
+          }
+        }
+      } else {
+        const currentTrial = parseFloat(existingWallet.trialBalance || '0');
+        if (currentTrial > 0 && isExpired) {
+          // Expire trial principal
+          await walletRepository.updateBalances(existingWallet.id, { trialBalance: '0.00000000' });
+          try {
+            await transactionRepository.createTransaction({
+              userId,
+              walletId: existingWallet.id,
+              type: 'TRIAL_EXPIRY',
+              referenceId: `EXPIRY-${userId}`,
+              status: 'COMPLETED',
+              description: `Trial Fund principal expired after ${durationDays} days`,
+              amount: existingWallet.trialBalance,
+              balanceBefore: existingWallet.trialBalance,
+              balanceAfter: '0.00000000',
+            });
+          } catch (e) {}
+        } else if (currentTrial === 0 && isEnabled && !isExpired && parseFloat(trialAmount) > 0) {
+          const existingTxs = await transactionRepository.findByUserId(userId, { type: 'TRIAL_FUND' });
+          if (existingTxs.length === 0) {
+            await walletRepository.updateBalances(existingWallet.id, { trialBalance: trialAmount });
+            try {
+              await transactionRepository.createTransaction({
+                userId,
+                walletId: existingWallet.id,
+                type: 'TRIAL_FUND',
+                referenceId: `TRIAL-${userId}`,
+                status: 'COMPLETED',
+                description: `Trial Fund credited automatically (${trialAmount} USDT for ${durationDays} days)`,
+                amount: trialAmount,
+                balanceBefore: '0.00000000',
+                balanceAfter: trialAmount,
+              });
+
+              await notificationRepository.createNotification({
+                userId,
+                priority: 'HIGH',
+                message: JSON.stringify({
+                  title: 'Trial Fund Credited',
+                  description: `A Trial Fund of $${parseFloat(trialAmount).toFixed(2)} USDT (${durationDays}-day trial) has been credited to your account.`,
+                  icon: 'Sparkles',
+                  type: 'trial_fund',
+                }),
+              });
+            } catch (logErr) {
+              console.error('Failed to log trial fund transaction/notification:', logErr);
+            }
+          }
+        }
       }
 
       const existingVip = await vipRepository.findByUserId(userId);

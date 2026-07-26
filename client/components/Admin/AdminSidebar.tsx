@@ -130,9 +130,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   };
 
   const sidebarContent = (
-    <div className={`flex flex-col h-full border-r ${isDark ? 'bg-[#0a0d26]' : 'bg-white'} ${t.sep}`}>
+    <div className={`flex flex-col h-full w-full overflow-hidden border-r ${isDark ? 'bg-[#0a0d26]' : 'bg-white'} ${t.sep}`}>
       {/* Brand Logo Header */}
-      <div className={`p-5 flex items-center justify-between border-b ${t.sep} ${isCollapsed ? 'justify-center' : ''}`}>
+      <div className={`p-5 flex items-center justify-between border-b flex-shrink-0 ${t.sep} ${isCollapsed ? 'justify-center' : ''}`}>
         {!isCollapsed ? (
           <div className="flex items-center space-x-2.5 text-left">
             <div className="bg-blue-600 text-white p-1.5 rounded-lg flex items-center justify-center shadow-sm">
@@ -166,7 +166,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* Scrollable Navigation List */}
-      <nav className="flex-grow overflow-y-auto px-3 py-4 space-y-0.5 scrollbar-thin">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5 scrollbar-thin">
         {filteredMenuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -193,7 +193,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </nav>
 
       {/* Sidebar Footer block */}
-      <div className={`p-3 border-t bg-black/10 ${t.sep}`}>
+      <div className={`p-3 border-t bg-black/10 flex-shrink-0 ${t.sep}`}>
         <button
           onClick={onLogout}
           className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
@@ -214,7 +214,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     <>
       {/* Desktop Sidebar container */}
       <aside 
-        className={`hidden md:block h-screen flex-shrink-0 transition-all duration-300 ease-in-out ${
+        className={`hidden md:flex flex-col h-screen flex-shrink-0 transition-all duration-300 ease-in-out ${
           isCollapsed ? 'w-16' : 'w-56'
         }`}
       >

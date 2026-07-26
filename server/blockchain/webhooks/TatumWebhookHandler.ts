@@ -8,6 +8,7 @@ import { depositRepository } from '../../repositories/depositRepository.ts';
 import { depositService } from '../services/DepositService.ts';
 import { logger } from '../../utils/logger.ts';
 import { blockchainConfig } from '../config/blockchainConfig.ts';
+import { tokenRegistry } from '../tokens/tokenRegistry.ts';
 import { normalizeAmount } from '../utils/amountUtils.ts';
 import { activeBlockchainProvider } from '../providers/index.ts';
 
@@ -77,19 +78,13 @@ export class TatumWebhookHandler {
       incomingContractAddress = asset;
     }
 
-    if (incomingContractAddress && expectedContractAddress) {
-      const isTron = network === 'USDT_TRC20';
-      const isContractValid = isTron
-        ? incomingContractAddress === expectedContractAddress
-        : incomingContractAddress.toLowerCase() === expectedContractAddress.toLowerCase();
-
-      if (!isContractValid) {
+    if (incomingContractAddress) {
+      if (!tokenRegistry.isSupportedContract(network, incomingContractAddress)) {
         logger.warn(
-          `[TatumWebhookHandler] SECURITY REJECTION: Fake or mismatched token contract address detected! ` +
-          `txHash=${txId}, network=${network}, incomingContractAddress=${incomingContractAddress}, ` +
-          `expectedContractAddress=${expectedContractAddress}, depositAddress=${address}`
+          `[TatumWebhookHandler] SECURITY REJECTION: Fake or un-registered token contract address detected! ` +
+          `txHash=${txId}, network=${network}, incomingContractAddress=${incomingContractAddress}, depositAddress=${address}`
         );
-        return { status: 'rejected', reason: 'contract_address_mismatch' };
+        return { status: 'rejected', reason: 'contract_address_not_supported' };
       }
     }
 

@@ -4,10 +4,11 @@
  */
 
 import crypto from 'crypto';
-import { BlockchainProvider, BlockchainTransaction } from '../interfaces/BlockchainProvider.ts';
+import { BlockchainProvider, BlockchainTransaction, DiscoveredTransfer } from '../interfaces/BlockchainProvider.ts';
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 import { ProviderError } from '../errors/BlockchainError.ts';
 import { formatTokenAmount, normalizeAmount } from '../utils/amountUtils.ts';
+import { rpcProvider } from './RpcProvider.ts';
 
 export class TatumProvider implements BlockchainProvider {
   private readonly apiKey: string;
@@ -589,6 +590,14 @@ export class TatumProvider implements BlockchainProvider {
       console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, safeMsg);
       throw new Error(`Tatum webhook subscription failed: ${safeMsg}`);
     }
+  }
+
+  async getCurrentBlockNumber(network: string): Promise<number> {
+    return rpcProvider.getCurrentBlockNumber(network);
+  }
+
+  async getTransferEvents(network: string, fromBlock: number, toBlock: number): Promise<DiscoveredTransfer[]> {
+    return rpcProvider.getTransferEvents(network, fromBlock, toBlock);
   }
 }
 export default TatumProvider;

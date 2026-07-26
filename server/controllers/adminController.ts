@@ -6,6 +6,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/auth.ts';
 import { adminService } from '../services/adminService.ts';
+import { settingsService } from '../services/settingsService.ts';
 import { supportService } from '../services/supportService.ts';
 import { userRepository } from '../repositories/userRepository.ts';
 import { notificationRepository } from '../repositories/notificationRepository.ts';
@@ -778,6 +779,40 @@ export class AdminController {
       });
 
       return sendSuccess(res, updated[0], 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Retrieve trial fund configuration
+   */
+  async getTrialFundConfig(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const config = await settingsService.getTrialFundConfig();
+      return sendSuccess(res, config, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Save / update trial fund configuration
+   */
+  async updateTrialFundConfig(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { amount, durationDays, isEnabled } = req.body;
+      const updated = await settingsService.updateTrialFundConfig(
+        { amount, durationDays, isEnabled },
+        req.user.uid
+      );
+      return sendSuccess(res, updated, 200);
     } catch (error) {
       next(error);
     }

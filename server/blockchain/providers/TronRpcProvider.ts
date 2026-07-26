@@ -6,8 +6,9 @@
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 import { keyManager } from '../keys/KeyManager.ts';
 import { rpcManager } from '../rpc/RpcManager.ts';
-import { hdWalletEngine, decodeTronBase58Check } from '../hd/HdWalletEngine.ts';
-import type { BlockchainProvider, BlockchainTransaction } from '../interfaces/BlockchainProvider.ts';
+import { tokenRegistry } from '../tokens/tokenRegistry.ts';
+import { hdWalletEngine, decodeTronBase58Check, encodeTronBase58Check } from '../hd/HdWalletEngine.ts';
+import type { BlockchainProvider, BlockchainTransaction, DiscoveredTransfer } from '../interfaces/BlockchainProvider.ts';
 import { normalizeAmount } from '../utils/amountUtils.ts';
 
 export class TronRpcProvider implements BlockchainProvider {
@@ -21,7 +22,12 @@ export class TronRpcProvider implements BlockchainProvider {
   /**
    * Helper for HTTP GET / POST to Tron JSON-RPC / HTTP Nodes
    */
-  private async tronFetch<T>(rpcUrl: string, endpoint: string, body?: any): Promise<T> {
+  private async tronFetch<T>(
+    rpcUrl: string,
+    endpoint: string,
+    body?: any,
+    ignore404 = false
+  ): Promise<T | null> {
     const url = `${rpcUrl.replace(/\/$/, '')}${endpoint}`;
     const options: RequestInit = {
       method: body ? 'POST' : 'GET',
@@ -32,10 +38,13 @@ export class TronRpcProvider implements BlockchainProvider {
     };
 
     const response = await fetch(url, options);
+    if (response.status === 404 && ignore404) {
+      return null;
+    }
     if (!response.ok) {
       throw new Error(`Tron API HTTP error ${response.status}: ${await response.text()}`);
     }
-    return response.json() as Promise<T>;
+    return (await response.json()) as T;
   }
 
   /**
@@ -69,7 +78,11 @@ export class TronRpcProvider implements BlockchainProvider {
         return '0.00000000';
       });
     } catch (err: any) {
-      console.error(`[TronRpcProvider] Failed to get TRC20 balance for ${address}:`, err.message);
+      rpcManager.logThrottled(
+        `tron_bal_err_${address}`,
+        'error',
+        `[TronRpcProvider] Failed to get TRC20 balance for ${address}: ${err.message}`
+      );
       return '0.00000000';
     }
   }
@@ -91,7 +104,11 @@ export class TronRpcProvider implements BlockchainProvider {
         return (sun / 1000000).toFixed(6);
       });
     } catch (err: any) {
-      console.error(`[TronRpcProvider] Failed to get native TRX balance for ${address}:`, err.message);
+      rpcManager.logThrottled(
+        `tron_native_bal_err_${address}`,
+        'error',
+        `[TronRpcProvider] Failed to get native TRX balance for ${address}: ${err.message}`
+      );
       return '0.00000000';
     }
   }
@@ -213,6 +230,149 @@ export class TronRpcProvider implements BlockchainProvider {
     } catch (err: any) {
       console.error(`[TronRpcProvider] Failed to fetch transaction ${txHash} on ${network}:`, err.message);
       return null;
+    }
+  }
+
+  /**
+   * Get current block number on TRON chain
+   */
+  async getCurrentBlockNumber(network: string): Promise<number> {
+    try {
+      return await rpcManager.executeRpc(network, async (rpcUrl) => {
+        const res = await this.tronFetch<any>(rpcUrl, '/wallet/getnowblock');
+        return res?.block_header?.raw_data?.number || 0;
+      });
+    } catch (err: any) {
+      console.error(`[TronRpcProvider] Failed to get current block number for ${network}:`, err.message);
+      return 0;
+    }
+  }
+
+  /**
+   * Scan block range for TRC20 Transfer events
+   */
+  async getTransferEvents(
+    network: string,
+    fromBlock: number,
+    toBlock: number
+  ): Promise<DiscoveredTransfer[]> {
+    const netConfig = blockchainConfig.networks[network];
+    if (!netConfig || !netConfig.contractAddress) return [];
+    if (fromBlock > toBlock) return [];
+
+    const decimals = netConfig.decimals ?? 6;
+    const results: DiscoveredTransfer[] = [];
+
+    try {
+      return await rpcManager.executeRpc(network, async (rpcUrl) => {
+        // 1. Try TronGrid / HTTP event API first
+        try {
+          const eventsRes = await this.tronFetch<any>(
+            rpcUrl,
+            `/v1/contracts/${netConfig.contractAddress}/events?event_name=Transfer&limit=200`,
+            undefined,
+            true // ignore404 on non-TronGrid endpoints
+          );
+
+          if (eventsRes && Array.isArray(eventsRes.data)) {
+            for (const ev of eventsRes.data) {
+              const blockNum = ev.block_number || ev.blockNumber;
+              if (blockNum && blockNum >= fromBlock && blockNum <= toBlock) {
+                const txHash = ev.transaction_id || ev.transactionId || ev.transaction_hash;
+                const rawVal = ev.result?.value || ev.result?.['2'] || '0';
+                let rawTo = ev.result?.to || ev.result?.['1'] || ev.result?.transferToAddress;
+                let rawFrom = ev.result?.from || ev.result?.['0'] || ev.result?.transferFromAddress;
+
+                if (rawTo) {
+                  if (rawTo.startsWith('41')) {
+                    rawTo = encodeTronBase58Check(rawTo);
+                  } else if (rawTo.startsWith('0x41')) {
+                    rawTo = encodeTronBase58Check(rawTo.slice(2));
+                  } else if (rawTo.startsWith('0x') && rawTo.length === 42) {
+                    rawTo = encodeTronBase58Check('41' + rawTo.slice(2));
+                  }
+                }
+
+                if (rawFrom) {
+                  if (rawFrom.startsWith('41')) {
+                    rawFrom = encodeTronBase58Check(rawFrom);
+                  } else if (rawFrom.startsWith('0x41')) {
+                    rawFrom = encodeTronBase58Check(rawFrom.slice(2));
+                  } else if (rawFrom.startsWith('0x') && rawFrom.length === 42) {
+                    rawFrom = encodeTronBase58Check('41' + rawFrom.slice(2));
+                  }
+                }
+
+                const amount = normalizeAmount(rawVal.toString(), decimals);
+                if (txHash && rawTo) {
+                  const activeToken = tokenRegistry.getTokensForNetwork(network)[0];
+                  results.push({
+                    txHash,
+                    amount,
+                    sender: rawFrom || '',
+                    receiver: rawTo,
+                    blockNumber: blockNum,
+                    network,
+                    contractAddress: activeToken?.contractAddress,
+                    tokenId: activeToken?.id,
+                  });
+                }
+              }
+            }
+            if (results.length > 0) return results;
+          }
+        } catch {
+          // Event API call failed or not available on node, fall through to block scanning
+        }
+
+        // 2. Fallback block scanning via /wallet/getblockbynum
+        const hexContract = decodeTronBase58Check(netConfig.contractAddress);
+        const maxBlockToScan = Math.min(toBlock, fromBlock + 20); // Limit block-by-block RPC scan range
+        for (let b = fromBlock; b <= maxBlockToScan; b++) {
+          try {
+            const block = await this.tronFetch<any>(rpcUrl, '/wallet/getblockbynum', { num: b });
+            if (block && Array.isArray(block.transactions)) {
+              for (const tx of block.transactions) {
+                const txHash = tx.txID;
+                const contractCalls = tx.raw_data?.contract;
+                if (Array.isArray(contractCalls)) {
+                  for (const call of contractCalls) {
+                    if (call.type === 'TriggerSmartContract' && call.parameter?.value) {
+                      const val = call.parameter.value;
+                      if (hexContract && val.contract_address?.toLowerCase() === hexContract.toLowerCase()) {
+                        const dataHex = val.data || '';
+                        if (dataHex.startsWith('a9059cbb')) { // transfer(address,uint256)
+                          const toHex = '41' + dataHex.slice(32, 72).slice(-40);
+                          const receiverBs58 = encodeTronBase58Check(toHex);
+                          const rawVal = BigInt(`0x${dataHex.slice(72, 136) || '0'}`).toString();
+                          const amount = normalizeAmount(rawVal, decimals);
+                          const fromBs58 = val.owner_address ? encodeTronBase58Check(val.owner_address) : '';
+
+                          results.push({
+                            txHash,
+                            amount,
+                            sender: fromBs58,
+                            receiver: receiverBs58,
+                            blockNumber: b,
+                            network,
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch {
+            // Ignore individual block fetch error
+          }
+        }
+
+        return results;
+      });
+    } catch (err: any) {
+      console.error(`[TronRpcProvider] Error scanning TRON transfer events (${fromBlock}-${toBlock}):`, err.message);
+      return [];
     }
   }
 }

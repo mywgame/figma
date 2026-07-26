@@ -99,6 +99,31 @@ export class SettingsRepository {
     }
   }
 
+  /**
+   * Helper to set system setting safely, creating or updating
+   */
+  async setSystemSetting(key: string, value: string, updatedBy = 'SYSTEM', description?: string) {
+    try {
+      const existing = await this.findSystemSettingByKey(key);
+      if (existing) {
+        return await this.updateSystemSetting(key, value, updatedBy);
+      } else {
+        const all = await this.findAllSystemSettings();
+        const nextId = all.reduce((max, s) => Math.max(max, s.id), 0) + 1;
+        return await this.upsertSystemSetting({
+          id: nextId,
+          key,
+          value,
+          description: description || `Configuration for ${key}`,
+          updatedBy,
+        });
+      }
+    } catch (error) {
+      console.error(`Database set (setSystemSetting) failed for key ${key}:`, error);
+      throw new Error(`Failed to set system setting ${key}`);
+    }
+  }
+
   /* =========================================================================
    * USER SETTINGS (PERSONALIZED USER ACCOUNT PREFERENCES)
    * ========================================================================= */

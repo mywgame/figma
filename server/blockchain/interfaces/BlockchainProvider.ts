@@ -10,6 +10,18 @@ export interface BlockchainTransaction {
   receiver: string;
   confirmations: number;
   isSuccessful: boolean;
+  contractAddress?: string;
+}
+
+export interface DiscoveredTransfer {
+  txHash: string;
+  amount: string;
+  sender: string;
+  receiver: string;
+  blockNumber: number;
+  network: string;
+  contractAddress?: string;
+  tokenId?: string;
 }
 
 export interface BlockchainProvider {
@@ -21,4 +33,6 @@ export interface BlockchainProvider {
   validateAddress(network: string, address: string): Promise<boolean>;
   getTransaction(network: string, txHash: string): Promise<BlockchainTransaction | null>;
   subscribeAddress?(network: string, address: string, webhookUrl: string): Promise<boolean>;
+  getCurrentBlockNumber?(network: string): Promise<number>;
+  getTransferEvents?(network: string, fromBlock: number, toBlock: number): Promise<DiscoveredTransfer[]>;
 }

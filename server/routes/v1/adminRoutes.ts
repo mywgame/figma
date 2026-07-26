@@ -319,4 +319,26 @@ router.post(
   adminController.updateSweepModeConfig
 );
 
+/**
+ * @route GET /api/v1/admin/trial-fund
+ * @desc Get platform trial fund configuration
+ */
+router.get(
+  '/trial-fund',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getTrialFundConfig
+);
+
+/**
+ * @route POST /api/v1/admin/trial-fund
+ * @desc Update platform trial fund configuration
+ */
+router.post(
+  '/trial-fund',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateTrialFundConfig
+);
+
 export default router;

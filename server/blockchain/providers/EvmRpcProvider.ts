@@ -7,7 +7,8 @@ import { ethers } from 'ethers';
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 import { keyManager } from '../keys/KeyManager.ts';
 import { rpcManager } from '../rpc/RpcManager.ts';
-import type { BlockchainProvider, BlockchainTransaction } from '../interfaces/BlockchainProvider.ts';
+import { tokenRegistry } from '../tokens/tokenRegistry.ts';
+import type { BlockchainProvider, BlockchainTransaction, DiscoveredTransfer } from '../interfaces/BlockchainProvider.ts';
 import { normalizeAmount, denormalizeAmount } from '../utils/amountUtils.ts';
 
 const ERC20_ABI = [
@@ -17,6 +18,51 @@ const ERC20_ABI = [
 ];
 
 export class EvmRpcProvider implements BlockchainProvider {
+  private dynamicChunkSizes: Record<string, number> = {};
+
+  /**
+   * Get dynamic block chunk size for a network, starting with configured default
+   */
+  public getChunkSize(network: string): number {
+    if (!this.dynamicChunkSizes[network]) {
+      const configVal = blockchainConfig.networks[network]?.blockChunkSize;
+      this.dynamicChunkSizes[network] = configVal && configVal > 0 ? configVal : 100;
+    }
+    return this.dynamicChunkSizes[network];
+  }
+
+  private handleChunkSizeError(network: string, err: any) {
+    const current = this.getChunkSize(network);
+    const msg = (err?.message || '').toLowerCase();
+    if (
+      msg.includes('limit') ||
+      msg.includes('exceeded') ||
+      msg.includes('too many') ||
+      msg.includes('-32005') ||
+      msg.includes('-32000') ||
+      msg.includes('timeout')
+    ) {
+      const minChunk = 10;
+      const newChunk = Math.max(minChunk, Math.floor(current / 2));
+      if (newChunk !== current) {
+        this.dynamicChunkSizes[network] = newChunk;
+        rpcManager.logThrottled(
+          `chunk_reduce_${network}`,
+          'warn',
+          `[EvmRpcProvider] RPC log limit hit on ${network}. Reduced dynamic block chunk size to ${newChunk}.`
+        );
+      }
+    }
+  }
+
+  private handleChunkSizeSuccess(network: string) {
+    const current = this.getChunkSize(network);
+    const maxConfig = blockchainConfig.networks[network]?.blockChunkSize || 100;
+    if (current < maxConfig) {
+      this.dynamicChunkSizes[network] = Math.min(maxConfig, current + 10);
+    }
+  }
+
   /**
    * Derive EVM deposit address using KeyManager / HD engine
    */
@@ -33,13 +79,17 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getEthersProvider(network, rpcUrl);
         const contract = new ethers.Contract(netConfig.contractAddress, ERC20_ABI, provider);
         const rawBal: bigint = await contract.balanceOf(address);
         return normalizeAmount(rawBal.toString(), netConfig.decimals);
       });
     } catch (err: any) {
-      console.error(`[EvmRpcProvider] Failed to get token balance for ${address} on ${network}:`, err.message);
+      rpcManager.logThrottled(
+        `balance_err_${network}_${address}`,
+        'error',
+        `[EvmRpcProvider] Failed to get token balance for ${address} on ${network}: ${err.message}`
+      );
       return '0.00000000';
     }
   }
@@ -50,12 +100,16 @@ export class EvmRpcProvider implements BlockchainProvider {
   async getNativeBalance(network: string, address: string): Promise<string> {
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getEthersProvider(network, rpcUrl);
         const rawBal = await provider.getBalance(address);
         return ethers.formatEther(rawBal);
       });
     } catch (err: any) {
-      console.error(`[EvmRpcProvider] Failed to get native balance for ${address} on ${network}:`, err.message);
+      rpcManager.logThrottled(
+        `native_bal_err_${network}_${address}`,
+        'error',
+        `[EvmRpcProvider] Failed to get native balance for ${address} on ${network}: ${err.message}`
+      );
       return '0.00000000';
     }
   }
@@ -76,7 +130,7 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getEthersProvider(network, rpcUrl);
         const wallet = new ethers.Wallet(hotPrivateKey, provider);
         const tx = await wallet.sendTransaction({
           to: toAddress,
@@ -85,7 +139,11 @@ export class EvmRpcProvider implements BlockchainProvider {
         return tx.hash;
       });
     } catch (err: any) {
-      console.error(`[EvmRpcProvider] Native gas funding failed on ${network} to ${toAddress}:`, err.message);
+      rpcManager.logThrottled(
+        `fund_gas_err_${network}`,
+        'error',
+        `[EvmRpcProvider] Native gas funding failed on ${network} to ${toAddress}: ${err.message}`
+      );
       throw err;
     }
   }
@@ -110,7 +168,7 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getEthersProvider(network, rpcUrl);
         const wallet = new ethers.Wallet(signerKey, provider);
 
         if (netConfig?.contractAddress) {
@@ -127,7 +185,11 @@ export class EvmRpcProvider implements BlockchainProvider {
         }
       });
     } catch (err: any) {
-      console.error(`[EvmRpcProvider] Broadcast transaction failed on ${network}:`, err.message);
+      rpcManager.logThrottled(
+        `broadcast_err_${network}`,
+        'error',
+        `[EvmRpcProvider] Broadcast transaction failed on ${network}: ${err.message}`
+      );
       throw err;
     }
   }
@@ -148,7 +210,7 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getEthersProvider(network, rpcUrl);
         const [tx, receipt, currentBlock] = await Promise.all([
           provider.getTransaction(txHash),
           provider.getTransactionReceipt(txHash),
@@ -164,17 +226,20 @@ export class EvmRpcProvider implements BlockchainProvider {
         let amount = '0.00000000';
         let sender = tx.from;
         let receiver = tx.to || '';
+        let detectedContract: string | undefined;
 
         // Interface for parsing ERC20 transfer log
         const iface = new ethers.Interface(ERC20_ABI);
         for (const log of receipt.logs) {
-          if (netConfig?.contractAddress && log.address.toLowerCase() === netConfig.contractAddress.toLowerCase()) {
+          const matchedToken = tokenRegistry.findTokenByContract(network, log.address);
+          if (matchedToken) {
             try {
               const parsedLog = iface.parseLog({ topics: [...log.topics], data: log.data });
               if (parsedLog && parsedLog.name === 'Transfer') {
                 sender = parsedLog.args[0];
                 receiver = parsedLog.args[1];
-                amount = normalizeAmount(parsedLog.args[2].toString(), decimals);
+                amount = normalizeAmount(parsedLog.args[2].toString(), matchedToken.decimals);
+                detectedContract = matchedToken.contractAddress;
                 break;
               }
             } catch {
@@ -194,11 +259,134 @@ export class EvmRpcProvider implements BlockchainProvider {
           receiver,
           confirmations,
           isSuccessful,
+          contractAddress: detectedContract,
         };
       });
     } catch (err: any) {
-      console.error(`[EvmRpcProvider] Failed to fetch transaction ${txHash} on ${network}:`, err.message);
+      rpcManager.logThrottled(
+        `get_tx_err_${network}_${txHash}`,
+        'error',
+        `[EvmRpcProvider] Failed to fetch transaction ${txHash} on ${network}: ${err.message}`
+      );
       return null;
+    }
+  }
+
+  /**
+   * Get current block number on EVM chain
+   */
+  async getCurrentBlockNumber(network: string): Promise<number> {
+    try {
+      return await rpcManager.executeRpc(network, async (rpcUrl) => {
+        const provider = rpcManager.getEthersProvider(network, rpcUrl);
+        return await provider.getBlockNumber();
+      });
+    } catch (err: any) {
+      rpcManager.logThrottled(
+        `get_block_err_${network}`,
+        'error',
+        `[EvmRpcProvider] Failed to get current block number for ${network}: ${err.message}`
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Scan range of blocks for ERC20 Transfer events
+   */
+  async getTransferEvents(
+    network: string,
+    fromBlock: number,
+    toBlock: number
+  ): Promise<DiscoveredTransfer[]> {
+    const activeTokens = tokenRegistry.getTokensForNetwork(network);
+    if (!activeTokens || activeTokens.length === 0) return [];
+    if (fromBlock > toBlock) return [];
+
+    // Deduplicate contract addresses and normalize before building eth_getLogs filter
+    const rawAddresses = activeTokens.map((t) => t.contractAddress);
+    const uniqueAddresses = Array.from(new Set(rawAddresses.map((a) => a.toLowerCase()))).map(
+      (lower) => rawAddresses.find((a) => a.toLowerCase() === lower) || lower
+    );
+    const addressFilter = uniqueAddresses.length === 1 ? uniqueAddresses[0] : uniqueAddresses;
+
+    const transferTopic = ethers.id('Transfer(address,address,uint256)');
+
+    try {
+      return await rpcManager.executeRpc(network, async (rpcUrl) => {
+        const provider = rpcManager.getEthersProvider(network, rpcUrl);
+        
+        try {
+          const logs = await provider.getLogs({
+            address: addressFilter,
+            topics: [transferTopic],
+            fromBlock,
+            toBlock,
+          });
+
+          this.handleChunkSizeSuccess(network);
+
+          const iface = new ethers.Interface(ERC20_ABI);
+          const results: DiscoveredTransfer[] = [];
+
+          for (const log of logs) {
+            const matchedToken = tokenRegistry.findTokenByContract(network, log.address);
+            if (!matchedToken) continue; // Ignore unknown token contracts
+
+            const decimals = matchedToken.decimals;
+
+            try {
+              const parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
+              if (parsed && parsed.name === 'Transfer') {
+                const sender = parsed.args[0];
+                const receiver = parsed.args[1];
+                const rawVal = parsed.args[2].toString();
+                const amount = normalizeAmount(rawVal, decimals);
+
+                results.push({
+                  txHash: log.transactionHash,
+                  amount,
+                  sender,
+                  receiver,
+                  blockNumber: log.blockNumber,
+                  network,
+                  contractAddress: matchedToken.contractAddress,
+                  tokenId: matchedToken.id,
+                });
+              }
+            } catch {
+              // Fallback topic extraction if log parse fails
+              if (log.topics.length >= 3) {
+                const sender = '0x' + log.topics[1].slice(-40);
+                const receiver = '0x' + log.topics[2].slice(-40);
+                const amount = normalizeAmount(log.data, decimals);
+                results.push({
+                  txHash: log.transactionHash,
+                  amount,
+                  sender,
+                  receiver,
+                  blockNumber: log.blockNumber,
+                  network,
+                  contractAddress: matchedToken.contractAddress,
+                  tokenId: matchedToken.id,
+                });
+              }
+            }
+          }
+
+          return results;
+        } catch (err: any) {
+          this.handleChunkSizeError(network, err);
+          throw err;
+        }
+      });
+    } catch (err: any) {
+      rpcManager.logThrottled(
+        `get_logs_err_${network}`,
+        'error',
+        `[EvmRpcProvider] Failed to fetch logs for ${network} (${fromBlock}-${toBlock}): ${err.message}`
+      );
+      return [];
     }
   }
 }

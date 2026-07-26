@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ethers } from 'ethers';
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 
 export interface RpcEndpoint {
@@ -14,6 +15,8 @@ export interface RpcEndpoint {
 
 export class RpcManager {
   private endpoints: Record<string, RpcEndpoint[]> = {};
+  private ethersProviderCache: Map<string, ethers.JsonRpcProvider> = new Map();
+  private logCooldowns: Map<string, number> = new Map();
 
   constructor() {
     this.initializeEndpoints();
@@ -34,7 +37,7 @@ export class RpcManager {
         ]
       : [
           'https://bsc-dataseed.binance.org',
-          'https://bsc-mainnet.publicnode.com',
+          'https://bsc-dataseed1.defibit.io',
           'https://1rpc.io/bnb',
         ];
 
@@ -60,9 +63,9 @@ export class RpcManager {
           'https://polygon-amoy.publicnode.com',
         ]
       : [
-          'https://polygon-rpc.com',
-          'https://polygon-bor.publicnode.com',
+          'https://polygon.drpc.org',
           'https://1rpc.io/matic',
+          'https://polygon-bor.publicnode.com',
         ];
 
     const polygonUrls = [
@@ -88,6 +91,7 @@ export class RpcManager {
       : [
           'https://api.trongrid.io',
           'https://tron.drpc.org',
+          'https://api.tronstack.io',
         ];
 
     const tronUrls = [
@@ -100,6 +104,56 @@ export class RpcManager {
       url,
       weight: 100 - i * 10,
     }));
+  }
+
+  /**
+   * Get or create a cached ethers JsonRpcProvider instance configured with staticNetwork
+   * to eliminate "failed to detect network" warnings and avoid creating transient providers.
+   */
+  public getEthersProvider(network: string, rpcUrl: string): ethers.JsonRpcProvider {
+    const cacheKey = `${network}:${rpcUrl}`;
+    if (!this.ethersProviderCache.has(cacheKey)) {
+      const isTestnet = blockchainConfig.isTestnet;
+      const chainIdMap: Record<string, number> = {
+        USDT_BEP20: isTestnet ? 97 : 56,
+        USDT_POLYGON: isTestnet ? 80002 : 137,
+      };
+
+      const chainId = chainIdMap[network];
+      let provider: ethers.JsonRpcProvider;
+
+      if (chainId) {
+        const netObj = ethers.Network.from(chainId);
+        provider = new ethers.JsonRpcProvider(rpcUrl, netObj, {
+          staticNetwork: netObj,
+          batchMaxCount: 1,
+        });
+      } else {
+        provider = new ethers.JsonRpcProvider(rpcUrl);
+      }
+
+      this.ethersProviderCache.set(cacheKey, provider);
+    }
+    return this.ethersProviderCache.get(cacheKey)!;
+  }
+
+  /**
+   * Log messages with rate limiting to eliminate terminal spam
+   */
+  public logThrottled(
+    key: string,
+    level: 'warn' | 'error' | 'info',
+    message: string,
+    cooldownMs = 60000
+  ) {
+    const now = Date.now();
+    const lastTime = this.logCooldowns.get(key) || 0;
+    if (now - lastTime > cooldownMs) {
+      this.logCooldowns.set(key, now);
+      if (level === 'error') console.error(message);
+      else if (level === 'warn') console.warn(message);
+      else console.log(message);
+    }
   }
 
   /**
@@ -135,8 +189,47 @@ export class RpcManager {
     if (target) {
       target.isFailing = true;
       target.lastFailureTime = Date.now();
-      console.warn(`[RpcManager] Marked RPC endpoint as failing for ${network}: ${url}`);
+      this.logThrottled(
+        `failing_${network}_${url}`,
+        'warn',
+        `[RpcManager] Marked RPC endpoint as failing for ${network}: ${url}`
+      );
     }
+  }
+
+  /**
+   * Check if an error is a non-retryable application/configuration error
+   */
+  private isNonRetryableError(err: any): boolean {
+    if (!err) return false;
+    const code = err.code;
+    const msg = (err.message || '').toLowerCase();
+
+    const nonRetryableCodes = [
+      'INVALID_ARGUMENT',
+      'NUMERIC_FAULT',
+      'UNSUPPORTED_OPERATION',
+      'BUFFER_OVERRUN',
+      'MISSING_ARGUMENT',
+      'UNEXPECTED_ARGUMENT',
+      'INVALID_OPTION',
+    ];
+
+    if (code && nonRetryableCodes.includes(code)) {
+      return true;
+    }
+
+    if (
+      msg.includes('bad address checksum') ||
+      msg.includes('invalid address') ||
+      msg.includes('invalid hex') ||
+      msg.includes('invalid argument') ||
+      msg.includes('abi encoding')
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -154,9 +247,21 @@ export class RpcManager {
       try {
         return await executor(url);
       } catch (err: any) {
+        if (this.isNonRetryableError(err)) {
+          this.logThrottled(
+            `non_retryable_${network}`,
+            'error',
+            `[RpcManager] Non-retryable error on ${url} for ${network}: ${err.message}`
+          );
+          throw err;
+        }
         lastError = err;
         this.markFailing(network, url);
-        console.warn(`[RpcManager] RPC call failed on ${url} for ${network}: ${err.message}. Retrying with next endpoint...`);
+        this.logThrottled(
+          `retry_${network}_${url}`,
+          'warn',
+          `[RpcManager] RPC transport call failed on ${url} for ${network}: ${err.message}. Retrying with next endpoint...`
+        );
       }
     }
 

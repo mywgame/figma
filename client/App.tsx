@@ -538,7 +538,7 @@ function MainAppContent() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="min-h-screen bg-navy-950 flex flex-col"
+          className="h-screen w-screen overflow-hidden bg-navy-950 flex flex-col"
         >
           <EnterpriseAdminDashboard onBackToLanding={() => setCurrentView('landing')} />
         </motion.div>
@@ -654,21 +654,6 @@ function MainAppContent() {
         initialMode={authModalMode} 
         initialReferralCode={referralCodeForAuth}
       />
-
-      {/* 5. Floating Quick-Link to original sync dashboard when authenticated */}
-      {user && (
-        <div className="fixed bottom-6 right-6 z-30">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className="flex items-center space-x-2 px-5 py-3.5 bg-gray-950 text-white rounded-full text-xs font-bold hover:bg-gray-800 shadow-xl border border-gray-800 transition-all cursor-pointer transform hover:scale-105 active:scale-95"
-            title="Open Developer Ledger Dashboard"
-            id="floating-dashboard-shortcut"
-          >
-            <LayoutDashboard className="w-4 h-4 text-blue-400" />
-            <span>Developer Core Dashboard</span>
-          </button>
-        </div>
-      )}
 
     </motion.div>
   </>

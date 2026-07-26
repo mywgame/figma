@@ -382,6 +382,24 @@ class ApiService {
     return this.patch<any>(`/admin/support/tickets/${ticketId}`, payload);
   }
 
+  /**
+   * Admin: Fetch trial fund configuration
+   */
+  async getAdminTrialFundConfig(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/trial-fund');
+  }
+
+  /**
+   * Admin: Update trial fund configuration
+   */
+  async updateAdminTrialFundConfig(payload: {
+    amount: string;
+    durationDays: string | number;
+    isEnabled: boolean;
+  }): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/trial-fund', payload);
+  }
+
   /* =========================================================================
    * NOTIFICATIONS ENDPOINTS
    * ========================================================================= */
