@@ -13,6 +13,7 @@ import { errorHandler } from './server/middlewares/errorHandler.ts';
 import { helmetMiddleware, corsMiddleware, rateLimiter } from './server/middlewares/security.ts';
 import apiRoutes from './server/routes/index.ts';
 import { transactionMonitor } from './server/services/transactionMonitor.ts';
+import { rpcDepositScanner } from './server/blockchain/services/RpcDepositScanner.ts';
 import { treasuryService } from './server/blockchain/services/TreasuryService.ts';
 import { sweepQueueProcessor } from './server/blockchain/services/SweepQueueProcessor.ts';
 
@@ -73,8 +74,9 @@ async function bootstrap() {
   // 6. Bind and Listen
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server successfully bound to host 0.0.0.0, listening on port ${PORT}`);
-    // Start background transaction check routine
+    // Start background background routines
     transactionMonitor.start();
+    rpcDepositScanner.start();
     sweepQueueProcessor.start();
   });
 
@@ -82,6 +84,7 @@ async function bootstrap() {
   const shutdown = () => {
     logger.info('Received shutdown signal. Commencing graceful termination...');
     transactionMonitor.stop();
+    rpcDepositScanner.stop();
     sweepQueueProcessor.stop();
     server.close(() => {
       logger.info('Express server successfully closed. Process exiting.');

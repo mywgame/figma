@@ -14,6 +14,7 @@ export interface NetworkConfig {
   coldAddress?: string;
   chainName: string;
   decimals: number;
+  confirmationsRequired: number;
 }
 
 export type BlockchainEnvironment = 'production' | 'sandbox' | 'development';
@@ -58,6 +59,9 @@ export const blockchainConfig = {
   apiKey: apiKey,
   isConfigured: !!apiKey,
   isTestnet: isTestnet,
+  monitoringIntervalMs: parseInt(process.env.MONITORING_INTERVAL_MS || (isTestnet ? '30000' : '120000'), 10),
+  blockChunkSize: parseInt(process.env.BLOCK_CHUNK_SIZE || '50', 10),
+  initialReplayBlocks: parseInt(process.env.INITIAL_REPLAY_BLOCKS || '10', 10),
 
   networks: {
     USDT_BEP20: {
@@ -78,6 +82,10 @@ export const blockchainConfig = {
         '',
       chainName: 'BSC',
       decimals: parseInt(process.env.USDT_BEP20_DECIMALS || process.env.USDT_DECIMALS || '18', 10),
+      confirmationsRequired: parseInt(
+        process.env.USDT_BEP20_CONFIRMATIONS || (isTestnet ? '1' : '6'),
+        10
+      ),
     } as NetworkConfig,
 
     USDT_POLYGON: {
@@ -91,6 +99,10 @@ export const blockchainConfig = {
       hotAddress: process.env.USDT_POLYGON_HOT_ADDRESS || '',
       chainName: 'POLYGON',
       decimals: parseInt(process.env.USDT_POLYGON_DECIMALS || '6', 10),
+      confirmationsRequired: parseInt(
+        process.env.USDT_POLYGON_CONFIRMATIONS || (isTestnet ? '1' : '12'),
+        10
+      ),
     } as NetworkConfig,
 
     USDT_TRC20: {
@@ -104,6 +116,10 @@ export const blockchainConfig = {
       hotAddress: process.env.USDT_TRC20_HOT_ADDRESS || '',
       chainName: 'TRON',
       decimals: parseInt(process.env.USDT_TRC20_DECIMALS || '6', 10),
+      confirmationsRequired: parseInt(
+        process.env.USDT_TRC20_CONFIRMATIONS || (isTestnet ? '1' : '19'),
+        10
+      ),
     } as NetworkConfig,
   } as Record<string, NetworkConfig>,
 };

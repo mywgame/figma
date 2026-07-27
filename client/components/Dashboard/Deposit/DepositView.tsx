@@ -18,6 +18,7 @@ interface DepositViewProps {
   showToast: (msg: string) => void;
   onBack: () => void;
   onRefresh?: () => Promise<void>;
+  onDepositSuccess?: (info: { amount: string; network: string }) => void;
 }
 
 export const DepositView: React.FC<DepositViewProps> = ({
@@ -25,6 +26,7 @@ export const DepositView: React.FC<DepositViewProps> = ({
   showToast,
   onBack,
   onRefresh,
+  onDepositSuccess,
 }) => {
   const { t } = useTheme();
   const { token } = useAuth();
@@ -161,6 +163,15 @@ export const DepositView: React.FC<DepositViewProps> = ({
       setVerifySuccess('Deposit verified successfully! Your account balance has been updated.');
       setTxHash('');
       showToast('Deposit successfully verified!');
+      
+      const depositObj = data.data?.deposit || {};
+      const verifiedAmount = depositObj.amount || '0';
+      const verifiedNetwork = depositObj.network || depositNetwork;
+
+      if (onDepositSuccess) {
+        onDepositSuccess({ amount: verifiedAmount, network: verifiedNetwork });
+      }
+
       fetchDepositHistory();
       if (onRefresh) {
         await onRefresh();

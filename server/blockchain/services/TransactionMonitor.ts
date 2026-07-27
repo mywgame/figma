@@ -9,6 +9,7 @@ import { notificationService } from '../../services/notificationService.ts';
 import { logger } from '../../utils/logger.ts';
 import { BlockchainProvider } from '../interfaces/BlockchainProvider.ts';
 import { activeBlockchainProvider } from '../providers/index.ts';
+import { blockchainConfig } from '../config/blockchainConfig.ts';
 
 export class TransactionMonitor {
   private timer: NodeJS.Timeout | null = null;
@@ -17,16 +18,15 @@ export class TransactionMonitor {
   // Track consecutive non-existence of transaction hash on-chain to save API credits
   private queryAttempts: Record<string, number> = {};
   
-  // Max times we poll Tatum for a txHash before assuming it's an invalid or fake hash
-  private readonly MAX_ATTEMPTS = 30; // 30 checks * 30s interval = 15 minutes
-  private readonly CONFIRMATIONS_REQUIRED = 6; // Required on-chain confirmations
+  // Max times we poll for a txHash before assuming it's an invalid or fake hash
+  private readonly MAX_ATTEMPTS = 30;
 
   constructor(private readonly provider: BlockchainProvider = activeBlockchainProvider) {}
 
   /**
    * Start background transaction monitor loop
    */
-  start(intervalMs = 120000) {
+  start(intervalMs: number = blockchainConfig.monitoringIntervalMs) {
     if (this.timer) {
       logger.info('Transaction monitor is already running.');
       return;
@@ -78,7 +78,6 @@ export class TransactionMonitor {
       }
 
       if (withTxHash.length === 0) {
-        this.isChecking = false;
         return;
       }
 
@@ -99,12 +98,10 @@ export class TransactionMonitor {
             if (attempts >= this.MAX_ATTEMPTS) {
               logger.warn(`Deposit ${depositId} with hash ${txHash} has timed out on-chain after ${attempts} attempts. Marking as FAILED.`);
               
-              // Prevent replay/infinite polling by marking status as FAILED
               await depositRepository.updateStatus(depositId, 'FAILED', {
                 adminNotes: `On-chain monitoring timeout: Transaction hash was not detected within ${this.MAX_ATTEMPTS} poll intervals.`,
               });
 
-              // Send failure notification to user
               await notificationService.createStructuredNotification(deposit.userId, {
                 title: 'Deposit Verification Failed',
                 description: `Verification for your deposit of ${deposit.amount} USDT timed out. Please verify your transaction hash or submit a support ticket.`,
@@ -142,17 +139,30 @@ export class TransactionMonitor {
             continue;
           }
 
-          // Transaction is successful! Check confirmations
+          // Verify receiver address matches deposit address (ignoring case)
+          if (deposit.depositAddress && blockchainTx.receiver) {
+            const expectedAddr = deposit.depositAddress.toLowerCase();
+            const actualAddr = blockchainTx.receiver.toLowerCase();
+            if (expectedAddr !== actualAddr) {
+              logger.warn(`Deposit ${depositId} hash ${txHash} receiver mismatch (${actualAddr} vs expected ${expectedAddr}). Marking as FAILED.`);
+              await depositRepository.updateStatus(depositId, 'FAILED', {
+                adminNotes: `On-chain transaction receiver (${blockchainTx.receiver}) does not match assigned deposit address (${deposit.depositAddress}).`,
+              });
+              delete this.queryAttempts[depositId];
+              continue;
+            }
+          }
+
+          // Fetch network-specific required confirmations from blockchainConfig
+          const requiredConfirmations = blockchainConfig.networks[deposit.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
           const confirmations = blockchainTx.confirmations;
-          if (confirmations >= this.CONFIRMATIONS_REQUIRED) {
-            logger.info(`Deposit ${depositId} (hash: ${txHash}) reached ${confirmations}/${this.CONFIRMATIONS_REQUIRED} confirmations. Crediting user account.`);
-            
-            // Atomically process successful deposit & credit balances inside a transactional database workflow
+
+          if (confirmations >= requiredConfirmations) {
+            logger.info(`Deposit ${depositId} (hash: ${txHash}) reached ${confirmations}/${requiredConfirmations} confirmations. Crediting user account.`);
             await depositService.processSuccessfulDeposit(depositId, txHash, 'SYSTEM');
-            
             delete this.queryAttempts[depositId];
           } else {
-            logger.info(`Deposit ${depositId} (hash: ${txHash}) found on-chain with ${confirmations}/${this.CONFIRMATIONS_REQUIRED} confirmations. Awaiting additional blocks...`);
+            logger.info(`Deposit ${depositId} (hash: ${txHash}) found on-chain with ${confirmations}/${requiredConfirmations} confirmations. Awaiting additional blocks...`);
           }
 
         } catch (error) {

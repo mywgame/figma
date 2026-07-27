@@ -107,6 +107,18 @@ export class DepositAddressRepository {
       console.error('Database deletion (deleteDepositAddress) failed:', error);
     }
   }
+
+  /**
+   * Find all generated deposit addresses across all users
+   */
+  async findAll() {
+    try {
+      return await db.select().from(depositAddresses);
+    } catch (error) {
+      console.error('Database query (findAll deposit addresses) failed:', error);
+      return [];
+    }
+  }
 }
 
 export const depositAddressRepository = new DepositAddressRepository();

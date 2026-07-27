@@ -3741,6 +3741,17 @@ var DepositAddressRepository = class {
       console.error("Database deletion (deleteDepositAddress) failed:", error);
     }
   }
+  /**
+   * Find all generated deposit addresses across all users
+   */
+  async findAll() {
+    try {
+      return await db.select().from(depositAddresses);
+    } catch (error) {
+      console.error("Database query (findAll deposit addresses) failed:", error);
+      return [];
+    }
+  }
 };
 var depositAddressRepository = new DepositAddressRepository();
 
@@ -4613,6 +4624,9 @@ var blockchainConfig = {
   apiKey,
   isConfigured: !!apiKey,
   isTestnet,
+  monitoringIntervalMs: parseInt(process.env.MONITORING_INTERVAL_MS || (isTestnet ? "30000" : "120000"), 10),
+  blockChunkSize: parseInt(process.env.BLOCK_CHUNK_SIZE || "50", 10),
+  initialReplayBlocks: parseInt(process.env.INITIAL_REPLAY_BLOCKS || "10", 10),
   networks: {
     USDT_BEP20: {
       contractAddress: process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT || (isTestnet ? "0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C" : "0x55d398326f99059ff775485246999027b3197955"),
@@ -4620,7 +4634,11 @@ var blockchainConfig = {
       hotPrivateKey: process.env.USDT_BEP20_HOT_PRIVATE_KEY || process.env.HOT_WALLET_PRIVATE_KEY || "",
       hotAddress: process.env.USDT_BEP20_HOT_ADDRESS || process.env.HOT_WALLET_ADDRESS || "",
       chainName: "BSC",
-      decimals: parseInt(process.env.USDT_BEP20_DECIMALS || process.env.USDT_DECIMALS || "18", 10)
+      decimals: parseInt(process.env.USDT_BEP20_DECIMALS || process.env.USDT_DECIMALS || "18", 10),
+      confirmationsRequired: parseInt(
+        process.env.USDT_BEP20_CONFIRMATIONS || (isTestnet ? "1" : "6"),
+        10
+      )
     },
     USDT_POLYGON: {
       contractAddress: process.env.USDT_POLYGON_CONTRACT || (isTestnet ? "0x41e94eb019c0762f9bfcf9fb1e58725bfb01728b" : "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"),
@@ -4628,7 +4646,11 @@ var blockchainConfig = {
       hotPrivateKey: process.env.USDT_POLYGON_HOT_PRIVATE_KEY || "",
       hotAddress: process.env.USDT_POLYGON_HOT_ADDRESS || "",
       chainName: "POLYGON",
-      decimals: parseInt(process.env.USDT_POLYGON_DECIMALS || "6", 10)
+      decimals: parseInt(process.env.USDT_POLYGON_DECIMALS || "6", 10),
+      confirmationsRequired: parseInt(
+        process.env.USDT_POLYGON_CONFIRMATIONS || (isTestnet ? "1" : "12"),
+        10
+      )
     },
     USDT_TRC20: {
       contractAddress: process.env.USDT_TRC20_CONTRACT || (isTestnet ? "TXYZdfUrW2Dx79gSStj7Q47S8oexuF3pC3" : "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"),
@@ -4636,7 +4658,11 @@ var blockchainConfig = {
       hotPrivateKey: process.env.USDT_TRC20_HOT_PRIVATE_KEY || "",
       hotAddress: process.env.USDT_TRC20_HOT_ADDRESS || "",
       chainName: "TRON",
-      decimals: parseInt(process.env.USDT_TRC20_DECIMALS || "6", 10)
+      decimals: parseInt(process.env.USDT_TRC20_DECIMALS || "6", 10),
+      confirmationsRequired: parseInt(
+        process.env.USDT_TRC20_CONFIRMATIONS || (isTestnet ? "1" : "19"),
+        10
+      )
     }
   }
 };
@@ -5151,17 +5177,18 @@ var EvmRpcProvider = class {
         let receiver = tx.to || "";
         const iface = new import_ethers3.ethers.Interface(ERC20_ABI);
         for (const log of receipt.logs) {
-          if (netConfig?.contractAddress && log.address.toLowerCase() === netConfig.contractAddress.toLowerCase()) {
-            try {
-              const parsedLog = iface.parseLog({ topics: [...log.topics], data: log.data });
-              if (parsedLog && parsedLog.name === "Transfer") {
+          const isContractMatch = !netConfig?.contractAddress || log.address.toLowerCase() === netConfig.contractAddress.toLowerCase();
+          try {
+            const parsedLog = iface.parseLog({ topics: [...log.topics], data: log.data });
+            if (parsedLog && parsedLog.name === "Transfer") {
+              if (isContractMatch || receiver === tx.to) {
                 sender = parsedLog.args[0];
                 receiver = parsedLog.args[1];
                 amount = normalizeAmount(parsedLog.args[2].toString(), decimals);
-                break;
+                if (isContractMatch) break;
               }
-            } catch {
             }
+          } catch {
           }
         }
         if (amount === "0.00000000" && tx.value > 0n) {
@@ -5337,8 +5364,10 @@ var TronRpcProvider = class {
             if (logItem.topics && logItem.topics.length >= 3) {
               const rawVal = BigInt(`0x${logItem.data || "0"}`).toString();
               amount = normalizeAmount(rawVal, decimals);
-              sender = `0x${logItem.topics[1].slice(-40)}`;
-              receiver = `0x${logItem.topics[2].slice(-40)}`;
+              const senderHex = logItem.topics[1].slice(-40);
+              const receiverHex = logItem.topics[2].slice(-40);
+              sender = encodeTronBase58Check("41" + senderHex);
+              receiver = encodeTronBase58Check("41" + receiverHex);
               break;
             }
           }
@@ -5624,15 +5653,17 @@ var TatumProvider = class {
         const blockHeight = await this.getCurrentBlockHeight(network);
         try {
           const tokenTxUrl = `/v3/blockchain/token/transaction/${chain}/${txHash}`;
-          const parsedTx = await this.getRequest(tokenTxUrl);
+          const rawParsed = await this.getRequest(tokenTxUrl);
+          const parsedTx = Array.isArray(rawParsed) ? rawParsed[0] : rawParsed;
           if (parsedTx) {
             const txBlock = parsedTx.blockNumber || blockHeight;
             const confirmations = blockHeight - txBlock + 1;
+            const receiverAddr = parsedTx.to || parsedTx.toAddress || parsedTx.receiver || "";
             const resultObj = {
               hash: txHash,
               amount: normalizeAmount(parsedTx.amount || parsedTx.value || "0", decimals),
-              sender: parsedTx.from || "",
-              receiver: parsedTx.to || "",
+              sender: parsedTx.from || parsedTx.fromAddress || "",
+              receiver: receiverAddr,
               confirmations: Math.max(1, confirmations),
               isSuccessful: true
             };
@@ -5663,9 +5694,15 @@ var TatumProvider = class {
             const logs = rawTx.logs || rawTx.log || [];
             for (const log of logs) {
               const topics = log.topics || [];
-              if (topics[0] === "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef") {
-                if (topics[1]) from = "0x" + topics[1].slice(-40);
-                if (topics[2]) to = "0x" + topics[2].slice(-40);
+              if (topics[0] && topics[0].toLowerCase() === "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef") {
+                if (topics[1]) {
+                  const rawSender = topics[1].slice(-40);
+                  from = network === "USDT_TRC20" ? encodeTronBase58Check("41" + rawSender) : "0x" + rawSender;
+                }
+                if (topics[2]) {
+                  const rawReceiver = topics[2].slice(-40);
+                  to = network === "USDT_TRC20" ? encodeTronBase58Check("41" + rawReceiver) : "0x" + rawReceiver;
+                }
                 if (log.data && log.data !== "0x") {
                   const hexVal = log.data.replace(/^0x/, "");
                   if (hexVal) {
@@ -5750,8 +5787,8 @@ var TatumProvider = class {
     try {
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { depositAddresses: depositAddresses2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq26 } = await import("drizzle-orm");
-      const dbAddr = await db2.select().from(depositAddresses2).where(eq26(depositAddresses2.address, address)).limit(1);
+      const { eq: eq27 } = await import("drizzle-orm");
+      const dbAddr = await db2.select().from(depositAddresses2).where(eq27(depositAddresses2.address, address)).limit(1);
       if (dbAddr.length > 0) {
         return dbAddr[0].nativeBalance || "0.00000000";
       }
@@ -5812,15 +5849,15 @@ var TatumProvider = class {
     try {
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { depositAddresses: depositAddresses2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq26 } = await import("drizzle-orm");
-      const dbAddr = await db2.select().from(depositAddresses2).where(eq26(depositAddresses2.address, toAddress)).limit(1);
+      const { eq: eq27 } = await import("drizzle-orm");
+      const dbAddr = await db2.select().from(depositAddresses2).where(eq27(depositAddresses2.address, toAddress)).limit(1);
       if (dbAddr.length > 0) {
         const currentNative = parseFloat(dbAddr[0].nativeBalance || "0.00000000");
         const newNative = (currentNative + parseFloat(amount)).toFixed(8);
         await db2.update(depositAddresses2).set({
           nativeBalance: newNative,
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq26(depositAddresses2.id, dbAddr[0].id));
+        }).where(eq27(depositAddresses2.id, dbAddr[0].id));
       }
     } catch (dbErr) {
       console.error("[TatumProvider] Failed to update simulated native balance in database:", dbErr.message);
@@ -7255,28 +7292,22 @@ var withdrawalService2 = withdrawalService;
 var import_resend = require("resend");
 var ResendProvider = class {
   constructor(apiKey2 = config2.email.resendApiKey, fromAddress = config2.email.fromAddress) {
-    this.client = null;
-    this.apiKey = apiKey2 ? apiKey2.replace(/^['"]|['"]$/g, "").trim() : void 0;
-    this.fromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, "").trim() : void 0;
-  }
-  getClient() {
-    if (!this.apiKey) {
+    const cleanApiKey = apiKey2 ? apiKey2.replace(/^['"]|['"]$/g, "").trim() : "";
+    const cleanFromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, "").trim() : "";
+    if (!cleanApiKey) {
       throw new Error("RESEND_API_KEY is not configured in the environment. Real email delivery is required.");
     }
-    if (!this.fromAddress) {
+    if (!cleanFromAddress) {
       throw new Error("EMAIL_FROM is not configured in the environment. Real email delivery is required.");
     }
-    if (!this.client) {
-      this.client = new import_resend.Resend(this.apiKey);
-    }
-    return { client: this.client, fromAddress: this.fromAddress };
+    this.client = new import_resend.Resend(cleanApiKey);
+    this.fromAddress = cleanFromAddress;
   }
   async send({ to, subject, html }) {
     console.log(`[Resend] Initiating real email delivery to ${to} with subject: "${subject}"`);
     try {
-      const { client, fromAddress } = this.getClient();
-      const response = await client.emails.send({
-        from: fromAddress,
+      const response = await this.client.emails.send({
+        from: this.fromAddress,
         to,
         subject,
         html
@@ -11177,22 +11208,19 @@ var routes_default = router6;
 // server/blockchain/services/TransactionMonitor.ts
 init_notificationService();
 var TransactionMonitor = class {
-  // Required on-chain confirmations
   constructor(provider = activeBlockchainProvider) {
     this.provider = provider;
     this.timer = null;
     this.isChecking = false;
     // Track consecutive non-existence of transaction hash on-chain to save API credits
     this.queryAttempts = {};
-    // Max times we poll Tatum for a txHash before assuming it's an invalid or fake hash
+    // Max times we poll for a txHash before assuming it's an invalid or fake hash
     this.MAX_ATTEMPTS = 30;
-    // 30 checks * 30s interval = 15 minutes
-    this.CONFIRMATIONS_REQUIRED = 6;
   }
   /**
    * Start background transaction monitor loop
    */
-  start(intervalMs = 12e4) {
+  start(intervalMs = blockchainConfig.monitoringIntervalMs) {
     if (this.timer) {
       logger.info("Transaction monitor is already running.");
       return;
@@ -11232,7 +11260,6 @@ var TransactionMonitor = class {
         }
       }
       if (withTxHash.length === 0) {
-        this.isChecking = false;
         return;
       }
       logger.debug(`Polling on-chain status for ${withTxHash.length} pending deposits...`);
@@ -11278,13 +11305,26 @@ var TransactionMonitor = class {
             delete this.queryAttempts[depositId];
             continue;
           }
+          if (deposit.depositAddress && blockchainTx.receiver) {
+            const expectedAddr = deposit.depositAddress.toLowerCase();
+            const actualAddr = blockchainTx.receiver.toLowerCase();
+            if (expectedAddr !== actualAddr) {
+              logger.warn(`Deposit ${depositId} hash ${txHash} receiver mismatch (${actualAddr} vs expected ${expectedAddr}). Marking as FAILED.`);
+              await depositRepository.updateStatus(depositId, "FAILED", {
+                adminNotes: `On-chain transaction receiver (${blockchainTx.receiver}) does not match assigned deposit address (${deposit.depositAddress}).`
+              });
+              delete this.queryAttempts[depositId];
+              continue;
+            }
+          }
+          const requiredConfirmations = blockchainConfig.networks[deposit.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
           const confirmations = blockchainTx.confirmations;
-          if (confirmations >= this.CONFIRMATIONS_REQUIRED) {
-            logger.info(`Deposit ${depositId} (hash: ${txHash}) reached ${confirmations}/${this.CONFIRMATIONS_REQUIRED} confirmations. Crediting user account.`);
+          if (confirmations >= requiredConfirmations) {
+            logger.info(`Deposit ${depositId} (hash: ${txHash}) reached ${confirmations}/${requiredConfirmations} confirmations. Crediting user account.`);
             await depositService.processSuccessfulDeposit(depositId, txHash, "SYSTEM");
             delete this.queryAttempts[depositId];
           } else {
-            logger.info(`Deposit ${depositId} (hash: ${txHash}) found on-chain with ${confirmations}/${this.CONFIRMATIONS_REQUIRED} confirmations. Awaiting additional blocks...`);
+            logger.info(`Deposit ${depositId} (hash: ${txHash}) found on-chain with ${confirmations}/${requiredConfirmations} confirmations. Awaiting additional blocks...`);
           }
         } catch (error) {
           logger.error(`Error processing transaction monitoring check for deposit ID ${depositId} (hash: ${txHash}):`, error);
@@ -11301,6 +11341,337 @@ var transactionMonitor = new TransactionMonitor();
 
 // server/services/transactionMonitor.ts
 var transactionMonitor2 = transactionMonitor;
+
+// server/blockchain/services/RpcDepositScanner.ts
+var import_ethers4 = require("ethers");
+var import_drizzle_orm38 = require("drizzle-orm");
+init_db();
+init_schema();
+var TRANSFER_EVENT_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+function withTimeout(promise, timeoutMs, operationName) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Operation '${operationName}' timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    promise.then((res) => {
+      clearTimeout(timer);
+      resolve(res);
+    }).catch((err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+var RpcDepositScanner = class {
+  constructor() {
+    this.timer = null;
+    this.isScanning = false;
+    // Cache JsonRpcProvider instances per rpcUrl to avoid instantiating new objects every scan cycle
+    this.providerCache = /* @__PURE__ */ new Map();
+  }
+  /**
+   * Get or create a cached JsonRpcProvider for a given rpcUrl
+   */
+  getProvider(rpcUrl) {
+    let provider = this.providerCache.get(rpcUrl);
+    if (!provider) {
+      provider = new import_ethers4.ethers.JsonRpcProvider(rpcUrl);
+      this.providerCache.set(rpcUrl, provider);
+    }
+    return provider;
+  }
+  /**
+   * Start background block/event scanner loop
+   */
+  start(intervalMs = blockchainConfig.monitoringIntervalMs) {
+    if (this.timer) {
+      logger.info("RpcDepositScanner is already running.");
+      return;
+    }
+    logger.info(`Starting RpcDepositScanner event loop (Interval: ${intervalMs}ms)...`);
+    this.timer = setInterval(() => this.scanAllNetworks(), intervalMs);
+    this.scanAllNetworks().catch((err) => {
+      logger.error("Error in initial RpcDepositScanner execution:", err);
+    });
+  }
+  /**
+   * Stop background block scanner loop
+   */
+  stop() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+      logger.info("RpcDepositScanner loop stopped.");
+    }
+  }
+  /**
+   * Execute scanning tick across all active networks concurrently
+   */
+  async scanAllNetworks() {
+    if (this.isScanning) {
+      logger.debug("[RpcDepositScanner] Previous scan tick is still processing. Skipping iteration.");
+      return;
+    }
+    this.isScanning = true;
+    try {
+      await Promise.allSettled([
+        this.scanEvmNetwork("USDT_BEP20"),
+        this.scanEvmNetwork("USDT_POLYGON"),
+        this.scanTronNetwork()
+      ]);
+    } catch (err) {
+      logger.error("[RpcDepositScanner] Unexpected error during scanner tick:", err);
+    } finally {
+      this.isScanning = false;
+    }
+  }
+  /**
+   * Scan EVM contract Transfer logs using eth_getLogs with incremental block persistence and metrics
+   */
+  async scanEvmNetwork(network) {
+    const startTime = Date.now();
+    const netConfig = blockchainConfig.networks[network];
+    if (!netConfig || !netConfig.contractAddress) return;
+    let logsFound = 0;
+    let matchingAddresses = 0;
+    let depositsCreated = 0;
+    let fromBlock = 0;
+    let toBlock = 0;
+    try {
+      await rpcManager.executeRpc(network, async (rpcUrl) => {
+        const provider = this.getProvider(rpcUrl);
+        const currentBlock = await withTimeout(
+          provider.getBlockNumber(),
+          1e4,
+          `getBlockNumber(${network})`
+        );
+        let lastScannedBlock = await this.getLastScannedBlock(network);
+        if (lastScannedBlock === null) {
+          const replayBlocks = blockchainConfig.initialReplayBlocks;
+          lastScannedBlock = Math.max(0, currentBlock - replayBlocks);
+          await this.setLastScannedBlock(network, lastScannedBlock);
+        }
+        fromBlock = lastScannedBlock + 1;
+        const chunkSize = blockchainConfig.blockChunkSize;
+        toBlock = Math.min(currentBlock, fromBlock + chunkSize - 1);
+        if (fromBlock > toBlock) {
+          return;
+        }
+        const logs = await withTimeout(
+          provider.getLogs({
+            address: netConfig.contractAddress,
+            topics: [TRANSFER_EVENT_TOPIC],
+            fromBlock,
+            toBlock
+          }),
+          1e4,
+          `getLogs(${network})`
+        );
+        logsFound = logs.length;
+        for (const log of logs) {
+          if (!log.topics || log.topics.length < 3) continue;
+          try {
+            const rawTo = log.topics[2];
+            const toAddress = import_ethers4.ethers.getAddress("0x" + rawTo.slice(26));
+            const addrRecord = await depositAddressRepository.findByAddress(toAddress);
+            if (!addrRecord) continue;
+            matchingAddresses++;
+            const txHash = log.transactionHash;
+            const amountStr = normalizeAmount(log.data, netConfig.decimals);
+            const existing = await depositRepository.findByTxHash(txHash);
+            if (!existing) {
+              try {
+                logger.info(
+                  `[RpcDepositScanner] Auto-discovered ${network} transfer of ${amountStr} USDT for user ${addrRecord.userId} at address ${toAddress} (txHash: ${txHash})`
+                );
+                await depositService.createDeposit(
+                  addrRecord.userId,
+                  amountStr,
+                  network,
+                  toAddress,
+                  txHash
+                );
+                depositsCreated++;
+              } catch (createErr) {
+                if (createErr.message?.includes("unique constraint") || createErr.message?.includes("duplicate key")) {
+                  logger.debug(
+                    `[RpcDepositScanner] [${network}] Skipped duplicate deposit creation for txHash ${txHash} (caught unique constraint)`
+                  );
+                } else {
+                  throw createErr;
+                }
+              }
+            }
+          } catch (logErr) {
+            logger.error(
+              `[RpcDepositScanner] Error processing log in ${network} block ${log.blockNumber}:`,
+              logErr.message
+            );
+            throw logErr;
+          }
+        }
+        await this.setLastScannedBlock(network, toBlock);
+      });
+      const durationMs = Date.now() - startTime;
+      if (fromBlock <= toBlock && fromBlock > 0) {
+        logger.info(
+          `[RpcDepositScanner Metrics] [${network}] Scanned blocks ${fromBlock}->${toBlock} in ${durationMs}ms | Logs: ${logsFound} | Matches: ${matchingAddresses} | Created: ${depositsCreated}`
+        );
+      }
+    } catch (err) {
+      logger.error(`[RpcDepositScanner] Failed scanning ${network}:`, err.message);
+    }
+  }
+  /**
+   * Scan TRON contract Transfer events with incremental block tracking and metrics
+   */
+  async scanTronNetwork() {
+    const startTime = Date.now();
+    const network = "USDT_TRC20";
+    const netConfig = blockchainConfig.networks[network];
+    if (!netConfig || !netConfig.contractAddress) return;
+    let logsFound = 0;
+    let matchingAddresses = 0;
+    let depositsCreated = 0;
+    let fromBlock = 0;
+    let toBlock = 0;
+    try {
+      await rpcManager.executeRpc(network, async (rpcUrl) => {
+        const cleanUrl = rpcUrl.replace(/\/$/, "");
+        const nowBlockRes = await withTimeout(
+          fetch(`${cleanUrl}/wallet/getnowblock`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+          }).then((r) => r.json()),
+          1e4,
+          `TRON getnowblock`
+        ).catch(() => null);
+        const currentBlock = nowBlockRes?.block_header?.raw_data?.number;
+        if (!currentBlock || typeof currentBlock !== "number") {
+          return;
+        }
+        let lastScannedBlock = await this.getLastScannedBlock(network);
+        if (lastScannedBlock === null) {
+          const replayBlocks = blockchainConfig.initialReplayBlocks;
+          lastScannedBlock = Math.max(0, currentBlock - replayBlocks);
+          await this.setLastScannedBlock(network, lastScannedBlock);
+        }
+        fromBlock = lastScannedBlock + 1;
+        const chunkSize = blockchainConfig.blockChunkSize;
+        toBlock = Math.min(currentBlock, fromBlock + chunkSize - 1);
+        if (fromBlock > toBlock) {
+          return;
+        }
+        const eventEndpoint = `${cleanUrl}/v1/contracts/${netConfig.contractAddress}/events?event_name=Transfer&only_confirmed=true&limit=50&min_block_number=${fromBlock}`;
+        const response = await withTimeout(
+          fetch(eventEndpoint, { headers: { Accept: "application/json" } }),
+          1e4,
+          `TRON getEvents`
+        ).catch(() => null);
+        if (!response || !response.ok) return;
+        const data = await response.json();
+        const events = data?.data || [];
+        logsFound = events.length;
+        for (const evt of events) {
+          try {
+            const evtBlock = evt.block_number || evt.blockNumber;
+            if (evtBlock && (evtBlock < fromBlock || evtBlock > toBlock)) {
+              continue;
+            }
+            const result = evt.result || {};
+            const toAddress = result.to;
+            const txHash = evt.transaction_id;
+            const rawValue = result.value;
+            if (!toAddress || !txHash || !rawValue) continue;
+            const addrRecord = await depositAddressRepository.findByAddress(toAddress);
+            if (!addrRecord) continue;
+            matchingAddresses++;
+            const existing = await depositRepository.findByTxHash(txHash);
+            if (!existing) {
+              const amountStr = normalizeAmount(rawValue, netConfig.decimals);
+              try {
+                logger.info(
+                  `[RpcDepositScanner] Auto-discovered USDT_TRC20 transfer of ${amountStr} USDT for user ${addrRecord.userId} at address ${toAddress} (txHash: ${txHash})`
+                );
+                await depositService.createDeposit(
+                  addrRecord.userId,
+                  amountStr,
+                  network,
+                  toAddress,
+                  txHash
+                );
+                depositsCreated++;
+              } catch (createErr) {
+                if (createErr.message?.includes("unique constraint") || createErr.message?.includes("duplicate key")) {
+                  logger.debug(
+                    `[RpcDepositScanner] [USDT_TRC20] Skipped duplicate deposit creation for txHash ${txHash} (caught unique constraint)`
+                  );
+                } else {
+                  throw createErr;
+                }
+              }
+            }
+          } catch (evtErr) {
+            logger.error(`[RpcDepositScanner] Error processing TRON event:`, evtErr.message);
+            throw evtErr;
+          }
+        }
+        await this.setLastScannedBlock(network, toBlock);
+      });
+      const durationMs = Date.now() - startTime;
+      if (fromBlock <= toBlock && fromBlock > 0) {
+        logger.info(
+          `[RpcDepositScanner Metrics] [USDT_TRC20] Scanned blocks ${fromBlock}->${toBlock} in ${durationMs}ms | Logs: ${logsFound} | Matches: ${matchingAddresses} | Created: ${depositsCreated}`
+        );
+      }
+    } catch (err) {
+      logger.error(`[RpcDepositScanner] Failed scanning USDT_TRC20:`, err.message);
+    }
+  }
+  /**
+   * Read last scanned block height from database system_settings
+   */
+  async getLastScannedBlock(network) {
+    try {
+      const key = `LAST_SCANNED_BLOCK_${network}`;
+      const rows = await db.select().from(systemSettings).where((0, import_drizzle_orm38.eq)(systemSettings.key, key));
+      if (rows.length > 0 && rows[0].value) {
+        const parsed = parseInt(rows[0].value, 10);
+        return isNaN(parsed) ? null : parsed;
+      }
+      return null;
+    } catch (err) {
+      logger.error(`[RpcDepositScanner] Error fetching last scanned block for ${network}:`, err.message);
+      return null;
+    }
+  }
+  /**
+   * Write last scanned block height to database system_settings
+   */
+  async setLastScannedBlock(network, blockNumber) {
+    try {
+      const key = `LAST_SCANNED_BLOCK_${network}`;
+      const existing = await db.select().from(systemSettings).where((0, import_drizzle_orm38.eq)(systemSettings.key, key));
+      if (existing.length > 0) {
+        await db.update(systemSettings).set({
+          value: blockNumber.toString(),
+          updatedAt: /* @__PURE__ */ new Date()
+        }).where((0, import_drizzle_orm38.eq)(systemSettings.key, key));
+      } else {
+        await db.insert(systemSettings).values({
+          id: Math.floor(1e5 + Math.random() * 899999),
+          key,
+          value: blockNumber.toString(),
+          description: `Last scanned block for network ${network}`,
+          updatedBy: "SYSTEM"
+        });
+      }
+    } catch (err) {
+      logger.error(`[RpcDepositScanner] Error updating last scanned block for ${network}:`, err.message);
+    }
+  }
+};
+var rpcDepositScanner = new RpcDepositScanner();
 
 // server.ts
 async function bootstrap() {
@@ -11343,11 +11714,13 @@ async function bootstrap() {
   const server = app.listen(PORT, "0.0.0.0", () => {
     logger.info(`Server successfully bound to host 0.0.0.0, listening on port ${PORT}`);
     transactionMonitor2.start();
+    rpcDepositScanner.start();
     sweepQueueProcessor.start();
   });
   const shutdown = () => {
     logger.info("Received shutdown signal. Commencing graceful termination...");
     transactionMonitor2.stop();
+    rpcDepositScanner.stop();
     sweepQueueProcessor.stop();
     server.close(() => {
       logger.info("Express server successfully closed. Process exiting.");

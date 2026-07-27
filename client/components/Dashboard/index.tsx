@@ -54,6 +54,7 @@ import { DepositView } from './Deposit/DepositView.tsx';
 import { WithdrawalView } from './Withdrawal/WithdrawalView.tsx';
 import { RewardsView } from './Rewards/RewardsView.tsx';
 import { TaskView } from './Task/TaskView.tsx';
+import { DepositSuccessModal } from './Deposit/DepositSuccessModal.tsx';
 
 // Overlay
 import { ArrowLeft } from 'lucide-react';
@@ -75,6 +76,11 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPageLoading, setIsPageLoading] = useState(false);
+
+  // Deposit Success Modal State
+  const [depositSuccessData, setDepositSuccessData] = useState<{ amount: string; network: string } | null>(null);
+  const seenCompletedDepositIds = React.useRef<Set<string>>(new Set());
+  const isInitialDepositCheck = React.useRef<boolean>(true);
 
   useEffect(() => {
     setIsPageLoading(true);
@@ -123,9 +129,49 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
     }
   }, [showToast]);
 
+  // Background polling for auto-verified deposits
+  const checkAutoVerifiedDeposits = useCallback(async () => {
+    try {
+      const res = await api.getUserDeposits();
+      if (res.success && Array.isArray(res.data)) {
+        const completedDeposits = res.data.filter((d: any) => d.status === 'COMPLETED');
+        
+        if (isInitialDepositCheck.current) {
+          // On boot, record existing completed deposit IDs
+          completedDeposits.forEach((d: any) => seenCompletedDepositIds.current.add(d.id));
+          isInitialDepositCheck.current = false;
+        } else {
+          // Check if any new completed deposit has arrived
+          for (const dep of completedDeposits) {
+            if (!seenCompletedDepositIds.current.has(dep.id)) {
+              seenCompletedDepositIds.current.add(dep.id);
+              setDepositSuccessData({
+                amount: dep.amount,
+                network: dep.network || 'USDT',
+              });
+              // Refresh wallet & dashboard balances
+              fetchDashboard();
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error polling user deposits for auto-verification:', err);
+    }
+  }, [fetchDashboard]);
+
   useEffect(() => {
     fetchDashboard();
-  }, [fetchDashboard]);
+    checkAutoVerifiedDeposits();
+
+    // Poll every 8 seconds for automatic deposit verification
+    const pollInterval = setInterval(() => {
+      checkAutoVerifiedDeposits();
+    }, 8000);
+
+    return () => clearInterval(pollInterval);
+  }, [fetchDashboard, checkAutoVerifiedDeposits]);
 
   const handleLogout = () => {
     logout();
@@ -220,6 +266,7 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
             showToast={showToast}
             onBack={() => setActiveTab('dashboard')}
             onRefresh={fetchDashboard}
+            onDepositSuccess={(info) => setDepositSuccessData(info)}
           />
         );
       case 'withdrawal':
@@ -312,6 +359,14 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
           onClose={() => setToastMessage(null)}
         />
       )}
+
+      {/* Deposit Success Modal */}
+      <DepositSuccessModal
+        isOpen={!!depositSuccessData}
+        amount={depositSuccessData?.amount || '0'}
+        network={depositSuccessData?.network}
+        onClose={() => setDepositSuccessData(null)}
+      />
 
     </div>
   );
