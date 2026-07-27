@@ -8,6 +8,7 @@ import { BlockchainProvider, BlockchainTransaction } from '../interfaces/Blockch
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 import { ProviderError } from '../errors/BlockchainError.ts';
 import { formatTokenAmount, normalizeAmount } from '../utils/amountUtils.ts';
+import { encodeTronBase58Check } from '../hd/HdWalletEngine.ts';
 
 export class TatumProvider implements BlockchainProvider {
   private readonly apiKey: string;
@@ -256,17 +257,20 @@ export class TatumProvider implements BlockchainProvider {
         // 1. Attempt to fetch structured token transfer record from Tatum
         try {
           const tokenTxUrl = `/v3/blockchain/token/transaction/${chain}/${txHash}`;
-          const parsedTx = await this.getRequest<any>(tokenTxUrl);
+          const rawParsed = await this.getRequest<any>(tokenTxUrl);
+          const parsedTx = Array.isArray(rawParsed) ? rawParsed[0] : rawParsed;
           
           if (parsedTx) {
             const txBlock = parsedTx.blockNumber || blockHeight;
             const confirmations = blockHeight - txBlock + 1;
 
+            const receiverAddr = parsedTx.to || parsedTx.toAddress || parsedTx.receiver || '';
+
             const resultObj: BlockchainTransaction = {
               hash: txHash,
               amount: normalizeAmount(parsedTx.amount || parsedTx.value || '0', decimals),
-              sender: parsedTx.from || '',
-              receiver: parsedTx.to || '',
+              sender: parsedTx.from || parsedTx.fromAddress || '',
+              receiver: receiverAddr,
               confirmations: Math.max(1, confirmations),
               isSuccessful: true,
             };
@@ -304,9 +308,15 @@ export class TatumProvider implements BlockchainProvider {
             const logs = rawTx.logs || rawTx.log || [];
             for (const log of logs) {
               const topics = log.topics || [];
-              if (topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') {
-                if (topics[1]) from = '0x' + topics[1].slice(-40);
-                if (topics[2]) to = '0x' + topics[2].slice(-40);
+              if (topics[0] && topics[0].toLowerCase() === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef') {
+                if (topics[1]) {
+                  const rawSender = topics[1].slice(-40);
+                  from = network === 'USDT_TRC20' ? encodeTronBase58Check('41' + rawSender) : '0x' + rawSender;
+                }
+                if (topics[2]) {
+                  const rawReceiver = topics[2].slice(-40);
+                  to = network === 'USDT_TRC20' ? encodeTronBase58Check('41' + rawReceiver) : '0x' + rawReceiver;
+                }
                 if (log.data && log.data !== '0x') {
                   const hexVal = log.data.replace(/^0x/, '');
                   if (hexVal) {

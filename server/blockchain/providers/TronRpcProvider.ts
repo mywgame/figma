@@ -6,7 +6,7 @@
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 import { keyManager } from '../keys/KeyManager.ts';
 import { rpcManager } from '../rpc/RpcManager.ts';
-import { hdWalletEngine, decodeTronBase58Check } from '../hd/HdWalletEngine.ts';
+import { hdWalletEngine, decodeTronBase58Check, encodeTronBase58Check } from '../hd/HdWalletEngine.ts';
 import type { BlockchainProvider, BlockchainTransaction } from '../interfaces/BlockchainProvider.ts';
 import { normalizeAmount } from '../utils/amountUtils.ts';
 
@@ -194,8 +194,10 @@ export class TronRpcProvider implements BlockchainProvider {
             if (logItem.topics && logItem.topics.length >= 3) {
               const rawVal = BigInt(`0x${logItem.data || '0'}`).toString();
               amount = normalizeAmount(rawVal, decimals);
-              sender = `0x${logItem.topics[1].slice(-40)}`;
-              receiver = `0x${logItem.topics[2].slice(-40)}`;
+              const senderHex = logItem.topics[1].slice(-40);
+              const receiverHex = logItem.topics[2].slice(-40);
+              sender = encodeTronBase58Check('41' + senderHex);
+              receiver = encodeTronBase58Check('41' + receiverHex);
               break;
             }
           }

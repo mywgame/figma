@@ -168,18 +168,19 @@ export class EvmRpcProvider implements BlockchainProvider {
         // Interface for parsing ERC20 transfer log
         const iface = new ethers.Interface(ERC20_ABI);
         for (const log of receipt.logs) {
-          if (netConfig?.contractAddress && log.address.toLowerCase() === netConfig.contractAddress.toLowerCase()) {
-            try {
-              const parsedLog = iface.parseLog({ topics: [...log.topics], data: log.data });
-              if (parsedLog && parsedLog.name === 'Transfer') {
+          const isContractMatch = !netConfig?.contractAddress || log.address.toLowerCase() === netConfig.contractAddress.toLowerCase();
+          try {
+            const parsedLog = iface.parseLog({ topics: [...log.topics], data: log.data });
+            if (parsedLog && parsedLog.name === 'Transfer') {
+              if (isContractMatch || receiver === tx.to) {
                 sender = parsedLog.args[0];
                 receiver = parsedLog.args[1];
                 amount = normalizeAmount(parsedLog.args[2].toString(), decimals);
-                break;
+                if (isContractMatch) break;
               }
-            } catch {
-              // Ignore non-standard logs
             }
+          } catch {
+            // Ignore non-standard logs
           }
         }
 

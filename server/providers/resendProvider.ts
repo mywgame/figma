@@ -17,34 +17,29 @@ import type { EmailProvider, SendEmailParams } from './emailProvider.ts';
  * later when an email is actually sent.
  */
 export class ResendProvider implements EmailProvider {
-  private client: Resend | null = null;
-  private readonly apiKey?: string;
-  private readonly fromAddress?: string;
+  private readonly client: Resend;
+  private readonly fromAddress: string;
 
   constructor(apiKey: string | undefined = config.email.resendApiKey, fromAddress: string | undefined = config.email.fromAddress) {
-    this.apiKey = apiKey ? apiKey.replace(/^['"]|['"]$/g, '').trim() : undefined;
-    this.fromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, '').trim() : undefined;
-  }
+    const cleanApiKey = apiKey ? apiKey.replace(/^['"]|['"]$/g, '').trim() : '';
+    const cleanFromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, '').trim() : '';
 
-  private getClient(): { client: Resend; fromAddress: string } {
-    if (!this.apiKey) {
+    if (!cleanApiKey) {
       throw new Error('RESEND_API_KEY is not configured in the environment. Real email delivery is required.');
     }
-    if (!this.fromAddress) {
+    if (!cleanFromAddress) {
       throw new Error('EMAIL_FROM is not configured in the environment. Real email delivery is required.');
     }
-    if (!this.client) {
-      this.client = new Resend(this.apiKey);
-    }
-    return { client: this.client, fromAddress: this.fromAddress };
+
+    this.client = new Resend(cleanApiKey);
+    this.fromAddress = cleanFromAddress;
   }
 
   async send({ to, subject, html }: SendEmailParams): Promise<void> {
     console.log(`[Resend] Initiating real email delivery to ${to} with subject: "${subject}"`);
     try {
-      const { client, fromAddress } = this.getClient();
-      const response = await client.emails.send({
-        from: fromAddress,
+      const response = await this.client.emails.send({
+        from: this.fromAddress,
         to,
         subject,
         html,
