@@ -5,7 +5,7 @@
 
 import { evmRpcProvider } from './EvmRpcProvider.ts';
 import { tronRpcProvider } from './TronRpcProvider.ts';
-import type { BlockchainProvider, BlockchainTransaction, DiscoveredTransfer } from '../interfaces/BlockchainProvider.ts';
+import type { BlockchainProvider, BlockchainTransaction } from '../interfaces/BlockchainProvider.ts';
 
 export class RpcProvider implements BlockchainProvider {
   /**
@@ -50,22 +50,6 @@ export class RpcProvider implements BlockchainProvider {
 
   async getTransaction(network: string, txHash: string): Promise<BlockchainTransaction | null> {
     return this.getSubProvider(network).getTransaction(network, txHash);
-  }
-
-  async getCurrentBlockNumber(network: string): Promise<number> {
-    const sub = this.getSubProvider(network);
-    if (sub.getCurrentBlockNumber) {
-      return sub.getCurrentBlockNumber(network);
-    }
-    return 0;
-  }
-
-  async getTransferEvents(network: string, fromBlock: number, toBlock: number): Promise<DiscoveredTransfer[]> {
-    const sub = this.getSubProvider(network);
-    if (sub.getTransferEvents) {
-      return sub.getTransferEvents(network, fromBlock, toBlock);
-    }
-    return [];
   }
 }
 

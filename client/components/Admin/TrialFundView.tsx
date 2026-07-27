@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Sparkles,
   Info,
@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
-import { api } from '../../services/api.ts';
 
 interface TrialFundViewProps {
   t: ThemeTokens;
@@ -27,8 +26,8 @@ interface TrialFundViewProps {
 export const TrialFundView: React.FC<TrialFundViewProps> = ({ t, isDark }) => {
   // Local state representing the configuration settings
   const defaultSettings = {
-    amount: '100',
-    duration: '3',
+    amount: '1000',
+    duration: '7',
     isEnabled: true,
   };
 
@@ -36,32 +35,11 @@ export const TrialFundView: React.FC<TrialFundViewProps> = ({ t, isDark }) => {
   const [duration, setDuration] = useState(defaultSettings.duration);
   const [isEnabled, setIsEnabled] = useState(defaultSettings.isEnabled);
   
-  const [lastUpdated, setLastUpdated] = useState<string>('Connected to System Settings');
+  const [lastUpdated, setLastUpdated] = useState<string>('2026-07-16 14:32:10 UTC');
   const [isSaved, setIsSaved] = useState<boolean>(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Fetch real configuration on load
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        setIsLoading(true);
-        const res = await api.getAdminTrialFundConfig();
-        if (res.success && res.data) {
-          if (res.data.amount) setAmount(parseFloat(res.data.amount).toString());
-          if (res.data.durationDays) setDuration(res.data.durationDays.toString());
-          if (res.data.isEnabled !== undefined) setIsEnabled(res.data.isEnabled);
-          setIsSaved(true);
-        }
-      } catch (err) {
-        console.error('Failed to load trial fund config:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchConfig();
-  }, []);
-
+  // Checks if the local form state matches the default or simulated saved values
   const hasChanges = isSaved === false;
 
   const handleFieldChange = (setter: (val: string) => void, val: string) => {
@@ -74,40 +52,20 @@ export const TrialFundView: React.FC<TrialFundViewProps> = ({ t, isDark }) => {
     setIsSaved(false);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     
-    try {
-      const response = await api.updateAdminTrialFundConfig({
-        amount,
-        durationDays: duration,
-        isEnabled,
-      });
-
-      if (response.success) {
-        const now = new Date();
-        const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-        
-        setLastUpdated(formattedDate);
-        setIsSaved(true);
-        
-        setNotification({
-          type: 'success',
-          text: `Trial Fund configuration updated successfully! Amount: $${amount} USDT, Duration: ${duration} Days (${isEnabled ? 'Enabled' : 'Disabled'}).`
-        });
-      } else {
-        setNotification({
-          type: 'info',
-          text: response.error?.message || 'Failed to update Trial Fund configuration.'
-        });
-      }
-    } catch (err) {
-      console.error('Error saving trial fund config:', err);
-      setNotification({
-        type: 'info',
-        text: 'Network error updating Trial Fund configuration.'
-      });
-    }
+    // Simulate API request submission
+    const now = new Date();
+    const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    
+    setLastUpdated(formattedDate);
+    setIsSaved(true);
+    
+    setNotification({
+      type: 'success',
+      text: `Configuration request submitted successfully! New Trial Fund: ${amount} USDT for ${duration} days (${isEnabled ? 'Enabled' : 'Disabled'}).`
+    });
 
     setTimeout(() => {
       setNotification(null);

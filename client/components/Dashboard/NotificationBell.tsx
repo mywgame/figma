@@ -113,22 +113,14 @@ export const NotificationBell: React.FC = () => {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const handleMarkAllRead = async (e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    // Optimistically update local state so unread count badge & UI update immediately
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-
+  const handleMarkAllRead = async () => {
     try {
       const response = await api.markAllNotificationsRead();
-      if (!response.success) {
-        await fetchNotifications();
+      if (response.success) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       }
     } catch (error) {
       console.error('Error marking all read:', error);
-      await fetchNotifications();
     }
   };
 
@@ -235,7 +227,7 @@ export const NotificationBell: React.FC = () => {
             </div>
             {notifications.length > 0 && (
               <button
-                onClick={(e) => handleMarkAllRead(e)}
+                onClick={handleMarkAllRead}
                 className="flex items-center gap-1 text-[11px] font-bold text-cyan-400 hover:text-cyan-300 cursor-pointer focus:outline-none transition-colors"
                 title="Mark all as read"
                 id="notification-mark-all-read"

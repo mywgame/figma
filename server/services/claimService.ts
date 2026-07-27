@@ -41,10 +41,11 @@ export class ClaimService {
     const vipTier = vip ? vip.tier : 'VIP1';
     const rate = this.getDpyRateByVip(vipTier);
 
-    // BUSINESS RULE: Daily DPY is generated on Active Balance (availableBalance + active trialBalance).
-    // Locked balance = funds pending withdrawal exit — they are no longer "in the platform".
-    const trialVal = parseFloat(wallet.trialBalance || '0');
-    const activeBalance = parseFloat(wallet.availableBalance) + (isNaN(trialVal) ? 0 : trialVal);
+    // BUSINESS RULE: Daily DPY is generated ONLY on the Active Balance (availableBalance).
+    // Locked balance = funds pending withdrawal exit — they are no longer "in the platform"
+    // and must NOT keep earning yield until they return to the active wallet (or the
+    // withdrawal is rejected and refunded back to availableBalance).
+    const activeBalance = parseFloat(wallet.availableBalance);
     const rewardAmount = activeBalance * rate;
 
     if (rewardAmount <= 0) {

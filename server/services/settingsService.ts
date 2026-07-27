@@ -36,41 +36,6 @@ export class SettingsService {
     return updatedSetting;
   }
 
-  /**
-   * Retrieve Trial Fund configuration (amount, duration, enable/disable status)
-   */
-  async getTrialFundConfig() {
-    const amountSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_AMOUNT');
-    const durationSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_DURATION_DAYS');
-    const enabledSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_ENABLED');
-
-    return {
-      amount: amountSetting ? amountSetting.value : '100.00000000',
-      durationDays: durationSetting ? durationSetting.value : '3',
-      isEnabled: enabledSetting ? enabledSetting.value !== 'false' : true,
-    };
-  }
-
-  /**
-   * Save or update Trial Fund configuration in Admin Panel
-   */
-  async updateTrialFundConfig(data: { amount: string; durationDays: string | number; isEnabled: boolean }, adminUid: string) {
-    const parsedAmt = parseFloat(data.amount);
-    const formattedAmount = !isNaN(parsedAmt) && parsedAmt > 0 ? parsedAmt.toFixed(8) : '100.00000000';
-    const formattedDuration = String(parseInt(String(data.durationDays)) || 3);
-    const enabledStr = data.isEnabled ? 'true' : 'false';
-
-    await settingsRepository.setSystemSetting('TRIAL_FUND_AMOUNT', formattedAmount, adminUid, 'Default Trial Fund Amount (USDT)');
-    await settingsRepository.setSystemSetting('TRIAL_FUND_DURATION_DAYS', formattedDuration, adminUid, 'Trial Fund Duration in Days');
-    await settingsRepository.setSystemSetting('TRIAL_FUND_ENABLED', enabledStr, adminUid, 'Trial Fund Enable/Disable Flag');
-
-    return {
-      amount: formattedAmount,
-      durationDays: formattedDuration,
-      isEnabled: data.isEnabled,
-    };
-  }
-
   /* =========================================================================
    * USER SETTINGS (PERSONALIZED USER ACCOUNT PREFERENCES)
    * ========================================================================= */

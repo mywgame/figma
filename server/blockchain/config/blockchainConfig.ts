@@ -66,7 +66,7 @@ export const blockchainConfig = {
         process.env.USDT_CONTRACT ||
         (isTestnet
           ? '0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C'
-          : '0x55d398326f99059fF775485246999027B3197955'),
+          : '0x55d398326f99059ff775485246999027b3197955'),
       xpub: process.env.USDT_BEP20_XPUB || process.env.USDT_XPUB || '',
       hotPrivateKey:
         process.env.USDT_BEP20_HOT_PRIVATE_KEY ||
@@ -85,7 +85,7 @@ export const blockchainConfig = {
         process.env.USDT_POLYGON_CONTRACT ||
         (isTestnet
           ? '0x41e94eb019c0762f9bfcf9fb1e58725bfb01728b'
-          : '0xc2132D05D31c914a87C6611C10748AEb04B58e8F'),
+          : '0xc2132d05d31c914a87c6611c10748aeb04b58e8f'),
       xpub: process.env.USDT_POLYGON_XPUB || '',
       hotPrivateKey: process.env.USDT_POLYGON_HOT_PRIVATE_KEY || '',
       hotAddress: process.env.USDT_POLYGON_HOT_ADDRESS || '',

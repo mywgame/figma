@@ -1327,122 +1327,11 @@ var init_vipRepository = __esm({
   }
 });
 
-// server/repositories/transactionRepository.ts
-var import_drizzle_orm19, TransactionRepository, transactionRepository;
-var init_transactionRepository = __esm({
-  "server/repositories/transactionRepository.ts"() {
-    import_drizzle_orm19 = require("drizzle-orm");
-    init_db();
-    init_schema();
-    TransactionRepository = class {
-      /**
-       * Find a transaction by its sequential database ID
-       */
-      async findById(id) {
-        try {
-          const result = await db.select().from(transactions).where((0, import_drizzle_orm19.eq)(transactions.id, id));
-          return result[0] || null;
-        } catch (error) {
-          console.error("Database query (findById) failed:", error);
-          throw new Error("Failed to retrieve transaction from ledger.");
-        }
-      }
-      /**
-       * Find all transactions linking to a specific source entity or reference code
-       */
-      async findByReferenceId(referenceId) {
-        try {
-          const result = await db.select().from(transactions).where((0, import_drizzle_orm19.eq)(transactions.referenceId, referenceId));
-          return result;
-        } catch (error) {
-          console.error("Database query (findByReferenceId) failed:", error);
-          throw new Error("Failed to retrieve transactions by reference ID.");
-        }
-      }
-      /**
-       * Get transactions for a user with pagination and optional filters (type, status)
-       */
-      async findByUserId(userId, options) {
-        try {
-          const limit = options?.limit ?? 20;
-          const offset = options?.offset ?? 0;
-          const type = options?.type;
-          const status = options?.status;
-          let query = db.select().from(transactions).$dynamic();
-          const conditions = [(0, import_drizzle_orm19.eq)(transactions.userId, userId)];
-          if (type) {
-            conditions.push((0, import_drizzle_orm19.eq)(transactions.type, type));
-          }
-          if (status) {
-            conditions.push((0, import_drizzle_orm19.eq)(transactions.status, status));
-          }
-          const result = await query.where((0, import_drizzle_orm19.and)(...conditions)).orderBy((0, import_drizzle_orm19.desc)(transactions.createdAt)).limit(limit).offset(offset);
-          return result;
-        } catch (error) {
-          console.error("Database query (findByUserId) failed:", error);
-          throw new Error("Failed to query user transactions ledger.");
-        }
-      }
-      /**
-       * Write a new immutable transaction entry into the financial ledger
-       */
-      async createTransaction(data) {
-        try {
-          const result = await db.insert(transactions).values({
-            userId: data.userId,
-            walletId: data.walletId,
-            type: data.type,
-            referenceId: data.referenceId,
-            status: data.status || "COMPLETED",
-            description: data.description,
-            amount: data.amount,
-            balanceBefore: data.balanceBefore,
-            balanceAfter: data.balanceAfter,
-            createdBy: data.createdBy || "SYSTEM"
-          }).returning();
-          return result[0];
-        } catch (error) {
-          console.error("Database insertion (createTransaction) failed:", error);
-          throw new Error("Failed to record immutable transaction ledger entry.");
-        }
-      }
-      /**
-       * Get system-wide transaction logs with pagination and optional filters (audit panel)
-       */
-      async findAll(options) {
-        try {
-          const limit = options?.limit ?? 50;
-          const offset = options?.offset ?? 0;
-          const type = options?.type;
-          const status = options?.status;
-          let query = db.select().from(transactions).$dynamic();
-          const conditions = [];
-          if (type) {
-            conditions.push((0, import_drizzle_orm19.eq)(transactions.type, type));
-          }
-          if (status) {
-            conditions.push((0, import_drizzle_orm19.eq)(transactions.status, status));
-          }
-          if (conditions.length > 0) {
-            query = query.where((0, import_drizzle_orm19.and)(...conditions));
-          }
-          const result = await query.orderBy((0, import_drizzle_orm19.desc)(transactions.createdAt)).limit(limit).offset(offset);
-          return result;
-        } catch (error) {
-          console.error("Database query (findAll) failed:", error);
-          throw new Error("Failed to retrieve system transactions ledger.");
-        }
-      }
-    };
-    transactionRepository = new TransactionRepository();
-  }
-});
-
 // server/repositories/notificationRepository.ts
-var import_drizzle_orm20, NotificationRepository, notificationRepository;
+var import_drizzle_orm19, NotificationRepository, notificationRepository;
 var init_notificationRepository = __esm({
   "server/repositories/notificationRepository.ts"() {
-    import_drizzle_orm20 = require("drizzle-orm");
+    import_drizzle_orm19 = require("drizzle-orm");
     init_db();
     init_schema();
     NotificationRepository = class {
@@ -1451,7 +1340,7 @@ var init_notificationRepository = __esm({
        */
       async findById(id) {
         try {
-          const result = await db.select().from(notifications).where((0, import_drizzle_orm20.eq)(notifications.id, id));
+          const result = await db.select().from(notifications).where((0, import_drizzle_orm19.eq)(notifications.id, id));
           return result[0] || null;
         } catch (error) {
           console.error("Database query (findById) failed:", error);
@@ -1467,11 +1356,11 @@ var init_notificationRepository = __esm({
           const offset = options?.offset ?? 0;
           const read = options?.read;
           let query = db.select().from(notifications).$dynamic();
-          const conditions = [(0, import_drizzle_orm20.eq)(notifications.userId, userId)];
+          const conditions = [(0, import_drizzle_orm19.eq)(notifications.userId, userId)];
           if (read !== void 0) {
-            conditions.push((0, import_drizzle_orm20.eq)(notifications.read, read));
+            conditions.push((0, import_drizzle_orm19.eq)(notifications.read, read));
           }
-          const result = await query.where((0, import_drizzle_orm20.and)(...conditions)).orderBy((0, import_drizzle_orm20.desc)(notifications.createdAt)).limit(limit).offset(offset);
+          const result = await query.where((0, import_drizzle_orm19.and)(...conditions)).orderBy((0, import_drizzle_orm19.desc)(notifications.createdAt)).limit(limit).offset(offset);
           return result;
         } catch (error) {
           console.error("Database query (findByUserId) failed:", error);
@@ -1499,7 +1388,7 @@ var init_notificationRepository = __esm({
        */
       async markAsRead(id) {
         try {
-          const result = await db.update(notifications).set({ read: true }).where((0, import_drizzle_orm20.eq)(notifications.id, id)).returning();
+          const result = await db.update(notifications).set({ read: true }).where((0, import_drizzle_orm19.eq)(notifications.id, id)).returning();
           return result[0] || null;
         } catch (error) {
           console.error("Database update (markAsRead) failed:", error);
@@ -1511,7 +1400,7 @@ var init_notificationRepository = __esm({
        */
       async markAllAsRead(userId) {
         try {
-          const result = await db.update(notifications).set({ read: true }).where((0, import_drizzle_orm20.eq)(notifications.userId, userId)).returning();
+          const result = await db.update(notifications).set({ read: true }).where((0, import_drizzle_orm19.eq)(notifications.userId, userId)).returning();
           return result;
         } catch (error) {
           console.error("Database update (markAllAsRead) failed:", error);
@@ -1523,7 +1412,7 @@ var init_notificationRepository = __esm({
        */
       async deleteNotification(id) {
         try {
-          const result = await db.delete(notifications).where((0, import_drizzle_orm20.eq)(notifications.id, id)).returning();
+          const result = await db.delete(notifications).where((0, import_drizzle_orm19.eq)(notifications.id, id)).returning();
           return result[0] || null;
         } catch (error) {
           console.error("Database deletion (deleteNotification) failed:", error);
@@ -1536,10 +1425,10 @@ var init_notificationRepository = __esm({
 });
 
 // server/services/notificationService.ts
-var import_drizzle_orm21, NotificationService, notificationService;
+var import_drizzle_orm20, NotificationService, notificationService;
 var init_notificationService = __esm({
   "server/services/notificationService.ts"() {
-    import_drizzle_orm21 = require("drizzle-orm");
+    import_drizzle_orm20 = require("drizzle-orm");
     init_db();
     init_schema();
     init_notificationRepository();
@@ -1571,7 +1460,7 @@ var init_notificationService = __esm({
        */
       async notifyAdmins(data) {
         try {
-          const admins = await db.select().from(users).where((0, import_drizzle_orm21.or)((0, import_drizzle_orm21.eq)(users.role, "ADMIN"), (0, import_drizzle_orm21.eq)(users.role, "SUPERADMIN")));
+          const admins = await db.select().from(users).where((0, import_drizzle_orm20.or)((0, import_drizzle_orm20.eq)(users.role, "ADMIN"), (0, import_drizzle_orm20.eq)(users.role, "SUPERADMIN")));
           const message = JSON.stringify({
             title: data.title,
             description: data.description,
@@ -1629,6 +1518,117 @@ var init_notificationService = __esm({
       }
     };
     notificationService = new NotificationService();
+  }
+});
+
+// server/repositories/transactionRepository.ts
+var import_drizzle_orm21, TransactionRepository, transactionRepository;
+var init_transactionRepository = __esm({
+  "server/repositories/transactionRepository.ts"() {
+    import_drizzle_orm21 = require("drizzle-orm");
+    init_db();
+    init_schema();
+    TransactionRepository = class {
+      /**
+       * Find a transaction by its sequential database ID
+       */
+      async findById(id) {
+        try {
+          const result = await db.select().from(transactions).where((0, import_drizzle_orm21.eq)(transactions.id, id));
+          return result[0] || null;
+        } catch (error) {
+          console.error("Database query (findById) failed:", error);
+          throw new Error("Failed to retrieve transaction from ledger.");
+        }
+      }
+      /**
+       * Find all transactions linking to a specific source entity or reference code
+       */
+      async findByReferenceId(referenceId) {
+        try {
+          const result = await db.select().from(transactions).where((0, import_drizzle_orm21.eq)(transactions.referenceId, referenceId));
+          return result;
+        } catch (error) {
+          console.error("Database query (findByReferenceId) failed:", error);
+          throw new Error("Failed to retrieve transactions by reference ID.");
+        }
+      }
+      /**
+       * Get transactions for a user with pagination and optional filters (type, status)
+       */
+      async findByUserId(userId, options) {
+        try {
+          const limit = options?.limit ?? 20;
+          const offset = options?.offset ?? 0;
+          const type = options?.type;
+          const status = options?.status;
+          let query = db.select().from(transactions).$dynamic();
+          const conditions = [(0, import_drizzle_orm21.eq)(transactions.userId, userId)];
+          if (type) {
+            conditions.push((0, import_drizzle_orm21.eq)(transactions.type, type));
+          }
+          if (status) {
+            conditions.push((0, import_drizzle_orm21.eq)(transactions.status, status));
+          }
+          const result = await query.where((0, import_drizzle_orm21.and)(...conditions)).orderBy((0, import_drizzle_orm21.desc)(transactions.createdAt)).limit(limit).offset(offset);
+          return result;
+        } catch (error) {
+          console.error("Database query (findByUserId) failed:", error);
+          throw new Error("Failed to query user transactions ledger.");
+        }
+      }
+      /**
+       * Write a new immutable transaction entry into the financial ledger
+       */
+      async createTransaction(data) {
+        try {
+          const result = await db.insert(transactions).values({
+            userId: data.userId,
+            walletId: data.walletId,
+            type: data.type,
+            referenceId: data.referenceId,
+            status: data.status || "COMPLETED",
+            description: data.description,
+            amount: data.amount,
+            balanceBefore: data.balanceBefore,
+            balanceAfter: data.balanceAfter,
+            createdBy: data.createdBy || "SYSTEM"
+          }).returning();
+          return result[0];
+        } catch (error) {
+          console.error("Database insertion (createTransaction) failed:", error);
+          throw new Error("Failed to record immutable transaction ledger entry.");
+        }
+      }
+      /**
+       * Get system-wide transaction logs with pagination and optional filters (audit panel)
+       */
+      async findAll(options) {
+        try {
+          const limit = options?.limit ?? 50;
+          const offset = options?.offset ?? 0;
+          const type = options?.type;
+          const status = options?.status;
+          let query = db.select().from(transactions).$dynamic();
+          const conditions = [];
+          if (type) {
+            conditions.push((0, import_drizzle_orm21.eq)(transactions.type, type));
+          }
+          if (status) {
+            conditions.push((0, import_drizzle_orm21.eq)(transactions.status, status));
+          }
+          if (conditions.length > 0) {
+            query = query.where((0, import_drizzle_orm21.and)(...conditions));
+          }
+          const result = await query.orderBy((0, import_drizzle_orm21.desc)(transactions.createdAt)).limit(limit).offset(offset);
+          return result;
+        } catch (error) {
+          console.error("Database query (findAll) failed:", error);
+          throw new Error("Failed to retrieve system transactions ledger.");
+        }
+      }
+    };
+    transactionRepository = new TransactionRepository();
   }
 });
 
@@ -2949,30 +2949,6 @@ var SettingsRepository = class {
       throw new Error("Failed to update system configuration.");
     }
   }
-  /**
-   * Helper to set system setting safely, creating or updating
-   */
-  async setSystemSetting(key, value, updatedBy = "SYSTEM", description) {
-    try {
-      const existing = await this.findSystemSettingByKey(key);
-      if (existing) {
-        return await this.updateSystemSetting(key, value, updatedBy);
-      } else {
-        const all = await this.findAllSystemSettings();
-        const nextId = all.reduce((max, s) => Math.max(max, s.id), 0) + 1;
-        return await this.upsertSystemSetting({
-          id: nextId,
-          key,
-          value,
-          description: description || `Configuration for ${key}`,
-          updatedBy
-        });
-      }
-    } catch (error) {
-      console.error(`Database set (setSystemSetting) failed for key ${key}:`, error);
-      throw new Error(`Failed to set system setting ${key}`);
-    }
-  }
   /* =========================================================================
    * USER SETTINGS (PERSONALIZED USER ACCOUNT PREFERENCES)
    * ========================================================================= */
@@ -3026,8 +3002,6 @@ var SettingsRepository = class {
 var settingsRepository = new SettingsRepository();
 
 // server/services/userService.ts
-init_transactionRepository();
-init_notificationRepository();
 init_notificationService();
 init_types();
 
@@ -3111,103 +3085,16 @@ var UserService = class {
    */
   async ensureUserResources(userId) {
     try {
-      const user = await userRepository.findById(userId);
-      const userCreatedAt = user ? new Date(user.createdAt).getTime() : Date.now();
-      const trialAmountSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_AMOUNT");
-      const trialDurationSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_DURATION_DAYS");
-      const trialEnabledSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_ENABLED");
-      const isEnabled = trialEnabledSetting ? trialEnabledSetting.value !== "false" : true;
-      const rawAmount = trialAmountSetting ? trialAmountSetting.value : "100.00000000";
-      const durationDays = trialDurationSetting ? parseInt(trialDurationSetting.value) || 3 : 3;
-      const parsedAmt = parseFloat(rawAmount);
-      const trialAmount = isEnabled && !isNaN(parsedAmt) && parsedAmt > 0 ? parsedAmt.toFixed(8) : "0.00000000";
-      const expiryTime = userCreatedAt + durationDays * 86400 * 1e3;
-      const isExpired = Date.now() > expiryTime;
       const existingWallet = await walletRepository.findByUserId(userId);
       if (!existingWallet) {
-        const initialTrialBalance = isExpired ? "0.00000000" : trialAmount;
-        const createdWallet = await walletRepository.createWallet({
+        const trialAmountSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_AMOUNT");
+        const trialAmount = trialAmountSetting ? trialAmountSetting.value : "100.00000000";
+        await walletRepository.createWallet({
           userId,
           availableBalance: "0.00000000",
           lockedBalance: "0.00000000",
-          trialBalance: initialTrialBalance
+          trialBalance: trialAmount
         });
-        if (isEnabled && parseFloat(initialTrialBalance) > 0 && createdWallet) {
-          try {
-            await transactionRepository.createTransaction({
-              userId,
-              walletId: createdWallet.id,
-              type: "TRIAL_FUND",
-              referenceId: `TRIAL-${userId}`,
-              status: "COMPLETED",
-              description: `Trial Fund credited automatically on registration (${initialTrialBalance} USDT for ${durationDays} days)`,
-              amount: initialTrialBalance,
-              balanceBefore: "0.00000000",
-              balanceAfter: initialTrialBalance
-            });
-            await notificationRepository.createNotification({
-              userId,
-              priority: "HIGH",
-              message: JSON.stringify({
-                title: "Trial Fund Credited",
-                description: `Welcome! A Trial Fund of $${parseFloat(initialTrialBalance).toFixed(2)} USDT (${durationDays}-day trial) has been credited to your account.`,
-                icon: "Sparkles",
-                type: "trial_fund"
-              })
-            });
-          } catch (logErr) {
-            console.error("Failed to log trial fund transaction/notification:", logErr);
-          }
-        }
-      } else {
-        const currentTrial = parseFloat(existingWallet.trialBalance || "0");
-        if (currentTrial > 0 && isExpired) {
-          await walletRepository.updateBalances(existingWallet.id, { trialBalance: "0.00000000" });
-          try {
-            await transactionRepository.createTransaction({
-              userId,
-              walletId: existingWallet.id,
-              type: "TRIAL_EXPIRY",
-              referenceId: `EXPIRY-${userId}`,
-              status: "COMPLETED",
-              description: `Trial Fund principal expired after ${durationDays} days`,
-              amount: existingWallet.trialBalance,
-              balanceBefore: existingWallet.trialBalance,
-              balanceAfter: "0.00000000"
-            });
-          } catch (e) {
-          }
-        } else if (currentTrial === 0 && isEnabled && !isExpired && parseFloat(trialAmount) > 0) {
-          const existingTxs = await transactionRepository.findByUserId(userId, { type: "TRIAL_FUND" });
-          if (existingTxs.length === 0) {
-            await walletRepository.updateBalances(existingWallet.id, { trialBalance: trialAmount });
-            try {
-              await transactionRepository.createTransaction({
-                userId,
-                walletId: existingWallet.id,
-                type: "TRIAL_FUND",
-                referenceId: `TRIAL-${userId}`,
-                status: "COMPLETED",
-                description: `Trial Fund credited automatically (${trialAmount} USDT for ${durationDays} days)`,
-                amount: trialAmount,
-                balanceBefore: "0.00000000",
-                balanceAfter: trialAmount
-              });
-              await notificationRepository.createNotification({
-                userId,
-                priority: "HIGH",
-                message: JSON.stringify({
-                  title: "Trial Fund Credited",
-                  description: `A Trial Fund of $${parseFloat(trialAmount).toFixed(2)} USDT (${durationDays}-day trial) has been credited to your account.`,
-                  icon: "Sparkles",
-                  type: "trial_fund"
-                })
-              });
-            } catch (logErr) {
-              console.error("Failed to log trial fund transaction/notification:", logErr);
-            }
-          }
-        }
       }
       const existingVip = await vipRepository.findByUserId(userId);
       if (!existingVip) {
@@ -3898,8 +3785,7 @@ var ClaimService = class {
     const vip = await vipRepository.findByUserId(userId);
     const vipTier = vip ? vip.tier : "VIP1";
     const rate = this.getDpyRateByVip(vipTier);
-    const trialVal = parseFloat(wallet.trialBalance || "0");
-    const activeBalance = parseFloat(wallet.availableBalance) + (isNaN(trialVal) ? 0 : trialVal);
+    const activeBalance = parseFloat(wallet.availableBalance);
     const rewardAmount = activeBalance * rate;
     if (rewardAmount <= 0) {
       return null;
@@ -4692,7 +4578,7 @@ init_vipService();
 init_auditRepository();
 
 // server/blockchain/providers/EvmRpcProvider.ts
-var import_ethers5 = require("ethers");
+var import_ethers3 = require("ethers");
 
 // server/blockchain/config/blockchainConfig.ts
 var dotenv3 = __toESM(require("dotenv"), 1);
@@ -4729,7 +4615,7 @@ var blockchainConfig = {
   isTestnet,
   networks: {
     USDT_BEP20: {
-      contractAddress: process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT || (isTestnet ? "0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C" : "0x55d398326f99059fF775485246999027B3197955"),
+      contractAddress: process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT || (isTestnet ? "0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C" : "0x55d398326f99059ff775485246999027b3197955"),
       xpub: process.env.USDT_BEP20_XPUB || process.env.USDT_XPUB || "",
       hotPrivateKey: process.env.USDT_BEP20_HOT_PRIVATE_KEY || process.env.HOT_WALLET_PRIVATE_KEY || "",
       hotAddress: process.env.USDT_BEP20_HOT_ADDRESS || process.env.HOT_WALLET_ADDRESS || "",
@@ -4737,7 +4623,7 @@ var blockchainConfig = {
       decimals: parseInt(process.env.USDT_BEP20_DECIMALS || process.env.USDT_DECIMALS || "18", 10)
     },
     USDT_POLYGON: {
-      contractAddress: process.env.USDT_POLYGON_CONTRACT || (isTestnet ? "0x41e94eb019c0762f9bfcf9fb1e58725bfb01728b" : "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"),
+      contractAddress: process.env.USDT_POLYGON_CONTRACT || (isTestnet ? "0x41e94eb019c0762f9bfcf9fb1e58725bfb01728b" : "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"),
       xpub: process.env.USDT_POLYGON_XPUB || "",
       hotPrivateKey: process.env.USDT_POLYGON_HOT_PRIVATE_KEY || "",
       hotAddress: process.env.USDT_POLYGON_HOT_ADDRESS || "",
@@ -4958,12 +4844,9 @@ var KeyManager = class {
 var keyManager = new KeyManager();
 
 // server/blockchain/rpc/RpcManager.ts
-var import_ethers2 = require("ethers");
 var RpcManager = class {
   constructor() {
     this.endpoints = {};
-    this.ethersProviderCache = /* @__PURE__ */ new Map();
-    this.logCooldowns = /* @__PURE__ */ new Map();
     this.initializeEndpoints();
   }
   initializeEndpoints() {
@@ -4976,7 +4859,7 @@ var RpcManager = class {
       "https://data-seed-prebsc-2-s1.binance.org:8545"
     ] : [
       "https://bsc-dataseed.binance.org",
-      "https://bsc-dataseed1.defibit.io",
+      "https://bsc-mainnet.publicnode.com",
       "https://1rpc.io/bnb"
     ];
     const bscUrls = [
@@ -4995,9 +4878,9 @@ var RpcManager = class {
       "https://polygon-amoy.drpc.org",
       "https://polygon-amoy.publicnode.com"
     ] : [
-      "https://polygon.drpc.org",
-      "https://1rpc.io/matic",
-      "https://polygon-bor.publicnode.com"
+      "https://polygon-rpc.com",
+      "https://polygon-bor.publicnode.com",
+      "https://1rpc.io/matic"
     ];
     const polygonUrls = [
       ...polygonEnvPrimary ? [polygonEnvPrimary] : [],
@@ -5015,8 +4898,7 @@ var RpcManager = class {
       "https://api.shasta.trongrid.io"
     ] : [
       "https://api.trongrid.io",
-      "https://tron.drpc.org",
-      "https://api.tronstack.io"
+      "https://tron.drpc.org"
     ];
     const tronUrls = [
       ...tronEnvPrimary ? [tronEnvPrimary] : [],
@@ -5027,46 +4909,6 @@ var RpcManager = class {
       url,
       weight: 100 - i * 10
     }));
-  }
-  /**
-   * Get or create a cached ethers JsonRpcProvider instance configured with staticNetwork
-   * to eliminate "failed to detect network" warnings and avoid creating transient providers.
-   */
-  getEthersProvider(network, rpcUrl) {
-    const cacheKey = `${network}:${rpcUrl}`;
-    if (!this.ethersProviderCache.has(cacheKey)) {
-      const isTestnet2 = blockchainConfig.isTestnet;
-      const chainIdMap = {
-        USDT_BEP20: isTestnet2 ? 97 : 56,
-        USDT_POLYGON: isTestnet2 ? 80002 : 137
-      };
-      const chainId = chainIdMap[network];
-      let provider;
-      if (chainId) {
-        const netObj = import_ethers2.ethers.Network.from(chainId);
-        provider = new import_ethers2.ethers.JsonRpcProvider(rpcUrl, netObj, {
-          staticNetwork: netObj,
-          batchMaxCount: 1
-        });
-      } else {
-        provider = new import_ethers2.ethers.JsonRpcProvider(rpcUrl);
-      }
-      this.ethersProviderCache.set(cacheKey, provider);
-    }
-    return this.ethersProviderCache.get(cacheKey);
-  }
-  /**
-   * Log messages with rate limiting to eliminate terminal spam
-   */
-  logThrottled(key, level, message, cooldownMs = 6e4) {
-    const now = Date.now();
-    const lastTime = this.logCooldowns.get(key) || 0;
-    if (now - lastTime > cooldownMs) {
-      this.logCooldowns.set(key, now);
-      if (level === "error") console.error(message);
-      else if (level === "warn") console.warn(message);
-      else console.log(message);
-    }
   }
   /**
    * Get active RPC endpoint for a given network with failover support
@@ -5095,36 +4937,8 @@ var RpcManager = class {
     if (target) {
       target.isFailing = true;
       target.lastFailureTime = Date.now();
-      this.logThrottled(
-        `failing_${network}_${url}`,
-        "warn",
-        `[RpcManager] Marked RPC endpoint as failing for ${network}: ${url}`
-      );
+      console.warn(`[RpcManager] Marked RPC endpoint as failing for ${network}: ${url}`);
     }
-  }
-  /**
-   * Check if an error is a non-retryable application/configuration error
-   */
-  isNonRetryableError(err) {
-    if (!err) return false;
-    const code = err.code;
-    const msg = (err.message || "").toLowerCase();
-    const nonRetryableCodes = [
-      "INVALID_ARGUMENT",
-      "NUMERIC_FAULT",
-      "UNSUPPORTED_OPERATION",
-      "BUFFER_OVERRUN",
-      "MISSING_ARGUMENT",
-      "UNEXPECTED_ARGUMENT",
-      "INVALID_OPTION"
-    ];
-    if (code && nonRetryableCodes.includes(code)) {
-      return true;
-    }
-    if (msg.includes("bad address checksum") || msg.includes("invalid address") || msg.includes("invalid hex") || msg.includes("invalid argument") || msg.includes("abi encoding")) {
-      return true;
-    }
-    return false;
   }
   /**
    * Execute JSON-RPC call with automatic RPC failover and retry
@@ -5137,21 +4951,9 @@ var RpcManager = class {
       try {
         return await executor(url);
       } catch (err) {
-        if (this.isNonRetryableError(err)) {
-          this.logThrottled(
-            `non_retryable_${network}`,
-            "error",
-            `[RpcManager] Non-retryable error on ${url} for ${network}: ${err.message}`
-          );
-          throw err;
-        }
         lastError = err;
         this.markFailing(network, url);
-        this.logThrottled(
-          `retry_${network}_${url}`,
-          "warn",
-          `[RpcManager] RPC transport call failed on ${url} for ${network}: ${err.message}. Retrying with next endpoint...`
-        );
+        console.warn(`[RpcManager] RPC call failed on ${url} for ${network}: ${err.message}. Retrying with next endpoint...`);
       }
     }
     throw new Error(
@@ -5161,183 +4963,8 @@ var RpcManager = class {
 };
 var rpcManager = new RpcManager();
 
-// server/blockchain/tokens/tokenRegistry.ts
-var import_ethers3 = require("ethers");
-function sanitizeContractAddress(val, fallback) {
-  if (!val || typeof val !== "string") return fallback;
-  let cleaned = val.trim();
-  if (cleaned.startsWith('"') && cleaned.endsWith('"') || cleaned.startsWith("'") && cleaned.endsWith("'")) {
-    cleaned = cleaned.slice(1, -1).trim();
-  }
-  if (cleaned.includes("=")) {
-    const parts = cleaned.split("=");
-    cleaned = parts[parts.length - 1].trim();
-  }
-  return cleaned || fallback;
-}
-var TokenRegistry = class {
-  constructor() {
-    this.tokens = [];
-    this.initializeRegistry();
-  }
-  /**
-   * Initialize supported tokens registry with environment variable overrides and safe defaults
-   */
-  initializeRegistry() {
-    const bscMainnetContract = sanitizeContractAddress(
-      process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT,
-      "0x55d398326f99059fF775485246999027B3197955"
-    );
-    const polygonMainnetContract = sanitizeContractAddress(
-      process.env.USDT_POLYGON_CONTRACT,
-      "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
-    );
-    const tronMainnetContract = sanitizeContractAddress(
-      process.env.USDT_TRC20_CONTRACT,
-      "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
-    );
-    const bscTestnetContract = sanitizeContractAddress(
-      process.env.USDT_BEP20_TEST_CONTRACT || process.env.USDT_TEST_CONTRACT,
-      "0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C"
-    );
-    this.tokens = [
-      {
-        id: "USDT_BEP20_MAIN",
-        symbol: "USDT",
-        name: "Tether USD (BSC)",
-        network: "USDT_BEP20",
-        chainId: 56,
-        tokenStandard: "ERC20",
-        decimals: parseInt(process.env.USDT_BEP20_DECIMALS || "18", 10),
-        contractAddress: bscMainnetContract,
-        enabled: true,
-        developmentOnly: false
-      },
-      {
-        id: "USDT_POLYGON_MAIN",
-        symbol: "USDT",
-        name: "Tether USD (Polygon)",
-        network: "USDT_POLYGON",
-        chainId: 137,
-        tokenStandard: "ERC20",
-        decimals: parseInt(process.env.USDT_POLYGON_DECIMALS || "6", 10),
-        contractAddress: polygonMainnetContract,
-        enabled: true,
-        developmentOnly: false
-      },
-      {
-        id: "USDT_TRC20_MAIN",
-        symbol: "USDT",
-        name: "Tether USD (TRON)",
-        network: "USDT_TRC20",
-        chainId: 728126428,
-        tokenStandard: "TRC20",
-        decimals: parseInt(process.env.USDT_TRC20_DECIMALS || "6", 10),
-        contractAddress: tronMainnetContract,
-        enabled: true,
-        developmentOnly: false
-      },
-      {
-        id: "USDT_BEP20_TEST",
-        symbol: "USDT",
-        name: "MetaFirm Test USDT (BSC Testnet)",
-        network: "USDT_BEP20",
-        chainId: 97,
-        tokenStandard: "ERC20",
-        decimals: parseInt(process.env.USDT_BEP20_DECIMALS || "18", 10),
-        contractAddress: bscTestnetContract,
-        enabled: true,
-        developmentOnly: true
-      }
-    ];
-    this.validateRegistryAtStartup();
-  }
-  /**
-   * Fail-fast startup validation for all configured EVM & TRON contract addresses
-   */
-  validateRegistryAtStartup() {
-    for (const token of this.tokens) {
-      if (!token.enabled) continue;
-      if (token.tokenStandard === "ERC20") {
-        try {
-          const checksummed = import_ethers3.ethers.getAddress(token.contractAddress.trim().toLowerCase());
-          token.contractAddress = checksummed;
-        } catch (err) {
-          throw new Error(
-            `[TokenRegistry] Startup Validation Error: Invalid EVM contract address '${token.contractAddress}' for token '${token.id}' on network '${token.network}': ${err.message}`
-          );
-        }
-      } else if (token.tokenStandard === "TRC20") {
-        if (!hdWalletEngine.isValidTronAddress(token.contractAddress)) {
-          throw new Error(
-            `[TokenRegistry] Startup Validation Error: Invalid TRON contract address '${token.contractAddress}' for token '${token.id}' on network '${token.network}'`
-          );
-        }
-      }
-    }
-  }
-  /**
-   * Check whether development/test tokens are allowed
-   */
-  areTestTokensEnabled() {
-    return process.env.ENABLE_TEST_TOKENS === "true" || process.env.ENABLE_DEVELOPMENT_TOKENS === "true" || blockchainConfig.isTestnet;
-  }
-  /**
-   * Get all tokens in registry
-   */
-  getAllTokens() {
-    return [...this.tokens];
-  }
-  /**
-   * Get active tokens according to enable status and environment
-   */
-  getActiveTokens() {
-    const allowTest = this.areTestTokensEnabled();
-    return this.tokens.filter((t) => {
-      if (!t.enabled) return false;
-      if (t.developmentOnly && !allowTest) return false;
-      return true;
-    });
-  }
-  /**
-   * Get active tokens for a given network
-   */
-  getTokensForNetwork(network) {
-    return this.getActiveTokens().filter(
-      (t) => t.network.toUpperCase() === network.toUpperCase()
-    );
-  }
-  /**
-   * Get active contract addresses for a given network
-   */
-  getContractAddressesForNetwork(network) {
-    return this.getTokensForNetwork(network).map((t) => t.contractAddress);
-  }
-  /**
-   * Find token by contract address on a network
-   */
-  findTokenByContract(network, contractAddress) {
-    if (!contractAddress) return null;
-    const tokens = this.getTokensForNetwork(network);
-    const normTarget = contractAddress.toLowerCase().trim();
-    for (const t of tokens) {
-      if (t.contractAddress.toLowerCase().trim() === normTarget) {
-        return t;
-      }
-    }
-    return null;
-  }
-  /**
-   * Check if a contract address is supported on a network
-   */
-  isSupportedContract(network, contractAddress) {
-    return this.findTokenByContract(network, contractAddress) !== null;
-  }
-};
-var tokenRegistry = new TokenRegistry();
-
 // server/blockchain/utils/amountUtils.ts
-var import_ethers4 = require("ethers");
+var import_ethers2 = require("ethers");
 function formatTokenAmount(rawBigInt, decimals = 18) {
   if (rawBigInt <= 0n) return "0.00000000";
   const divisor = BigInt(10 ** decimals);
@@ -5384,7 +5011,7 @@ function denormalizeAmount(humanAmount, decimals = 18) {
   if (!humanAmount) return 0n;
   try {
     const cleanAmount = String(humanAmount).trim();
-    return import_ethers4.ethers.parseUnits(cleanAmount, decimals);
+    return import_ethers2.ethers.parseUnits(cleanAmount, decimals);
   } catch {
     return 0n;
   }
@@ -5397,42 +5024,6 @@ var ERC20_ABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)"
 ];
 var EvmRpcProvider = class {
-  constructor() {
-    this.dynamicChunkSizes = {};
-  }
-  /**
-   * Get dynamic block chunk size for a network, starting with configured default
-   */
-  getChunkSize(network) {
-    if (!this.dynamicChunkSizes[network]) {
-      const configVal = blockchainConfig.networks[network]?.blockChunkSize;
-      this.dynamicChunkSizes[network] = configVal && configVal > 0 ? configVal : 100;
-    }
-    return this.dynamicChunkSizes[network];
-  }
-  handleChunkSizeError(network, err) {
-    const current = this.getChunkSize(network);
-    const msg = (err?.message || "").toLowerCase();
-    if (msg.includes("limit") || msg.includes("exceeded") || msg.includes("too many") || msg.includes("-32005") || msg.includes("-32000") || msg.includes("timeout")) {
-      const minChunk = 10;
-      const newChunk = Math.max(minChunk, Math.floor(current / 2));
-      if (newChunk !== current) {
-        this.dynamicChunkSizes[network] = newChunk;
-        rpcManager.logThrottled(
-          `chunk_reduce_${network}`,
-          "warn",
-          `[EvmRpcProvider] RPC log limit hit on ${network}. Reduced dynamic block chunk size to ${newChunk}.`
-        );
-      }
-    }
-  }
-  handleChunkSizeSuccess(network) {
-    const current = this.getChunkSize(network);
-    const maxConfig = blockchainConfig.networks[network]?.blockChunkSize || 100;
-    if (current < maxConfig) {
-      this.dynamicChunkSizes[network] = Math.min(maxConfig, current + 10);
-    }
-  }
   /**
    * Derive EVM deposit address using KeyManager / HD engine
    */
@@ -5447,17 +5038,13 @@ var EvmRpcProvider = class {
     if (!netConfig || !netConfig.contractAddress) return "0.00000000";
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = rpcManager.getEthersProvider(network, rpcUrl);
-        const contract = new import_ethers5.ethers.Contract(netConfig.contractAddress, ERC20_ABI, provider);
+        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
+        const contract = new import_ethers3.ethers.Contract(netConfig.contractAddress, ERC20_ABI, provider);
         const rawBal = await contract.balanceOf(address);
         return normalizeAmount(rawBal.toString(), netConfig.decimals);
       });
     } catch (err) {
-      rpcManager.logThrottled(
-        `balance_err_${network}_${address}`,
-        "error",
-        `[EvmRpcProvider] Failed to get token balance for ${address} on ${network}: ${err.message}`
-      );
+      console.error(`[EvmRpcProvider] Failed to get token balance for ${address} on ${network}:`, err.message);
       return "0.00000000";
     }
   }
@@ -5467,16 +5054,12 @@ var EvmRpcProvider = class {
   async getNativeBalance(network, address) {
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = rpcManager.getEthersProvider(network, rpcUrl);
+        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
         const rawBal = await provider.getBalance(address);
-        return import_ethers5.ethers.formatEther(rawBal);
+        return import_ethers3.ethers.formatEther(rawBal);
       });
     } catch (err) {
-      rpcManager.logThrottled(
-        `native_bal_err_${network}_${address}`,
-        "error",
-        `[EvmRpcProvider] Failed to get native balance for ${address} on ${network}: ${err.message}`
-      );
+      console.error(`[EvmRpcProvider] Failed to get native balance for ${address} on ${network}:`, err.message);
       return "0.00000000";
     }
   }
@@ -5493,20 +5076,16 @@ var EvmRpcProvider = class {
     }
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = rpcManager.getEthersProvider(network, rpcUrl);
-        const wallet = new import_ethers5.ethers.Wallet(hotPrivateKey, provider);
+        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
+        const wallet = new import_ethers3.ethers.Wallet(hotPrivateKey, provider);
         const tx = await wallet.sendTransaction({
           to: toAddress,
-          value: import_ethers5.ethers.parseEther(amount)
+          value: import_ethers3.ethers.parseEther(amount)
         });
         return tx.hash;
       });
     } catch (err) {
-      rpcManager.logThrottled(
-        `fund_gas_err_${network}`,
-        "error",
-        `[EvmRpcProvider] Native gas funding failed on ${network} to ${toAddress}: ${err.message}`
-      );
+      console.error(`[EvmRpcProvider] Native gas funding failed on ${network} to ${toAddress}:`, err.message);
       throw err;
     }
   }
@@ -5523,27 +5102,23 @@ var EvmRpcProvider = class {
     }
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = rpcManager.getEthersProvider(network, rpcUrl);
-        const wallet = new import_ethers5.ethers.Wallet(signerKey, provider);
+        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
+        const wallet = new import_ethers3.ethers.Wallet(signerKey, provider);
         if (netConfig?.contractAddress) {
-          const contract = new import_ethers5.ethers.Contract(netConfig.contractAddress, ERC20_ABI, wallet);
+          const contract = new import_ethers3.ethers.Contract(netConfig.contractAddress, ERC20_ABI, wallet);
           const parsedAmount = denormalizeAmount(amount, netConfig.decimals);
           const tx = await contract.transfer(toAddress, parsedAmount);
           return tx.hash;
         } else {
           const tx = await wallet.sendTransaction({
             to: toAddress,
-            value: import_ethers5.ethers.parseEther(amount)
+            value: import_ethers3.ethers.parseEther(amount)
           });
           return tx.hash;
         }
       });
     } catch (err) {
-      rpcManager.logThrottled(
-        `broadcast_err_${network}`,
-        "error",
-        `[EvmRpcProvider] Broadcast transaction failed on ${network}: ${err.message}`
-      );
+      console.error(`[EvmRpcProvider] Broadcast transaction failed on ${network}:`, err.message);
       throw err;
     }
   }
@@ -5551,7 +5126,7 @@ var EvmRpcProvider = class {
    * Validate EVM address
    */
   async validateAddress(_network, address) {
-    return import_ethers5.ethers.isAddress(address);
+    return import_ethers3.ethers.isAddress(address);
   }
   /**
    * Fetch transaction details and verify confirmations
@@ -5561,7 +5136,7 @@ var EvmRpcProvider = class {
     const decimals = netConfig?.decimals ?? 18;
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = rpcManager.getEthersProvider(network, rpcUrl);
+        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
         const [tx, receipt, currentBlock] = await Promise.all([
           provider.getTransaction(txHash),
           provider.getTransactionReceipt(txHash),
@@ -5574,18 +5149,15 @@ var EvmRpcProvider = class {
         let amount = "0.00000000";
         let sender = tx.from;
         let receiver = tx.to || "";
-        let detectedContract;
-        const iface = new import_ethers5.ethers.Interface(ERC20_ABI);
+        const iface = new import_ethers3.ethers.Interface(ERC20_ABI);
         for (const log of receipt.logs) {
-          const matchedToken = tokenRegistry.findTokenByContract(network, log.address);
-          if (matchedToken) {
+          if (netConfig?.contractAddress && log.address.toLowerCase() === netConfig.contractAddress.toLowerCase()) {
             try {
               const parsedLog = iface.parseLog({ topics: [...log.topics], data: log.data });
               if (parsedLog && parsedLog.name === "Transfer") {
                 sender = parsedLog.args[0];
                 receiver = parsedLog.args[1];
-                amount = normalizeAmount(parsedLog.args[2].toString(), matchedToken.decimals);
-                detectedContract = matchedToken.contractAddress;
+                amount = normalizeAmount(parsedLog.args[2].toString(), decimals);
                 break;
               }
             } catch {
@@ -5593,7 +5165,7 @@ var EvmRpcProvider = class {
           }
         }
         if (amount === "0.00000000" && tx.value > 0n) {
-          amount = import_ethers5.ethers.formatEther(tx.value);
+          amount = import_ethers3.ethers.formatEther(tx.value);
         }
         return {
           hash: txHash,
@@ -5601,116 +5173,12 @@ var EvmRpcProvider = class {
           sender,
           receiver,
           confirmations,
-          isSuccessful,
-          contractAddress: detectedContract
+          isSuccessful
         };
       });
     } catch (err) {
-      rpcManager.logThrottled(
-        `get_tx_err_${network}_${txHash}`,
-        "error",
-        `[EvmRpcProvider] Failed to fetch transaction ${txHash} on ${network}: ${err.message}`
-      );
+      console.error(`[EvmRpcProvider] Failed to fetch transaction ${txHash} on ${network}:`, err.message);
       return null;
-    }
-  }
-  /**
-   * Get current block number on EVM chain
-   */
-  async getCurrentBlockNumber(network) {
-    try {
-      return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = rpcManager.getEthersProvider(network, rpcUrl);
-        return await provider.getBlockNumber();
-      });
-    } catch (err) {
-      rpcManager.logThrottled(
-        `get_block_err_${network}`,
-        "error",
-        `[EvmRpcProvider] Failed to get current block number for ${network}: ${err.message}`
-      );
-      return 0;
-    }
-  }
-  /**
-   * Scan range of blocks for ERC20 Transfer events
-   */
-  async getTransferEvents(network, fromBlock, toBlock) {
-    const activeTokens = tokenRegistry.getTokensForNetwork(network);
-    if (!activeTokens || activeTokens.length === 0) return [];
-    if (fromBlock > toBlock) return [];
-    const rawAddresses = activeTokens.map((t) => t.contractAddress);
-    const uniqueAddresses = Array.from(new Set(rawAddresses.map((a) => a.toLowerCase()))).map(
-      (lower) => rawAddresses.find((a) => a.toLowerCase() === lower) || lower
-    );
-    const addressFilter = uniqueAddresses.length === 1 ? uniqueAddresses[0] : uniqueAddresses;
-    const transferTopic = import_ethers5.ethers.id("Transfer(address,address,uint256)");
-    try {
-      return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = rpcManager.getEthersProvider(network, rpcUrl);
-        try {
-          const logs = await provider.getLogs({
-            address: addressFilter,
-            topics: [transferTopic],
-            fromBlock,
-            toBlock
-          });
-          this.handleChunkSizeSuccess(network);
-          const iface = new import_ethers5.ethers.Interface(ERC20_ABI);
-          const results = [];
-          for (const log of logs) {
-            const matchedToken = tokenRegistry.findTokenByContract(network, log.address);
-            if (!matchedToken) continue;
-            const decimals = matchedToken.decimals;
-            try {
-              const parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
-              if (parsed && parsed.name === "Transfer") {
-                const sender = parsed.args[0];
-                const receiver = parsed.args[1];
-                const rawVal = parsed.args[2].toString();
-                const amount = normalizeAmount(rawVal, decimals);
-                results.push({
-                  txHash: log.transactionHash,
-                  amount,
-                  sender,
-                  receiver,
-                  blockNumber: log.blockNumber,
-                  network,
-                  contractAddress: matchedToken.contractAddress,
-                  tokenId: matchedToken.id
-                });
-              }
-            } catch {
-              if (log.topics.length >= 3) {
-                const sender = "0x" + log.topics[1].slice(-40);
-                const receiver = "0x" + log.topics[2].slice(-40);
-                const amount = normalizeAmount(log.data, decimals);
-                results.push({
-                  txHash: log.transactionHash,
-                  amount,
-                  sender,
-                  receiver,
-                  blockNumber: log.blockNumber,
-                  network,
-                  contractAddress: matchedToken.contractAddress,
-                  tokenId: matchedToken.id
-                });
-              }
-            }
-          }
-          return results;
-        } catch (err) {
-          this.handleChunkSizeError(network, err);
-          throw err;
-        }
-      });
-    } catch (err) {
-      rpcManager.logThrottled(
-        `get_logs_err_${network}`,
-        "error",
-        `[EvmRpcProvider] Failed to fetch logs for ${network} (${fromBlock}-${toBlock}): ${err.message}`
-      );
-      return [];
     }
   }
 };
@@ -5727,7 +5195,7 @@ var TronRpcProvider = class {
   /**
    * Helper for HTTP GET / POST to Tron JSON-RPC / HTTP Nodes
    */
-  async tronFetch(rpcUrl, endpoint, body, ignore404 = false) {
+  async tronFetch(rpcUrl, endpoint, body) {
     const url = `${rpcUrl.replace(/\/$/, "")}${endpoint}`;
     const options = {
       method: body ? "POST" : "GET",
@@ -5737,13 +5205,10 @@ var TronRpcProvider = class {
       ...body ? { body: JSON.stringify(body) } : {}
     };
     const response = await fetch(url, options);
-    if (response.status === 404 && ignore404) {
-      return null;
-    }
     if (!response.ok) {
       throw new Error(`Tron API HTTP error ${response.status}: ${await response.text()}`);
     }
-    return await response.json();
+    return response.json();
   }
   /**
    * Query TRC20 token balance on-chain
@@ -5771,11 +5236,7 @@ var TronRpcProvider = class {
         return "0.00000000";
       });
     } catch (err) {
-      rpcManager.logThrottled(
-        `tron_bal_err_${address}`,
-        "error",
-        `[TronRpcProvider] Failed to get TRC20 balance for ${address}: ${err.message}`
-      );
+      console.error(`[TronRpcProvider] Failed to get TRC20 balance for ${address}:`, err.message);
       return "0.00000000";
     }
   }
@@ -5794,11 +5255,7 @@ var TronRpcProvider = class {
         return (sun / 1e6).toFixed(6);
       });
     } catch (err) {
-      rpcManager.logThrottled(
-        `tron_native_bal_err_${address}`,
-        "error",
-        `[TronRpcProvider] Failed to get native TRX balance for ${address}: ${err.message}`
-      );
+      console.error(`[TronRpcProvider] Failed to get native TRX balance for ${address}:`, err.message);
       return "0.00000000";
     }
   }
@@ -5900,131 +5357,6 @@ var TronRpcProvider = class {
       return null;
     }
   }
-  /**
-   * Get current block number on TRON chain
-   */
-  async getCurrentBlockNumber(network) {
-    try {
-      return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const res = await this.tronFetch(rpcUrl, "/wallet/getnowblock");
-        return res?.block_header?.raw_data?.number || 0;
-      });
-    } catch (err) {
-      console.error(`[TronRpcProvider] Failed to get current block number for ${network}:`, err.message);
-      return 0;
-    }
-  }
-  /**
-   * Scan block range for TRC20 Transfer events
-   */
-  async getTransferEvents(network, fromBlock, toBlock) {
-    const netConfig = blockchainConfig.networks[network];
-    if (!netConfig || !netConfig.contractAddress) return [];
-    if (fromBlock > toBlock) return [];
-    const decimals = netConfig.decimals ?? 6;
-    const results = [];
-    try {
-      return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        try {
-          const eventsRes = await this.tronFetch(
-            rpcUrl,
-            `/v1/contracts/${netConfig.contractAddress}/events?event_name=Transfer&limit=200`,
-            void 0,
-            true
-            // ignore404 on non-TronGrid endpoints
-          );
-          if (eventsRes && Array.isArray(eventsRes.data)) {
-            for (const ev of eventsRes.data) {
-              const blockNum = ev.block_number || ev.blockNumber;
-              if (blockNum && blockNum >= fromBlock && blockNum <= toBlock) {
-                const txHash = ev.transaction_id || ev.transactionId || ev.transaction_hash;
-                const rawVal = ev.result?.value || ev.result?.["2"] || "0";
-                let rawTo = ev.result?.to || ev.result?.["1"] || ev.result?.transferToAddress;
-                let rawFrom = ev.result?.from || ev.result?.["0"] || ev.result?.transferFromAddress;
-                if (rawTo) {
-                  if (rawTo.startsWith("41")) {
-                    rawTo = encodeTronBase58Check(rawTo);
-                  } else if (rawTo.startsWith("0x41")) {
-                    rawTo = encodeTronBase58Check(rawTo.slice(2));
-                  } else if (rawTo.startsWith("0x") && rawTo.length === 42) {
-                    rawTo = encodeTronBase58Check("41" + rawTo.slice(2));
-                  }
-                }
-                if (rawFrom) {
-                  if (rawFrom.startsWith("41")) {
-                    rawFrom = encodeTronBase58Check(rawFrom);
-                  } else if (rawFrom.startsWith("0x41")) {
-                    rawFrom = encodeTronBase58Check(rawFrom.slice(2));
-                  } else if (rawFrom.startsWith("0x") && rawFrom.length === 42) {
-                    rawFrom = encodeTronBase58Check("41" + rawFrom.slice(2));
-                  }
-                }
-                const amount = normalizeAmount(rawVal.toString(), decimals);
-                if (txHash && rawTo) {
-                  const activeToken = tokenRegistry.getTokensForNetwork(network)[0];
-                  results.push({
-                    txHash,
-                    amount,
-                    sender: rawFrom || "",
-                    receiver: rawTo,
-                    blockNumber: blockNum,
-                    network,
-                    contractAddress: activeToken?.contractAddress,
-                    tokenId: activeToken?.id
-                  });
-                }
-              }
-            }
-            if (results.length > 0) return results;
-          }
-        } catch {
-        }
-        const hexContract = decodeTronBase58Check(netConfig.contractAddress);
-        const maxBlockToScan = Math.min(toBlock, fromBlock + 20);
-        for (let b = fromBlock; b <= maxBlockToScan; b++) {
-          try {
-            const block = await this.tronFetch(rpcUrl, "/wallet/getblockbynum", { num: b });
-            if (block && Array.isArray(block.transactions)) {
-              for (const tx of block.transactions) {
-                const txHash = tx.txID;
-                const contractCalls = tx.raw_data?.contract;
-                if (Array.isArray(contractCalls)) {
-                  for (const call of contractCalls) {
-                    if (call.type === "TriggerSmartContract" && call.parameter?.value) {
-                      const val = call.parameter.value;
-                      if (hexContract && val.contract_address?.toLowerCase() === hexContract.toLowerCase()) {
-                        const dataHex = val.data || "";
-                        if (dataHex.startsWith("a9059cbb")) {
-                          const toHex = "41" + dataHex.slice(32, 72).slice(-40);
-                          const receiverBs58 = encodeTronBase58Check(toHex);
-                          const rawVal = BigInt(`0x${dataHex.slice(72, 136) || "0"}`).toString();
-                          const amount = normalizeAmount(rawVal, decimals);
-                          const fromBs58 = val.owner_address ? encodeTronBase58Check(val.owner_address) : "";
-                          results.push({
-                            txHash,
-                            amount,
-                            sender: fromBs58,
-                            receiver: receiverBs58,
-                            blockNumber: b,
-                            network
-                          });
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          } catch {
-          }
-        }
-        return results;
-      });
-    } catch (err) {
-      console.error(`[TronRpcProvider] Error scanning TRON transfer events (${fromBlock}-${toBlock}):`, err.message);
-      return [];
-    }
-  }
 };
 var tronRpcProvider = new TronRpcProvider();
 
@@ -6060,20 +5392,6 @@ var RpcProvider = class {
   }
   async getTransaction(network, txHash) {
     return this.getSubProvider(network).getTransaction(network, txHash);
-  }
-  async getCurrentBlockNumber(network) {
-    const sub = this.getSubProvider(network);
-    if (sub.getCurrentBlockNumber) {
-      return sub.getCurrentBlockNumber(network);
-    }
-    return 0;
-  }
-  async getTransferEvents(network, fromBlock, toBlock) {
-    const sub = this.getSubProvider(network);
-    if (sub.getTransferEvents) {
-      return sub.getTransferEvents(network, fromBlock, toBlock);
-    }
-    return [];
   }
 };
 var rpcProvider = new RpcProvider();
@@ -6585,12 +5903,6 @@ var TatumProvider = class {
       console.error(`[TatumProvider] Failed to create Tatum webhook subscription for ${address} on ${network}:`, safeMsg);
       throw new Error(`Tatum webhook subscription failed: ${safeMsg}`);
     }
-  }
-  async getCurrentBlockNumber(network) {
-    return rpcProvider.getCurrentBlockNumber(network);
-  }
-  async getTransferEvents(network, fromBlock, toBlock) {
-    return rpcProvider.getTransferEvents(network, fromBlock, toBlock);
   }
 };
 
@@ -7943,22 +7255,28 @@ var withdrawalService2 = withdrawalService;
 var import_resend = require("resend");
 var ResendProvider = class {
   constructor(apiKey2 = config2.email.resendApiKey, fromAddress = config2.email.fromAddress) {
-    const cleanApiKey = apiKey2 ? apiKey2.replace(/^['"]|['"]$/g, "").trim() : "";
-    const cleanFromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, "").trim() : "";
-    if (!cleanApiKey) {
+    this.client = null;
+    this.apiKey = apiKey2 ? apiKey2.replace(/^['"]|['"]$/g, "").trim() : void 0;
+    this.fromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, "").trim() : void 0;
+  }
+  getClient() {
+    if (!this.apiKey) {
       throw new Error("RESEND_API_KEY is not configured in the environment. Real email delivery is required.");
     }
-    if (!cleanFromAddress) {
+    if (!this.fromAddress) {
       throw new Error("EMAIL_FROM is not configured in the environment. Real email delivery is required.");
     }
-    this.client = new import_resend.Resend(cleanApiKey);
-    this.fromAddress = cleanFromAddress;
+    if (!this.client) {
+      this.client = new import_resend.Resend(this.apiKey);
+    }
+    return { client: this.client, fromAddress: this.fromAddress };
   }
   async send({ to, subject, html }) {
     console.log(`[Resend] Initiating real email delivery to ${to} with subject: "${subject}"`);
     try {
-      const response = await this.client.emails.send({
-        from: this.fromAddress,
+      const { client, fromAddress } = this.getClient();
+      const response = await client.emails.send({
+        from: fromAddress,
         to,
         subject,
         html
@@ -10838,89 +10156,6 @@ var AdminService = class {
 };
 var adminService = new AdminService();
 
-// server/services/settingsService.ts
-var SettingsService = class {
-  /* =========================================================================
-   * SYSTEM SETTINGS (GLOBAL PLATFORM BUSINESS RULES)
-   * ========================================================================= */
-  /**
-   * Retrieve a specific system configuration setting by key, with dynamic fallback support
-   */
-  async getSystemSetting(key, defaultValue = "") {
-    const setting = await settingsRepository.findSystemSettingByKey(key);
-    return setting ? setting.value : defaultValue;
-  }
-  /**
-   * Fetch all global platform configurations
-   */
-  async getSystemSettings() {
-    return settingsRepository.findAllSystemSettings();
-  }
-  /**
-   * Update an existing global platform configuration setting by key
-   */
-  async updateSystemSetting(key, value, adminUid) {
-    const updatedSetting = await settingsRepository.updateSystemSetting(key, value, adminUid);
-    if (!updatedSetting) {
-      throw new Error(`System setting not found for key: ${key}`);
-    }
-    return updatedSetting;
-  }
-  /**
-   * Retrieve Trial Fund configuration (amount, duration, enable/disable status)
-   */
-  async getTrialFundConfig() {
-    const amountSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_AMOUNT");
-    const durationSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_DURATION_DAYS");
-    const enabledSetting = await settingsRepository.findSystemSettingByKey("TRIAL_FUND_ENABLED");
-    return {
-      amount: amountSetting ? amountSetting.value : "100.00000000",
-      durationDays: durationSetting ? durationSetting.value : "3",
-      isEnabled: enabledSetting ? enabledSetting.value !== "false" : true
-    };
-  }
-  /**
-   * Save or update Trial Fund configuration in Admin Panel
-   */
-  async updateTrialFundConfig(data, adminUid) {
-    const parsedAmt = parseFloat(data.amount);
-    const formattedAmount = !isNaN(parsedAmt) && parsedAmt > 0 ? parsedAmt.toFixed(8) : "100.00000000";
-    const formattedDuration = String(parseInt(String(data.durationDays)) || 3);
-    const enabledStr = data.isEnabled ? "true" : "false";
-    await settingsRepository.setSystemSetting("TRIAL_FUND_AMOUNT", formattedAmount, adminUid, "Default Trial Fund Amount (USDT)");
-    await settingsRepository.setSystemSetting("TRIAL_FUND_DURATION_DAYS", formattedDuration, adminUid, "Trial Fund Duration in Days");
-    await settingsRepository.setSystemSetting("TRIAL_FUND_ENABLED", enabledStr, adminUid, "Trial Fund Enable/Disable Flag");
-    return {
-      amount: formattedAmount,
-      durationDays: formattedDuration,
-      isEnabled: data.isEnabled
-    };
-  }
-  /* =========================================================================
-   * USER SETTINGS (PERSONALIZED USER ACCOUNT PREFERENCES)
-   * ========================================================================= */
-  /**
-   * Fetch a user's localized preferences and security choices
-   */
-  async getUserSettings(userId) {
-    let settings = await settingsRepository.findUserSettingsByUserId(userId);
-    if (!settings) {
-      settings = await settingsRepository.createUserSettings({
-        userId
-      });
-    }
-    return settings;
-  }
-  /**
-   * Update localized personalizations, notifications, or security choices for a user
-   */
-  async updateUserSettings(userId, updates) {
-    const settings = await this.getUserSettings(userId);
-    return settingsRepository.updateUserSettings(userId, updates);
-  }
-};
-var settingsService = new SettingsService();
-
 // server/controllers/adminController.ts
 init_userRepository();
 init_notificationRepository();
@@ -11575,38 +10810,6 @@ var AdminController = class {
       next(error);
     }
   }
-  /**
-   * GET Retrieve trial fund configuration
-   */
-  async getTrialFundConfig(req, res, next) {
-    try {
-      if (!req.user) {
-        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
-      }
-      const config5 = await settingsService.getTrialFundConfig();
-      return sendSuccess(res, config5, 200);
-    } catch (error) {
-      next(error);
-    }
-  }
-  /**
-   * POST Save / update trial fund configuration
-   */
-  async updateTrialFundConfig(req, res, next) {
-    try {
-      if (!req.user) {
-        throw new ApiError(401, "Authentication credentials required", "UNAUTHORIZED");
-      }
-      const { amount, durationDays, isEnabled } = req.body;
-      const updated = await settingsService.updateTrialFundConfig(
-        { amount, durationDays, isEnabled },
-        req.user.uid
-      );
-      return sendSuccess(res, updated, 200);
-    } catch (error) {
-      next(error);
-    }
-  }
 };
 var adminController = new AdminController();
 
@@ -11781,18 +10984,6 @@ router3.post(
   requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
   adminController.updateSweepModeConfig
 );
-router3.get(
-  "/trial-fund",
-  requireAuth,
-  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
-  adminController.getTrialFundConfig
-);
-router3.post(
-  "/trial-fund",
-  requireAuth,
-  requireRole(["ADMIN" /* ADMIN */, "SUPERADMIN" /* SUPERADMIN */]),
-  adminController.updateTrialFundConfig
-);
 var adminRoutes_default = router3;
 
 // server/routes/v1/webhookRoutes.ts
@@ -11840,12 +11031,14 @@ var TatumWebhookHandler = class {
     if (!incomingContractAddress && asset && (asset.startsWith("0x") || asset.startsWith("T"))) {
       incomingContractAddress = asset;
     }
-    if (incomingContractAddress) {
-      if (!tokenRegistry.isSupportedContract(network, incomingContractAddress)) {
+    if (incomingContractAddress && expectedContractAddress) {
+      const isTron = network === "USDT_TRC20";
+      const isContractValid = isTron ? incomingContractAddress === expectedContractAddress : incomingContractAddress.toLowerCase() === expectedContractAddress.toLowerCase();
+      if (!isContractValid) {
         logger.warn(
-          `[TatumWebhookHandler] SECURITY REJECTION: Fake or un-registered token contract address detected! txHash=${txId}, network=${network}, incomingContractAddress=${incomingContractAddress}, depositAddress=${address}`
+          `[TatumWebhookHandler] SECURITY REJECTION: Fake or mismatched token contract address detected! txHash=${txId}, network=${network}, incomingContractAddress=${incomingContractAddress}, expectedContractAddress=${expectedContractAddress}, depositAddress=${address}`
         );
-        return { status: "rejected", reason: "contract_address_not_supported" };
+        return { status: "rejected", reason: "contract_address_mismatch" };
       }
     }
     try {
@@ -11991,8 +11184,6 @@ var TransactionMonitor = class {
     this.isChecking = false;
     // Track consecutive non-existence of transaction hash on-chain to save API credits
     this.queryAttempts = {};
-    // Track network failure counts and cooldown timestamps
-    this.networkFailures = {};
     // Max times we poll Tatum for a txHash before assuming it's an invalid or fake hash
     this.MAX_ATTEMPTS = 30;
     // 30 checks * 30s interval = 15 minutes
@@ -12001,7 +11192,7 @@ var TransactionMonitor = class {
   /**
    * Start background transaction monitor loop
    */
-  start(intervalMs = 3e4) {
+  start(intervalMs = 12e4) {
     if (this.timer) {
       logger.info("Transaction monitor is already running.");
       return;
@@ -12023,7 +11214,7 @@ var TransactionMonitor = class {
     }
   }
   /**
-   * Scan database for pending deposits and scan blockchain blocks for new deposits
+   * Scan database for pending deposits with txHash and verify on-chain
    */
   async checkPendingDeposits() {
     if (this.isChecking) {
@@ -12032,7 +11223,6 @@ var TransactionMonitor = class {
     }
     this.isChecking = true;
     try {
-      await this.scanNewBlocks();
       const pendingDeposits = await depositRepository.findAll({ status: "PENDING" });
       const withTxHash = pendingDeposits.filter((d) => !!d.txHash);
       const activeDepositIds = new Set(withTxHash.map((d) => d.id));
@@ -12042,6 +11232,7 @@ var TransactionMonitor = class {
         }
       }
       if (withTxHash.length === 0) {
+        this.isChecking = false;
         return;
       }
       logger.debug(`Polling on-chain status for ${withTxHash.length} pending deposits...`);
@@ -12072,14 +11263,6 @@ var TransactionMonitor = class {
             continue;
           }
           this.queryAttempts[depositId] = 0;
-          if (blockchainTx.contractAddress && !tokenRegistry.isSupportedContract(deposit.network, blockchainTx.contractAddress)) {
-            logger.warn(`Deposit ${depositId} (hash: ${txHash}) belongs to an unsupported token contract ${blockchainTx.contractAddress}. Marking deposit as FAILED.`);
-            await depositRepository.updateStatus(depositId, "FAILED", {
-              adminNotes: `Invalid or untrusted token contract ${blockchainTx.contractAddress}. Only registered token contracts are accepted.`
-            });
-            delete this.queryAttempts[depositId];
-            continue;
-          }
           if (!blockchainTx.isSuccessful) {
             logger.warn(`Transaction hash ${txHash} is marked as FAILED on-chain. Updating deposit record.`);
             await depositRepository.updateStatus(depositId, "FAILED", {
@@ -12111,112 +11294,6 @@ var TransactionMonitor = class {
       logger.error("Fatal error encountered in background transaction monitoring workflow:", err);
     } finally {
       this.isChecking = false;
-    }
-  }
-  /**
-   * Scan blockchain blocks across all supported networks to automatically detect
-   * incoming deposits to user deposit addresses.
-   */
-  async scanNewBlocks() {
-    if (!this.provider.getCurrentBlockNumber || !this.provider.getTransferEvents) {
-      return;
-    }
-    const networks = Object.keys(blockchainConfig.networks);
-    for (const network of networks) {
-      const failureState = this.networkFailures[network] || { count: 0, cooldownUntil: 0 };
-      if (Date.now() < failureState.cooldownUntil) {
-        continue;
-      }
-      try {
-        const currentBlock = await this.provider.getCurrentBlockNumber(network);
-        if (!currentBlock || currentBlock <= 0) continue;
-        if (this.networkFailures[network]?.count > 0) {
-          logger.info(`[TransactionMonitor] Network ${network} scanning recovered.`);
-          this.networkFailures[network] = { count: 0, cooldownUntil: 0 };
-        }
-        const confirmationDepth = 3;
-        const targetBlock = Math.max(0, currentBlock - confirmationDepth);
-        const settingKey = `LAST_SCANNED_BLOCK_${network}`;
-        const setting = await settingsRepository.findSystemSettingByKey(settingKey);
-        let fromBlock;
-        if (setting && setting.value) {
-          fromBlock = parseInt(setting.value, 10) + 1;
-        } else {
-          fromBlock = Math.max(0, targetBlock - 50);
-        }
-        if (fromBlock > targetBlock) {
-          continue;
-        }
-        let chunkSize = blockchainConfig.networks[network]?.blockChunkSize || 100;
-        if (typeof this.provider.getChunkSize === "function") {
-          chunkSize = this.provider.getChunkSize(network);
-        }
-        const toBlock = Math.min(targetBlock, fromBlock + chunkSize - 1);
-        rpcManager.logThrottled(
-          `tm_scan_${network}`,
-          "info",
-          `[TransactionMonitor] Scanning ${network} blocks ${fromBlock} to ${toBlock} (Tip: ${currentBlock}, Chunk: ${chunkSize})...`
-        );
-        const transfers = await this.provider.getTransferEvents(network, fromBlock, toBlock);
-        for (const transfer of transfers) {
-          await this.processDiscoveredTransfer(transfer);
-        }
-        await settingsRepository.setSystemSetting(
-          settingKey,
-          toBlock.toString(),
-          "SYSTEM",
-          `Last scanned block for ${network}`
-        );
-      } catch (err) {
-        const count = (failureState.count || 0) + 1;
-        const cooldownMs = Math.min(3e5, Math.pow(2, Math.min(count, 5)) * 15e3);
-        this.networkFailures[network] = { count, cooldownUntil: Date.now() + cooldownMs };
-        rpcManager.logThrottled(
-          `tm_scan_err_${network}`,
-          "warn",
-          `[TransactionMonitor] Block scanning error for ${network} (Failure #${count}, cooling down for ${Math.round(cooldownMs / 1e3)}s): ${err.message || err}`,
-          12e4
-        );
-      }
-    }
-  }
-  /**
-   * Process an on-chain transfer discovered during block scanning
-   */
-  async processDiscoveredTransfer(transfer) {
-    try {
-      const { txHash, amount, receiver, network, contractAddress } = transfer;
-      if (!receiver || !txHash) return;
-      if (contractAddress && !tokenRegistry.isSupportedContract(network, contractAddress)) {
-        logger.warn(`[TransactionMonitor] Discovered transfer on ${network} for unsupported token contract ${contractAddress}. Ignoring.`);
-        return;
-      }
-      const depositAddr = await depositAddressRepository.findByAddress(receiver);
-      if (!depositAddr) {
-        return;
-      }
-      logger.info(`[TransactionMonitor] On-chain deposit detected! User: ${depositAddr.userId}, Address: ${receiver}, Network: ${network}, Amount: ${amount} USDT, TxHash: ${txHash}`);
-      const existingDeposit = await depositRepository.findByTxHash(txHash);
-      if (existingDeposit) {
-        if (existingDeposit.status === "PENDING") {
-          logger.info(`[TransactionMonitor] Found existing pending deposit ${existingDeposit.id} for txHash ${txHash}. Processing completion.`);
-          await depositService.processSuccessfulDeposit(existingDeposit.id, txHash, "SYSTEM");
-        } else {
-          logger.debug(`[TransactionMonitor] Deposit ${existingDeposit.id} for txHash ${txHash} already has status ${existingDeposit.status}. Skipping.`);
-        }
-        return;
-      }
-      const newDeposit = await depositService.createDeposit(
-        depositAddr.userId,
-        amount,
-        depositAddr.network || network,
-        depositAddr.address,
-        txHash
-      );
-      await depositService.processSuccessfulDeposit(newDeposit.id, txHash, "SYSTEM");
-      logger.info(`[TransactionMonitor] Auto-deposit ${newDeposit.id} processed & credited successfully for user ${depositAddr.userId}.`);
-    } catch (err) {
-      logger.error(`[TransactionMonitor] Error processing discovered transfer ${transfer.txHash}:`, err.message || err);
     }
   }
 };
