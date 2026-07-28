@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   CheckCircle2,
@@ -11,12 +11,13 @@ import {
   Copy,
   Check,
   ArrowDownCircle,
-  ExternalLink
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, Badge, Button } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
 import { AdminDeposit } from './types.ts';
-import { DEPOSITS_MOCK } from './mockData.ts';
+import { api } from '../../services/api.ts';
 
 interface DepositsViewProps {
   t: ThemeTokens;
@@ -24,25 +25,68 @@ interface DepositsViewProps {
 }
 
 export const DepositsView: React.FC<DepositsViewProps> = ({ t, isDark }) => {
-  const [deposits, setDeposits] = useState<AdminDeposit[]>(DEPOSITS_MOCK);
+  const [deposits, setDeposits] = useState<AdminDeposit[]>([]);
   const [filter, setFilter] = useState<'All' | 'Pending' | 'Completed' | 'Rejected'>('All');
   const [search, setSearch] = useState('');
   const [copiedTx, setCopiedTx] = useState<string | null>(null);
 
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionProcessing, setActionProcessing] = useState<string | null>(null);
+
+  const fetchDeposits = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await api.getAdminDeposits({ status: filter !== 'All' ? filter : undefined });
+      if (res.success && Array.isArray(res.data)) {
+        setDeposits(res.data);
+      } else {
+        setError(res.error?.message || 'Failed to fetch deposits data.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while fetching deposits.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeposits();
+  }, [filter]);
+
   // Handle Approve Deposit
-  const approveDeposit = (id: string) => {
-    // TODO: Replace with real API call
-    setDeposits(prev =>
-      prev.map(dep => (dep.id === id ? { ...dep, status: 'Completed' as const } : dep))
-    );
+  const approveDeposit = async (id: string) => {
+    try {
+      setActionProcessing(id);
+      const res = await api.approveAdminDeposit(id);
+      if (res.success) {
+        await fetchDeposits();
+      } else {
+        alert(res.error?.message || 'Failed to approve deposit.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'An error occurred during approval.');
+    } finally {
+      setActionProcessing(null);
+    }
   };
 
   // Handle Reject Deposit
-  const rejectDeposit = (id: string) => {
-    // TODO: Replace with real API call
-    setDeposits(prev =>
-      prev.map(dep => (dep.id === id ? { ...dep, status: 'Rejected' as const } : dep))
-    );
+  const rejectDeposit = async (id: string) => {
+    try {
+      setActionProcessing(id);
+      const res = await api.rejectAdminDeposit(id);
+      if (res.success) {
+        await fetchDeposits();
+      } else {
+        alert(res.error?.message || 'Failed to reject deposit.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'An error occurred during rejection.');
+    } finally {
+      setActionProcessing(null);
+    }
   };
 
   // Copy Tx Hash to Clipboard
@@ -67,9 +111,19 @@ export const DepositsView: React.FC<DepositsViewProps> = ({ t, isDark }) => {
   return (
     <div className="space-y-6 text-left">
       {/* Header Banner */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight">Deposit Audit</h2>
-        <p className={`text-xs mt-1 ${t.textSub}`}>Review inbound blockchain deposits, trace ledger entries, and finalize credits.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Deposit Audit</h2>
+          <p className={`text-xs mt-1 ${t.textSub}`}>Review inbound blockchain deposits, trace ledger entries, and finalize credits.</p>
+        </div>
+        <Button
+          onClick={fetchDeposits}
+          variant="secondary"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Quick Stats Grid */}
@@ -123,6 +177,19 @@ export const DepositsView: React.FC<DepositsViewProps> = ({ t, isDark }) => {
           </div>
         </div>
 
+        {/* Error Alert State */}
+        {error && (
+          <div className="p-4 bg-rose-500/10 border-b border-rose-500/20 text-rose-500 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              <span>{error}</span>
+            </div>
+            <Button variant="secondary" onClick={fetchDeposits} className="px-3 py-1 text-xs">
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* Deposits Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -136,7 +203,16 @@ export const DepositsView: React.FC<DepositsViewProps> = ({ t, isDark }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100/10">
-              {filteredDeposits.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2 text-gray-400">
+                      <RefreshCw className="w-5 h-5 animate-spin text-blue-500" />
+                      <span className="text-xs font-medium">Fetching deposits from backend...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredDeposits.length > 0 ? (
                 filteredDeposits.map((dep) => (
                   <tr key={dep.id} className={`transition-colors ${t.cardInner}`}>
                     <td className="px-5 py-4 font-mono font-bold text-gray-900 dark:text-white">{dep.id}</td>
@@ -175,16 +251,18 @@ export const DepositsView: React.FC<DepositsViewProps> = ({ t, isDark }) => {
                       {dep.status === 'Pending' ? (
                         <div className="flex items-center gap-2">
                           <button
+                            disabled={actionProcessing === dep.id}
                             onClick={() => approveDeposit(dep.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 hover:border-emerald-500 shadow-sm transition-all duration-200 cursor-pointer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 hover:border-emerald-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
                             title="Confirm Credit"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Approve</span>
                           </button>
                           <button
+                            disabled={actionProcessing === dep.id}
                             onClick={() => rejectDeposit(dep.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 shadow-sm transition-all duration-200 cursor-pointer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
                             title="Reject Notice"
                           >
                             <XCircle className="w-3.5 h-3.5" />

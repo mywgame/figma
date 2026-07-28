@@ -43,6 +43,7 @@ export class WalletRepository {
     lockedBalance?: string;
     principalBalance?: string;
     trialBalance?: string;
+    trialExpiresAt?: Date | null;
     referralIncome?: string;
     dailyYield?: string;
     teamIncome?: string;
@@ -57,6 +58,7 @@ export class WalletRepository {
           lockedBalance: data.lockedBalance || '0.00000000',
           principalBalance: data.principalBalance || '0.00000000',
           trialBalance: data.trialBalance || '0.00000000',
+          trialExpiresAt: data.trialExpiresAt ?? null,
           referralIncome: data.referralIncome || '0.00000000',
           dailyYield: data.dailyYield || '0.00000000',
           teamIncome: data.teamIncome || '0.00000000',
@@ -80,6 +82,7 @@ export class WalletRepository {
       lockedBalance: string;
       principalBalance: string;
       trialBalance: string;
+      trialExpiresAt: Date | null;
       referralIncome: string;
       dailyYield: string;
       teamIncome: string;

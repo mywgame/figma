@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Link as LinkIcon, Copy, Check, ChevronRight } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
-import { MockNetworkSummary } from '../../mocks/dashboardMockData.ts';
+import { MockNetworkSummary } from '../../types/index.ts';
 
 interface NetworkLevelsProps {
   network: MockNetworkSummary;

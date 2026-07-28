@@ -230,7 +230,7 @@ export class AuthService {
       status: 'ACTIVE',
     });
 
-    // Initialize $100 Trial Fund, Wallet, and VIP1 status automatically
+    // Initialize configured Trial Fund, Wallet, and VIP1 status automatically
     await userService.ensureUserResources(user.id);
 
     // Link referral relationship if registered via a referral link

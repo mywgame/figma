@@ -46,6 +46,12 @@ export class RpcDepositScanner {
    * Start background block/event scanner loop
    */
   start(intervalMs: number = blockchainConfig.monitoringIntervalMs) {
+    // TODO: Automatic deposit scanning is temporarily disabled to prevent continuous background RPC polling.
+    // Re-enable automatic deposit scanning in a future release.
+    logger.info('RpcDepositScanner background polling is temporarily disabled.');
+    return;
+
+    /*
     if (this.timer) {
       logger.info('RpcDepositScanner is already running.');
       return;
@@ -58,6 +64,7 @@ export class RpcDepositScanner {
     this.scanAllNetworks().catch((err) => {
       logger.error('Error in initial RpcDepositScanner execution:', err);
     });
+    */
   }
 
   /**

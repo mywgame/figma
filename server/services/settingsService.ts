@@ -26,14 +26,21 @@ export class SettingsService {
   }
 
   /**
-   * Update an existing global platform configuration setting by key
+   * Update or create a global platform configuration setting by key
    */
   async updateSystemSetting(key: string, value: string, adminUid: string) {
-    const updatedSetting = await settingsRepository.updateSystemSetting(key, value, adminUid);
-    if (!updatedSetting) {
-      throw new Error(`System setting not found for key: ${key}`);
+    let setting = await settingsRepository.updateSystemSetting(key, value, adminUid);
+    if (!setting) {
+      const all = await settingsRepository.findAllSystemSettings();
+      const maxId = all.reduce((max, s) => Math.max(max, s.id), 0) + 1;
+      setting = await settingsRepository.upsertSystemSetting({
+        id: maxId,
+        key,
+        value,
+        updatedBy: adminUid,
+      });
     }
-    return updatedSetting;
+    return setting;
   }
 
   /* =========================================================================

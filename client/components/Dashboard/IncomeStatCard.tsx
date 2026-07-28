@@ -6,7 +6,7 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
-import { IncomeAccent } from '../../mocks/dashboardMockData.ts';
+import { IncomeAccent } from '../../types/index.ts';
 
 interface IncomeStatCardProps {
   label: string;

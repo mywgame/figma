@@ -3,19 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   CheckCircle2,
   XCircle,
   Copy,
   Check,
-  ArrowUpCircle
+  ArrowUpCircle,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, Badge, Button } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
 import { AdminWithdrawal } from './types.ts';
-import { WITHDRAWALS_MOCK } from './mockData.ts';
+import { api } from '../../services/api.ts';
 
 interface WithdrawalsViewProps {
   t: ThemeTokens;
@@ -23,25 +25,68 @@ interface WithdrawalsViewProps {
 }
 
 export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) => {
-  const [withdrawals, setWithdrawals] = useState<AdminWithdrawal[]>(WITHDRAWALS_MOCK);
+  const [withdrawals, setWithdrawals] = useState<AdminWithdrawal[]>([]);
   const [filter, setFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
   const [search, setSearch] = useState('');
   const [copiedWallet, setCopiedWallet] = useState<string | null>(null);
 
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionProcessing, setActionProcessing] = useState<string | null>(null);
+
+  const fetchWithdrawals = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await api.getAdminWithdrawals({ status: filter !== 'All' ? filter : undefined });
+      if (res.success && Array.isArray(res.data)) {
+        setWithdrawals(res.data);
+      } else {
+        setError(res.error?.message || 'Failed to fetch withdrawals data.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while fetching withdrawals.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWithdrawals();
+  }, [filter]);
+
   // Handle Approve Withdrawal
-  const approveWithdrawal = (id: string) => {
-    // TODO: Replace with real API call
-    setWithdrawals(prev =>
-      prev.map(wd => (wd.id === id ? { ...wd, status: 'Approved' as const } : wd))
-    );
+  const approveWithdrawal = async (id: string) => {
+    try {
+      setActionProcessing(id);
+      const res = await api.approveAdminWithdrawal(id);
+      if (res.success) {
+        await fetchWithdrawals();
+      } else {
+        alert(res.error?.message || 'Failed to approve withdrawal.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'An error occurred during approval.');
+    } finally {
+      setActionProcessing(null);
+    }
   };
 
   // Handle Reject Withdrawal
-  const rejectWithdrawal = (id: string) => {
-    // TODO: Replace with real API call
-    setWithdrawals(prev =>
-      prev.map(wd => (wd.id === id ? { ...wd, status: 'Rejected' as const } : wd))
-    );
+  const rejectWithdrawal = async (id: string) => {
+    try {
+      setActionProcessing(id);
+      const res = await api.rejectAdminWithdrawal(id);
+      if (res.success) {
+        await fetchWithdrawals();
+      } else {
+        alert(res.error?.message || 'Failed to reject withdrawal.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'An error occurred during rejection.');
+    } finally {
+      setActionProcessing(null);
+    }
   };
 
   // Copy destination wallet to Clipboard
@@ -66,9 +111,19 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
   return (
     <div className="space-y-6 text-left">
       {/* Header Banner */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight">Withdrawal Audit</h2>
-        <p className={`text-xs mt-1 ${t.textSub}`}>Process member withdrawal requests, verify payout addresses, and authorize outgoing transactions.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Withdrawal Audit</h2>
+          <p className={`text-xs mt-1 ${t.textSub}`}>Process member withdrawal requests, verify payout addresses, and authorize outgoing transactions.</p>
+        </div>
+        <Button
+          onClick={fetchWithdrawals}
+          variant="secondary"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Quick Stats Grid */}
@@ -122,6 +177,19 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
           </div>
         </div>
 
+        {/* Error Alert State */}
+        {error && (
+          <div className="p-4 bg-rose-500/10 border-b border-rose-500/20 text-rose-500 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              <span>{error}</span>
+            </div>
+            <Button variant="secondary" onClick={fetchWithdrawals} className="px-3 py-1 text-xs">
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* Withdrawals Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -135,7 +203,16 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100/10">
-              {filteredWithdrawals.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2 text-gray-400">
+                      <RefreshCw className="w-5 h-5 animate-spin text-blue-500" />
+                      <span className="text-xs font-medium">Fetching withdrawals from backend...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredWithdrawals.length > 0 ? (
                 filteredWithdrawals.map((wd) => (
                   <tr key={wd.id} className={`transition-colors ${t.cardInner}`}>
                     <td className="px-5 py-4 font-mono font-bold text-gray-900 dark:text-white">{wd.id}</td>
@@ -167,16 +244,18 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                       {wd.status === 'Pending' ? (
                         <div className="flex items-center gap-2">
                           <button
+                            disabled={actionProcessing === wd.id}
                             onClick={() => approveWithdrawal(wd.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 hover:border-emerald-500 shadow-sm transition-all duration-200 cursor-pointer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 hover:border-emerald-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
                             title="Confirm Outbound Payout"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Approve</span>
                           </button>
                           <button
+                            disabled={actionProcessing === wd.id}
                             onClick={() => rejectWithdrawal(wd.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 shadow-sm transition-all duration-200 cursor-pointer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
                             title="Decline Request"
                           >
                             <XCircle className="w-3.5 h-3.5" />
@@ -193,7 +272,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className={`px-5 py-8 text-center font-medium ${t.textMuted}`}>
+                  <td colSpan={7} className={`px-5 py-8 text-center font-medium ${t.textMuted}`}>
                     No withdrawals match your criteria.
                   </td>
                 </tr>

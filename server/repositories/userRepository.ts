@@ -36,6 +36,44 @@ export class UserRepository {
   }
 
   /**
+   * Create a new user account explicitly
+   */
+  async createUser(data: {
+    name?: string;
+    email: string;
+    phone?: string;
+    passwordHash?: string;
+    status?: string;
+    role?: string;
+  }) {
+    try {
+      const randomDigits = Math.floor(100000 + Math.random() * 900000).toString();
+      const generatedUserId = `DS${randomDigits}`;
+      const generatedReferralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const generatedUid = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      const result = await db
+        .insert(users)
+        .values({
+          uid: generatedUid,
+          email: data.email,
+          name: data.name || null,
+          phone: data.phone || null,
+          passwordHash: data.passwordHash || null,
+          status: data.status || 'ACTIVE',
+          role: data.role || UserRole.USER,
+          userId: generatedUserId,
+          referralCode: generatedReferralCode,
+        })
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error('Database mutation (createUser) failed:', error);
+      throw new Error('Failed to create user record in database.', { cause: error });
+    }
+  }
+
+  /**
    * Upsert user: safely inserts or updates email upon logins.
    * Leverages Drizzle's onConflictDoUpdate for transactional safety.
    */

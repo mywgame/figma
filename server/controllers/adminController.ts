@@ -782,6 +782,447 @@ export class AdminController {
       next(error);
     }
   }
+
+  /**
+   * GET Platform Deposits
+   */
+  async getAdminDeposits(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const status = req.query.status as string | undefined;
+      const page = parseInt(req.query.page as string || '1', 10);
+      const limit = parseInt(req.query.limit as string || '50', 10);
+      const offset = (page - 1) * limit;
+
+      const result = await adminService.getAllDeposits({ status, limit, offset });
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Approve Deposit
+   */
+  async approveDeposit(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { id } = req.params;
+      const { txHash } = req.body;
+      const result = await adminService.approveDeposit(id, req.user.uid, txHash);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Reject Deposit
+   */
+  async rejectDeposit(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { id } = req.params;
+      const { notes } = req.body;
+      const result = await adminService.rejectDeposit(id, req.user.uid, notes);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Platform Withdrawals
+   */
+  async getAdminWithdrawals(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const status = req.query.status as string | undefined;
+      const page = parseInt(req.query.page as string || '1', 10);
+      const limit = parseInt(req.query.limit as string || '50', 10);
+      const offset = (page - 1) * limit;
+
+      const result = await adminService.getAllWithdrawals({ status, limit, offset });
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Approve Withdrawal
+   */
+  async approveWithdrawal(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { id } = req.params;
+      const { txHash, notes } = req.body;
+      const result = await adminService.approveWithdrawal(id, req.user.uid, txHash || 'INTERNAL_MANUAL', notes);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Reject Withdrawal
+   */
+  async rejectWithdrawal(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { id } = req.params;
+      const { notes } = req.body;
+      const result = await adminService.rejectWithdrawal(id, req.user.uid, notes || 'Rejected by admin');
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET System Audit Logs
+   */
+  async getSystemAuditLogs(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const action = req.query.action as string | undefined;
+      const page = parseInt(req.query.page as string || '1', 10);
+      const limit = parseInt(req.query.limit as string || '100', 10);
+      const offset = (page - 1) * limit;
+
+      const logs = await adminService.getSystemAuditLogs({ action, limit, offset });
+      return sendSuccess(res, logs, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Admin System Settings
+   */
+  async getSystemSettings(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const settings = await adminService.getSystemSettings();
+      return sendSuccess(res, settings, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH Update Admin System Setting by key
+   */
+  async updateSystemSetting(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { key } = req.params;
+      const { value } = req.body;
+
+      if (!key || value === undefined) {
+        throw new ApiError(400, 'Setting key and value are required', 'BAD_REQUEST');
+      }
+
+      const updated = await adminService.updateSystemSetting(key, String(value), req.user.uid);
+      return sendSuccess(res, updated, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Create new admin user account
+   */
+  async createAdminUser(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { name, email, mobile, rank, balance, referralCode } = req.body;
+      if (!name || !email) {
+        throw new ApiError(400, 'Name and Email are required', 'BAD_REQUEST');
+      }
+
+      const newUser = await adminService.createAdminUser({
+        name,
+        email,
+        phone: mobile,
+        rank,
+        initialBalance: parseFloat(balance || '0'),
+        referralCode,
+      }, req.user.uid);
+
+      return sendSuccess(res, newUser, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET VIP Tiers Matrix
+   */
+  async getVipTiers(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const tiers = await adminService.getVipTiers();
+      return sendSuccess(res, tiers, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH VIP Tier
+   */
+  async updateVipTier(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { tierName } = req.params;
+      const updated = await adminService.updateVipTier(tierName, req.body, req.user.uid);
+      return sendSuccess(res, updated, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Security Command Overview
+   */
+  async getSecurityOverview(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const security = await adminService.getSecurityOverview();
+      return sendSuccess(res, security, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Update Security Switches
+   */
+  async updateSecuritySwitches(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const switches = await adminService.updateSecuritySwitches(req.body, req.user.uid);
+      return sendSuccess(res, switches, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Revoke Admin Session
+   */
+  async revokeAdminSession(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { sessionId } = req.params;
+      const result = await adminService.revokeAdminSession(sessionId, req.user.uid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Clear Security Alerts
+   */
+  async clearSecurityAlerts(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const result = await adminService.clearSecurityAlerts(req.user.uid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Leader Salary Slabs
+   */
+  async getSalarySlabs(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const slabs = await adminService.getSalarySlabs();
+      return sendSuccess(res, slabs, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH Leader Salary Slab
+   */
+  async updateSalarySlab(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { rank } = req.params;
+      const updated = await adminService.updateSalarySlab(rank, req.body, req.user.uid);
+      return sendSuccess(res, updated, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Process Monthly Salary Payouts
+   */
+  async processMonthlySalaryPayouts(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const result = await adminService.processMonthlySalaryPayouts(req.user.uid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Reward Campaigns
+   */
+  async getRewardCampaigns(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const campaigns = await adminService.getRewardCampaigns();
+      return sendSuccess(res, campaigns, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Create Reward Campaign
+   */
+  async createRewardCampaign(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const campaign = await adminService.createRewardCampaign(req.body, req.user.uid);
+      return sendSuccess(res, campaign, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH Update Reward Campaign
+   */
+  async updateRewardCampaign(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { id } = req.params;
+      const updated = await adminService.updateRewardCampaign(id, req.body, req.user.uid);
+      return sendSuccess(res, updated, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET System Announcements
+   */
+  async getAnnouncements(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const announcements = await adminService.getAnnouncements();
+      return sendSuccess(res, announcements, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Create System Announcement
+   */
+  async createAnnouncement(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const announcement = await adminService.createAnnouncement(req.body, req.user.uid);
+      return sendSuccess(res, announcement, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE System Announcement
+   */
+  async deleteAnnouncement(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { id } = req.params;
+      const result = await adminService.deleteAnnouncement(id, req.user.uid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const adminController = new AdminController();

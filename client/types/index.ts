@@ -72,3 +72,58 @@ export interface DashboardData {
     activeTrialBalance: string;
   };
 }
+
+export type IncomeAccent = 'emerald' | 'cyan' | 'purple' | 'amber';
+
+export interface MockIdentity {
+  name: string;
+  id: string;
+  rankLabel: string;
+  rankColor: string;
+  rankBg: string;
+  rankIcon: string;
+  streakDays: number;
+  online: boolean;
+}
+
+export interface MockDailyClaim {
+  available: boolean;
+  rewardUsdt: number;
+  streakDays: number;
+  streakBonusPercent: number;
+  timerSecondsRemaining: number;
+  nextResetUtcIso: string;
+  history7Days: Array<{
+    dateLabel: string;
+    dayName: string;
+    status: 'claimed' | 'today-ready' | 'upcoming' | 'missed';
+    rewardUsdt: number;
+  }>;
+}
+
+export interface MockTransaction {
+  id: string;
+  type: 'deposit' | 'withdrawal' | 'daily_yield' | 'referral' | 'team_commission' | 'reward';
+  title: string;
+  subtitle: string;
+  amountUsdt: number;
+  timestampIso: string;
+  status: 'completed' | 'pending' | 'failed';
+  hash?: string;
+  network?: string;
+}
+
+export interface MockNetworkSummary {
+  inviteCode: string;
+  referralLink: string;
+  totalTeamMembers: number;
+  activeDirects: number;
+  teamVolumeUsdt: number;
+  levels: {
+    l1: { count: number; validCount: number; commissionPercent: number; earnedUsdt: number };
+    l2: { count: number; validCount: number; commissionPercent: number; earnedUsdt: number };
+    l3: { count: number; validCount: number; commissionPercent: number; earnedUsdt: number };
+    l4: { count: number; validCount: number; commissionPercent: number; earnedUsdt: number };
+  };
+}
+

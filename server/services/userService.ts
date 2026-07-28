@@ -11,6 +11,7 @@ import { activityRepository } from '../repositories/activityRepository.ts';
 import { sessionRepository } from '../repositories/sessionRepository.ts';
 import { settingsRepository } from '../repositories/settingsRepository.ts';
 import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
+import { transactionRepository } from '../repositories/transactionRepository.ts';
 import { notificationService } from './notificationService.ts';
 import { blockchainProvider } from './blockchainProvider.ts';
 import { UserRole } from '../../shared/types/index.ts';
@@ -44,21 +45,57 @@ export class UserService {
   }
 
   /**
-   * Initialize user resources like wallets and vipStatus
+   * Initialize user resources like wallets and vipStatus.
+   * Reads Trial Fund settings dynamically from Admin Settings upon user signup.
    */
   public async ensureUserResources(userId: string) {
     try {
       const existingWallet = await walletRepository.findByUserId(userId);
       if (!existingWallet) {
+        // Read Trial Fund configuration dynamically from Admin System Settings
         const trialAmountSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_AMOUNT');
-        const trialAmount = trialAmountSetting ? trialAmountSetting.value : '100.00000000';
+        const trialDurationSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_DURATION_DAYS');
 
-        await walletRepository.createWallet({
+        const trialAmountRaw = trialAmountSetting ? trialAmountSetting.value : '100.00000000';
+        const trialDurationRaw = trialDurationSetting ? trialDurationSetting.value : '3';
+
+        const trialAmountNum = parseFloat(trialAmountRaw);
+        const trialDurationDays = parseInt(trialDurationRaw, 10);
+
+        const isTrialEnabled = !isNaN(trialAmountNum) && trialAmountNum > 0;
+        const trialAmountStr = isTrialEnabled ? trialAmountNum.toFixed(8) : '0.00000000';
+
+        let trialExpiresAt: Date | null = null;
+        if (isTrialEnabled && !isNaN(trialDurationDays) && trialDurationDays > 0) {
+          trialExpiresAt = new Date(Date.now() + trialDurationDays * 24 * 60 * 60 * 1000);
+        }
+
+        // Main wallet balances (availableBalance, principalBalance) remain 0.
+        // Trial Wallet is kept separate under trialBalance & trialExpiresAt.
+        const createdWallet = await walletRepository.createWallet({
           userId,
           availableBalance: '0.00000000',
           lockedBalance: '0.00000000',
-          trialBalance: trialAmount,
+          principalBalance: '0.00000000',
+          trialBalance: trialAmountStr,
+          trialExpiresAt,
         });
+
+        // Record an immutable transaction ledger entry if Trial Fund is enabled
+        if (isTrialEnabled) {
+          await transactionRepository.createTransaction({
+            userId,
+            walletId: createdWallet.id,
+            type: 'TRIAL_FUND',
+            referenceId: createdWallet.id,
+            status: 'COMPLETED',
+            description: `Signup Bonus: ${trialAmountStr} USDT Trial Fund Credited (${trialDurationDays || 0} Days Duration)`,
+            amount: trialAmountStr,
+            balanceBefore: '0.00000000',
+            balanceAfter: trialAmountStr,
+            createdBy: 'SYSTEM',
+          });
+        }
       }
 
       const existingVip = await vipRepository.findByUserId(userId);

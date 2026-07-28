@@ -248,6 +248,7 @@ export class DashboardService {
         amount: trialAmountSetting ? trialAmountSetting.value : '100.00000000',
         durationDays: trialDurationSetting ? parseInt(trialDurationSetting.value) : 3,
         activeTrialBalance: wallet.trialBalance,
+        trialExpiresAt: wallet.trialExpiresAt,
       },
     };
   }

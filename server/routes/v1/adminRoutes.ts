@@ -319,4 +319,279 @@ router.post(
   adminController.updateSweepModeConfig
 );
 
+/**
+ * @route GET /api/v1/admin/settings
+ * @desc Retrieve all platform system settings
+ */
+router.get(
+  '/settings',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getSystemSettings
+);
+
+/**
+ * @route PATCH /api/v1/admin/settings/:key
+ * @desc Update a platform system setting by key
+ */
+router.patch(
+  '/settings/:key',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateSystemSetting
+);
+
+/**
+ * @route GET /api/v1/admin/deposits
+ * @desc Retrieve all platform deposits
+ */
+router.get(
+  '/deposits',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getAdminDeposits
+);
+
+/**
+ * @route POST /api/v1/admin/deposits/:id/approve
+ * @desc Approve a pending deposit
+ */
+router.post(
+  '/deposits/:id/approve',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.approveDeposit
+);
+
+/**
+ * @route POST /api/v1/admin/deposits/:id/reject
+ * @desc Reject a pending deposit
+ */
+router.post(
+  '/deposits/:id/reject',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.rejectDeposit
+);
+
+/**
+ * @route GET /api/v1/admin/withdrawals
+ * @desc Retrieve all platform withdrawals
+ */
+router.get(
+  '/withdrawals',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getAdminWithdrawals
+);
+
+/**
+ * @route POST /api/v1/admin/withdrawals/:id/approve
+ * @desc Approve a pending withdrawal
+ */
+router.post(
+  '/withdrawals/:id/approve',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.approveWithdrawal
+);
+
+/**
+ * @route POST /api/v1/admin/withdrawals/:id/reject
+ * @desc Reject a pending withdrawal
+ */
+router.post(
+  '/withdrawals/:id/reject',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.rejectWithdrawal
+);
+
+/**
+ * @route GET /api/v1/admin/audit-logs
+ * @desc Retrieve platform-wide system audit trail logs
+ */
+router.get(
+  '/audit-logs',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getSystemAuditLogs
+);
+
+/**
+ * @route POST /api/v1/admin/users
+ * @desc Create a new user account
+ */
+router.post(
+  '/users',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.createAdminUser
+);
+
+/**
+ * @route GET /api/v1/admin/vip/tiers
+ * @desc Get VIP tiers matrix
+ */
+router.get(
+  '/vip/tiers',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getVipTiers
+);
+
+/**
+ * @route PATCH /api/v1/admin/vip/tiers/:tierName
+ * @desc Update a VIP tier configuration
+ */
+router.patch(
+  '/vip/tiers/:tierName',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateVipTier
+);
+
+/**
+ * @route GET /api/v1/admin/security/overview
+ * @desc Get security command overview
+ */
+router.get(
+  '/security/overview',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getSecurityOverview
+);
+
+/**
+ * @route POST /api/v1/admin/security/switches
+ * @desc Update emergency security switches
+ */
+router.post(
+  '/security/switches',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateSecuritySwitches
+);
+
+/**
+ * @route POST /api/v1/admin/security/sessions/:sessionId/revoke
+ * @desc Revoke an active admin session
+ */
+router.post(
+  '/security/sessions/:sessionId/revoke',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.revokeAdminSession
+);
+
+/**
+ * @route POST /api/v1/admin/security/alerts/clear
+ * @desc Clear security threat alerts
+ */
+router.post(
+  '/security/alerts/clear',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.clearSecurityAlerts
+);
+
+/**
+ * @route GET /api/v1/admin/salary/slabs
+ * @desc Get leader salary slabs
+ */
+router.get(
+  '/salary/slabs',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getSalarySlabs
+);
+
+/**
+ * @route PATCH /api/v1/admin/salary/slabs/:rank
+ * @desc Update leader salary slab
+ */
+router.patch(
+  '/salary/slabs/:rank',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateSalarySlab
+);
+
+/**
+ * @route POST /api/v1/admin/salary/payout
+ * @desc Process monthly salary payouts
+ */
+router.post(
+  '/salary/payout',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.processMonthlySalaryPayouts
+);
+
+/**
+ * @route GET /api/v1/admin/rewards/campaigns
+ * @desc Get reward campaigns
+ */
+router.get(
+  '/rewards/campaigns',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getRewardCampaigns
+);
+
+/**
+ * @route POST /api/v1/admin/rewards/campaigns
+ * @desc Create reward campaign
+ */
+router.post(
+  '/rewards/campaigns',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.createRewardCampaign
+);
+
+/**
+ * @route PATCH /api/v1/admin/rewards/campaigns/:id
+ * @desc Update reward campaign
+ */
+router.patch(
+  '/rewards/campaigns/:id',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateRewardCampaign
+);
+
+/**
+ * @route GET /api/v1/admin/announcements
+ * @desc Get system announcements
+ */
+router.get(
+  '/announcements',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getAnnouncements
+);
+
+/**
+ * @route POST /api/v1/admin/announcements
+ * @desc Create system announcement
+ */
+router.post(
+  '/announcements',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.createAnnouncement
+);
+
+/**
+ * @route DELETE /api/v1/admin/announcements/:id
+ * @desc Delete system announcement
+ */
+router.delete(
+  '/announcements/:id',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.deleteAnnouncement
+);
+
 export default router;

@@ -12,7 +12,7 @@ import { NotificationBell } from './NotificationBell.tsx';
 import { AvatarPicker } from '../ui/AvatarPicker.tsx';
 import logoImg from '../../../assets/images/branding/logo.png';
 import logoMarkImg from '../../../assets/images/branding/logo-mark.png';
-import type { MockIdentity } from '../../mocks/dashboardMockData.ts';
+import type { MockIdentity } from '../../types/index.ts';
 import { DashboardTab } from './Sidebar.tsx';
 
 interface TopNavProps {

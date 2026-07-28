@@ -6,7 +6,7 @@
 import React from 'react';
 import { ArrowDownLeft, ArrowUpRight, Star, ChevronRight } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
-import { MockTransaction } from '../../mocks/dashboardMockData.ts';
+import { MockTransaction } from '../../types/index.ts';
 
 interface RecentActivityProps {
   transactions: MockTransaction[];

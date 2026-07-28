@@ -26,6 +26,7 @@ export const wallets = pgTable(
     trialBalance: numeric('trial_balance', { precision: 20, scale: 8 })
       .default('0.00000000')
       .notNull(), // Trial Fund balance (non-withdrawable, generates interest)
+    trialExpiresAt: timestamp('trial_expires_at'), // Expiration timestamp for trial fund
     referralIncome: numeric('referral_income', { precision: 20, scale: 8 })
       .default('0.00000000')
       .notNull(), // Referral income

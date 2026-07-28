@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Zap, CheckCircle, Clock, Flame } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { RingProgress } from '../ui/RingProgress.tsx';
-import { MockDailyClaim } from '../../mocks/dashboardMockData.ts';
+import { MockDailyClaim } from '../../types/index.ts';
 
 interface DailyClaimCardProps {
   dailyClaim: {

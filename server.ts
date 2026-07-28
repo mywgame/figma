@@ -76,7 +76,9 @@ async function bootstrap() {
     logger.info(`Server successfully bound to host 0.0.0.0, listening on port ${PORT}`);
     // Start background background routines
     transactionMonitor.start();
-    rpcDepositScanner.start();
+    // TODO: Automatic deposit scanning is temporarily disabled to prevent continuous RPC background polling.
+    // Re-enable automatic deposit scanning in a future release.
+    // rpcDepositScanner.start();
     sweepQueueProcessor.start();
   });
 

@@ -371,11 +371,34 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
   };
 
   // Handle Add New User
-  const handleAddUserSubmit = (e: React.FormEvent) => {
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Frontend ONLY UI indicator for local mock creation, keeping consistency with user specs
-    triggerToast(`Local mock user onboarding simulation complete. Use authentication routes to provision on DB.`, 'info');
-    setIsAddModalOpen(false);
+    try {
+      const res = await api.createAdminUser(newUser);
+      if (res.success) {
+        triggerToast(`Member account for ${newUser.name} created successfully!`, 'success');
+        setIsAddModalOpen(false);
+        setNewUser({
+          name: '',
+          email: '',
+          mobile: '',
+          rank: 'VIP1',
+          balance: '0.00',
+          referralCode: '',
+          levelA: 0,
+          levelB: 0,
+          levelC: 0,
+          levelD: 0,
+          status: 'Active',
+          adminNotes: ''
+        });
+        loadUsers();
+      } else {
+        triggerToast(res.error?.message || 'Failed to initialize account.', 'error');
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Error executing request.', 'error');
+    }
   };
 
   // File Upload Handlers (Drag and Drop Visuals)

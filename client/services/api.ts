@@ -383,6 +383,197 @@ class ApiService {
   }
 
   /* =========================================================================
+   * ADMIN DEPOSITS, WITHDRAWALS, AUDIT LOGS & SETTINGS ENDPOINTS
+   * ========================================================================= */
+
+  /**
+   * Admin: Get platform deposits
+   */
+  async getAdminDeposits(params?: { status?: string; page?: number; limit?: number }): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (params?.status && params.status !== 'All') query.append('status', params.status);
+    if (params?.page) query.append('page', params.page.toString());
+    if (params?.limit) query.append('limit', params.limit.toString());
+    return this.get<any>(`/admin/deposits?${query.toString()}`);
+  }
+
+  /**
+   * Admin: Approve a pending deposit
+   */
+  async approveAdminDeposit(id: string, txHash?: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/deposits/${id}/approve`, { txHash });
+  }
+
+  /**
+   * Admin: Reject a pending deposit
+   */
+  async rejectAdminDeposit(id: string, notes?: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/deposits/${id}/reject`, { notes });
+  }
+
+  /**
+   * Admin: Get platform withdrawals
+   */
+  async getAdminWithdrawals(params?: { status?: string; page?: number; limit?: number }): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (params?.status && params.status !== 'All') query.append('status', params.status);
+    if (params?.page) query.append('page', params.page.toString());
+    if (params?.limit) query.append('limit', params.limit.toString());
+    return this.get<any>(`/admin/withdrawals?${query.toString()}`);
+  }
+
+  /**
+   * Admin: Approve a pending withdrawal
+   */
+  async approveAdminWithdrawal(id: string, txHash?: string, notes?: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/withdrawals/${id}/approve`, { txHash, notes });
+  }
+
+  /**
+   * Admin: Reject a pending withdrawal
+   */
+  async rejectAdminWithdrawal(id: string, notes?: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/withdrawals/${id}/reject`, { notes });
+  }
+
+  /**
+   * Admin: Get system audit logs
+   */
+  async getAdminAuditLogs(params?: { action?: string; page?: number; limit?: number }): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (params?.action) query.append('action', params.action);
+    if (params?.page) query.append('page', params.page.toString());
+    if (params?.limit) query.append('limit', params.limit.toString());
+    return this.get<any>(`/admin/audit-logs?${query.toString()}`);
+  }
+
+  /**
+   * Admin: Get system settings
+   */
+  async getAdminSettings(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/settings');
+  }
+
+  /**
+   * Admin: Update system setting by key
+   */
+  async updateAdminSetting(key: string, value: string): Promise<ApiResponse<any>> {
+    return this.patch<any>(`/admin/settings/${key}`, { value });
+  }
+
+  /**
+   * Admin: Create new user account
+   */
+  async createAdminUser(userData: any): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/users', userData);
+  }
+
+  /**
+   * Admin: Get VIP tiers matrix
+   */
+  async getVipTiers(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/vip/tiers');
+  }
+
+  /**
+   * Admin: Update VIP tier configuration
+   */
+  async updateVipTier(tierName: string, updatedTier: any): Promise<ApiResponse<any>> {
+    return this.patch<any>(`/admin/vip/tiers/${tierName}`, updatedTier);
+  }
+
+  /**
+   * Admin: Get Security Command overview
+   */
+  async getSecurityOverview(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/security/overview');
+  }
+
+  /**
+   * Admin: Update emergency security switches
+   */
+  async updateSecuritySwitches(switches: any): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/security/switches', switches);
+  }
+
+  /**
+   * Admin: Revoke active session
+   */
+  async revokeAdminSession(sessionId: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/security/sessions/${sessionId}/revoke`, {});
+  }
+
+  /**
+   * Admin: Clear security alerts
+   */
+  async clearSecurityAlerts(): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/security/alerts/clear', {});
+  }
+
+  /**
+   * Admin: Get leader salary slabs
+   */
+  async getSalarySlabs(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/salary/slabs');
+  }
+
+  /**
+   * Admin: Update leader salary slab
+   */
+  async updateSalarySlab(rank: string, updatedSlab: any): Promise<ApiResponse<any>> {
+    return this.patch<any>(`/admin/salary/slabs/${rank}`, updatedSlab);
+  }
+
+  /**
+   * Admin: Process monthly salary payouts
+   */
+  async processMonthlySalaryPayouts(): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/salary/payout', {});
+  }
+
+  /**
+   * Admin: Get reward campaigns
+   */
+  async getRewardCampaigns(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/rewards/campaigns');
+  }
+
+  /**
+   * Admin: Create reward campaign
+   */
+  async createRewardCampaign(campaign: any): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/rewards/campaigns', campaign);
+  }
+
+  /**
+   * Admin: Update reward campaign
+   */
+  async updateRewardCampaign(id: string, updates: any): Promise<ApiResponse<any>> {
+    return this.patch<any>(`/admin/rewards/campaigns/${id}`, updates);
+  }
+
+  /**
+   * Admin: Get system announcements
+   */
+  async getAnnouncements(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/announcements');
+  }
+
+  /**
+   * Admin: Create system announcement
+   */
+  async createAnnouncement(announcement: any): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/announcements', announcement);
+  }
+
+  /**
+   * Admin: Delete system announcement
+   */
+  async deleteAnnouncement(id: string): Promise<ApiResponse<any>> {
+    return this.delete<any>(`/admin/announcements/${id}`);
+  }
+
+  /* =========================================================================
    * NOTIFICATIONS ENDPOINTS
    * ========================================================================= */
 
