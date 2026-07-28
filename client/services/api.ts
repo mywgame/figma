@@ -604,6 +604,97 @@ class ApiService {
   async deleteNotification(id: string): Promise<ApiResponse<any>> {
     return this.delete<any>(`/users/notifications/${id}`);
   }
+
+  /* =========================================================================
+   * TREASURY ENDPOINTS
+   * ========================================================================= */
+
+  /**
+   * Admin: Get treasury overview for a network
+   */
+  async getTreasuryOverview(network: string): Promise<ApiResponse<any>> {
+    return this.get<any>(`/admin/treasury/${network}`);
+  }
+
+  /**
+   * Admin: Get sweep queue items for a network
+   */
+  async getTreasurySweepQueue(network?: string, status?: string): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (network) query.append('network', network);
+    if (status) query.append('status', status);
+    return this.get<any>(`/admin/treasury/sweep-queue?${query.toString()}`);
+  }
+
+  /**
+   * Admin: Save comprehensive sweep configuration/rules
+   */
+  async updateTreasurySweepMode(data: {
+    network: string;
+    sweepMode?: 'AUTOMATIC' | 'MANUAL' | 'HYBRID';
+    sweepDelay?: string;
+    customDelayMinutes?: number;
+    autoSweepThreshold?: string;
+    paused?: boolean;
+  }): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep-mode', data);
+  }
+
+  /**
+   * Admin: Sweep specific user deposit address to hot wallet
+   */
+  async sweepUserDepositAddress(addressId: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep/address', { addressId });
+  }
+
+  /**
+   * Admin: Sweep all eligible positive balance addresses for a network
+   */
+  async sweepAllEligibleAddresses(network: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep/all', { network });
+  }
+
+  /**
+   * Admin: Transfer funds from Hot Wallet to Cold Wallet
+   */
+  async sweepHotToCold(network: string, amount: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep/hot-to-cold', { network, amount });
+  }
+
+  /**
+   * Admin: Retry a failed sweep job
+   */
+  async retrySweepJob(jobId: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep/retry', { jobId });
+  }
+
+  /**
+   * Admin: Fund native gas for a sweep queue item
+   */
+  async fundGasQueueItem(itemId: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep-queue/fund-gas', { itemId });
+  }
+
+  /**
+   * Admin: Sweep a queue item
+   */
+  async sweepQueueItem(itemId: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep-queue/sweep', { itemId });
+  }
+
+  /**
+   * Admin: Cancel a queue item
+   */
+  async cancelQueueItem(itemId: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep-queue/cancel', { itemId });
+  }
+
+  /**
+   * Admin: Bulk queue action
+   */
+  async bulkActionQueue(itemIds: string[], action: 'FUND_GAS' | 'SWEEP' | 'FUND_AND_SWEEP'): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep-queue/bulk-action', { itemIds, action });
+  }
 }
 
 export const api = new ApiService();

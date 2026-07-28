@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Card, Badge, Button } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
+import { api } from '../../services/api.ts';
 
 interface TreasuryViewProps {
   t: ThemeTokens;
@@ -123,12 +124,9 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const fetchQueueData = async (network: string) => {
     try {
       setQueueLoading(true);
-      const res = await fetch(`/api/v1/admin/treasury/sweep-queue?network=${network}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setSweepQueueItems(data.data || []);
-        }
+      const res = await api.getTreasurySweepQueue(network);
+      if (res.success && res.data) {
+        setSweepQueueItems(res.data || []);
       }
     } catch (err) {
       console.error('[TreasuryView] Failed to load sweep queue:', err);
@@ -141,13 +139,12 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/v1/admin/treasury/${network}`);
-      if (!res.ok) {
-        throw new Error(`Failed to load treasury data: Status ${res.status}`);
+      const res = await api.getTreasuryOverview(network);
+      if (!res.success) {
+        throw new Error(res.error?.message || 'Failed to load treasury data');
       }
-      const data = await res.json();
-      if (data.success && data.data) {
-        const payload = data.data;
+      if (res.data) {
+        const payload = res.data;
         setConfig(payload.config);
         setLiveHotBalance(payload.liveHotBalance || '0.00000000');
         setLiveColdBalance(payload.liveColdBalance || '0.00000000');
@@ -156,14 +153,14 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
         setJobs(payload.jobs || []);
 
         // Sync inputs
-        setSweepMode(payload.config.sweepMode || 'AUTOMATIC');
-        setSweepDelay(payload.config.sweepDelay || 'IMMEDIATE');
-        setCustomDelayMinutes(payload.config.customDelayMinutes || 0);
-        setAutoSweepThreshold(payload.config.autoSweepThreshold || '1.00000000');
-        setPaused(payload.config.paused || false);
+        setSweepMode(payload.config?.sweepMode || 'AUTOMATIC');
+        setSweepDelay(payload.config?.sweepDelay || 'IMMEDIATE');
+        setCustomDelayMinutes(payload.config?.customDelayMinutes || 0);
+        setAutoSweepThreshold(payload.config?.autoSweepThreshold || '1.00000000');
+        setPaused(payload.config?.paused || false);
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Failed to load treasury data');
     } finally {
       setLoading(false);
     }
@@ -202,21 +199,16 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const handleSaveConfig = async () => {
     try {
       setSavingConfig(true);
-      const res = await fetch('/api/v1/admin/treasury/sweep-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          network: selectedNetwork,
-          sweepMode,
-          sweepDelay,
-          customDelayMinutes: Number(customDelayMinutes),
-          autoSweepThreshold,
-          paused,
-        }),
+      const res = await api.updateTreasurySweepMode({
+        network: selectedNetwork,
+        sweepMode,
+        sweepDelay,
+        customDelayMinutes: Number(customDelayMinutes),
+        autoSweepThreshold,
+        paused,
       });
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Failed to save sweep rules.');
+      if (!res.success) throw new Error(res.error?.message || 'Failed to save sweep rules.');
 
       showFeedback('Sweep rules and configuration updated successfully!', null);
       refreshAll();
@@ -231,17 +223,12 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const handlePauseToggle = async (targetPaused: boolean) => {
     try {
       setSavingConfig(true);
-      const res = await fetch('/api/v1/admin/treasury/sweep-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          network: selectedNetwork,
-          paused: targetPaused,
-        }),
+      const res = await api.updateTreasurySweepMode({
+        network: selectedNetwork,
+        paused: targetPaused,
       });
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Failed to toggle paused state.');
+      if (!res.success) throw new Error(res.error?.message || 'Failed to toggle paused state.');
 
       setPaused(targetPaused);
       showFeedback(targetPaused ? 'Sweeps successfully paused!' : 'Sweeps successfully resumed!', null);
@@ -257,16 +244,11 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const handleSweepAddress = async (addressId: string) => {
     try {
       setSweepingAddressId(addressId);
-      const res = await fetch('/api/v1/admin/treasury/sweep/address', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addressId }),
-      });
+      const res = await api.sweepUserDepositAddress(addressId);
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Address sweep failed.');
+      if (!res.success) throw new Error(res.error?.message || 'Address sweep failed.');
 
-      showFeedback(`Address sweep successfully executed! TxHash: ${body.data.txHash}`, null);
+      showFeedback(`Address sweep successfully executed! TxHash: ${res.data?.txHash || 'Submitted'}`, null);
       refreshAll();
     } catch (err: any) {
       showFeedback(null, err.message);
@@ -282,16 +264,11 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
     }
     try {
       setBulkSweeping(true);
-      const res = await fetch('/api/v1/admin/treasury/sweep/all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ network: selectedNetwork }),
-      });
+      const res = await api.sweepAllEligibleAddresses(selectedNetwork);
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Bulk sweep failed.');
+      if (!res.success) throw new Error(res.error?.message || 'Bulk sweep failed.');
 
-      const runCount = body.data?.results?.length || 0;
+      const runCount = res.data?.results?.length || 0;
       showFeedback(`Bulk sweep run completed. Triggered ${runCount} sweep transaction(s).`, null);
       refreshAll();
     } catch (err: any) {
@@ -310,19 +287,11 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
     }
     try {
       setColdSweeping(true);
-      const res = await fetch('/api/v1/admin/treasury/sweep/hot-to-cold', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          network: selectedNetwork,
-          amount: parseFloat(sweepToColdAmount).toFixed(8),
-        }),
-      });
+      const res = await api.sweepHotToCold(selectedNetwork, parseFloat(sweepToColdAmount).toFixed(8));
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Transfer to Cold Wallet failed.');
+      if (!res.success) throw new Error(res.error?.message || 'Transfer to Cold Wallet failed.');
 
-      showFeedback(`Successfully transferred ${sweepToColdAmount} USDT to Cold Storage! TxHash: ${body.data.txHash}`, null);
+      showFeedback(`Successfully transferred ${sweepToColdAmount} USDT to Cold Storage! TxHash: ${res.data?.txHash || 'Submitted'}`, null);
       setSweepToColdAmount('');
       refreshAll();
     } catch (err: any) {
@@ -336,16 +305,11 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const handleRetryJob = async (jobId: string) => {
     try {
       setRetryingJobId(jobId);
-      const res = await fetch('/api/v1/admin/treasury/sweep/retry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId }),
-      });
+      const res = await api.retrySweepJob(jobId);
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Failed to retry sweep job.');
+      if (!res.success) throw new Error(res.error?.message || 'Failed to retry sweep job.');
 
-      showFeedback(`Sweep job retried successfully! TxHash: ${body.data.txHash}`, null);
+      showFeedback(`Sweep job retried successfully! TxHash: ${res.data?.txHash || 'Submitted'}`, null);
       refreshAll();
     } catch (err: any) {
       showFeedback(null, err.message);
@@ -358,15 +322,10 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const handleQueueFundGas = async (itemId: string) => {
     try {
       setProcessingQueueId(itemId);
-      const res = await fetch('/api/v1/admin/treasury/sweep-queue/fund-gas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Gas funding failed.');
+      const res = await api.fundGasQueueItem(itemId);
+      if (!res.success) throw new Error(res.error?.message || 'Gas funding failed.');
 
-      showFeedback(`Gas funding sent successfully! TxHash: ${body.data.txHash}`, null);
+      showFeedback(`Gas funding sent successfully! TxHash: ${res.data?.txHash || 'Submitted'}`, null);
       refreshAll();
     } catch (err: any) {
       showFeedback(null, err.message);
@@ -379,15 +338,10 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const handleQueueSweep = async (itemId: string) => {
     try {
       setProcessingQueueId(itemId);
-      const res = await fetch('/api/v1/admin/treasury/sweep-queue/sweep', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Sweep execution failed.');
+      const res = await api.sweepQueueItem(itemId);
+      if (!res.success) throw new Error(res.error?.message || 'Sweep execution failed.');
 
-      showFeedback(`Sweep transaction successfully broadcasted! TxHash: ${body.data.txHash}`, null);
+      showFeedback(`Sweep transaction successfully broadcasted! TxHash: ${res.data?.txHash || 'Submitted'}`, null);
       refreshAll();
     } catch (err: any) {
       showFeedback(null, err.message);
@@ -403,13 +357,8 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
     }
     try {
       setProcessingQueueId(itemId);
-      const res = await fetch('/api/v1/admin/treasury/sweep-queue/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Failed to cancel item.');
+      const res = await api.cancelQueueItem(itemId);
+      if (!res.success) throw new Error(res.error?.message || 'Failed to cancel item.');
 
       showFeedback('Sweep job successfully shelved/cancelled.', null);
       refreshAll();
@@ -425,15 +374,10 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
     if (selectedQueueIds.length === 0) return;
     try {
       setBulkProcessing(true);
-      const res = await fetch('/api/v1/admin/treasury/sweep-queue/bulk-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemIds: selectedQueueIds, action }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || 'Bulk execution failed.');
+      const res = await api.bulkActionQueue(selectedQueueIds, action);
+      if (!res.success) throw new Error(res.error?.message || 'Bulk execution failed.');
 
-      showFeedback(`Bulk action completed! Verified: ${body.data?.results?.length || 0} transaction(s).`, null);
+      showFeedback(`Bulk action completed! Verified: ${res.data?.results?.length || 0} transaction(s).`, null);
       setSelectedQueueIds([]);
       refreshAll();
     } catch (err: any) {
