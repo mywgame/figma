@@ -33,7 +33,7 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const contract = new ethers.Contract(netConfig.contractAddress, ERC20_ABI, provider);
         const rawBal: bigint = await contract.balanceOf(address);
         return normalizeAmount(rawBal.toString(), netConfig.decimals);
@@ -50,7 +50,7 @@ export class EvmRpcProvider implements BlockchainProvider {
   async getNativeBalance(network: string, address: string): Promise<string> {
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const rawBal = await provider.getBalance(address);
         return ethers.formatEther(rawBal);
       });
@@ -76,7 +76,7 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const wallet = new ethers.Wallet(hotPrivateKey, provider);
         const tx = await wallet.sendTransaction({
           to: toAddress,
@@ -110,7 +110,7 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const wallet = new ethers.Wallet(signerKey, provider);
 
         if (netConfig?.contractAddress) {
@@ -148,7 +148,7 @@ export class EvmRpcProvider implements BlockchainProvider {
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const [tx, receipt, currentBlock] = await Promise.all([
           provider.getTransaction(txHash),
           provider.getTransactionReceipt(txHash),

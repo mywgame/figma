@@ -4589,7 +4589,7 @@ init_vipService();
 init_auditRepository();
 
 // server/blockchain/providers/EvmRpcProvider.ts
-var import_ethers3 = require("ethers");
+var import_ethers4 = require("ethers");
 
 // server/blockchain/config/blockchainConfig.ts
 var dotenv3 = __toESM(require("dotenv"), 1);
@@ -4625,7 +4625,7 @@ var blockchainConfig = {
   isConfigured: !!apiKey,
   isTestnet,
   monitoringIntervalMs: parseInt(process.env.MONITORING_INTERVAL_MS || (isTestnet ? "30000" : "120000"), 10),
-  blockChunkSize: parseInt(process.env.BLOCK_CHUNK_SIZE || "50", 10),
+  blockChunkSize: parseInt(process.env.BLOCK_CHUNK_SIZE || (isTestnet ? "5" : "50"), 10),
   initialReplayBlocks: parseInt(process.env.INITIAL_REPLAY_BLOCKS || "10", 10),
   networks: {
     USDT_BEP20: {
@@ -4870,10 +4870,39 @@ var KeyManager = class {
 var keyManager = new KeyManager();
 
 // server/blockchain/rpc/RpcManager.ts
+var import_ethers2 = require("ethers");
 var RpcManager = class {
   constructor() {
     this.endpoints = {};
+    this.providerCache = /* @__PURE__ */ new Map();
     this.initializeEndpoints();
+  }
+  /**
+   * Get chain ID for EVM networks
+   */
+  getChainId(network) {
+    const isTestnet2 = blockchainConfig.isTestnet;
+    if (network === "USDT_BEP20") {
+      return isTestnet2 ? 97 : 56;
+    }
+    if (network === "USDT_POLYGON") {
+      return isTestnet2 ? 80002 : 137;
+    }
+    return 1;
+  }
+  /**
+   * Get or create a cached static JsonRpcProvider instance per rpcUrl
+   * Prevents ethers v6 background eth_chainId auto-detection retries and warnings
+   */
+  getProvider(network, rpcUrl) {
+    let provider = this.providerCache.get(rpcUrl);
+    if (!provider) {
+      const chainId = this.getChainId(network);
+      const networkObj = import_ethers2.ethers.Network.from(chainId);
+      provider = new import_ethers2.ethers.JsonRpcProvider(rpcUrl, networkObj, { staticNetwork: networkObj });
+      this.providerCache.set(rpcUrl, provider);
+    }
+    return provider;
   }
   initializeEndpoints() {
     const isTestnet2 = blockchainConfig.isTestnet;
@@ -4990,7 +5019,7 @@ var RpcManager = class {
 var rpcManager = new RpcManager();
 
 // server/blockchain/utils/amountUtils.ts
-var import_ethers2 = require("ethers");
+var import_ethers3 = require("ethers");
 function formatTokenAmount(rawBigInt, decimals = 18) {
   if (rawBigInt <= 0n) return "0.00000000";
   const divisor = BigInt(10 ** decimals);
@@ -5037,7 +5066,7 @@ function denormalizeAmount(humanAmount, decimals = 18) {
   if (!humanAmount) return 0n;
   try {
     const cleanAmount = String(humanAmount).trim();
-    return import_ethers2.ethers.parseUnits(cleanAmount, decimals);
+    return import_ethers3.ethers.parseUnits(cleanAmount, decimals);
   } catch {
     return 0n;
   }
@@ -5064,8 +5093,8 @@ var EvmRpcProvider = class {
     if (!netConfig || !netConfig.contractAddress) return "0.00000000";
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
-        const contract = new import_ethers3.ethers.Contract(netConfig.contractAddress, ERC20_ABI, provider);
+        const provider = rpcManager.getProvider(network, rpcUrl);
+        const contract = new import_ethers4.ethers.Contract(netConfig.contractAddress, ERC20_ABI, provider);
         const rawBal = await contract.balanceOf(address);
         return normalizeAmount(rawBal.toString(), netConfig.decimals);
       });
@@ -5080,9 +5109,9 @@ var EvmRpcProvider = class {
   async getNativeBalance(network, address) {
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const rawBal = await provider.getBalance(address);
-        return import_ethers3.ethers.formatEther(rawBal);
+        return import_ethers4.ethers.formatEther(rawBal);
       });
     } catch (err) {
       console.error(`[EvmRpcProvider] Failed to get native balance for ${address} on ${network}:`, err.message);
@@ -5102,11 +5131,11 @@ var EvmRpcProvider = class {
     }
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
-        const wallet = new import_ethers3.ethers.Wallet(hotPrivateKey, provider);
+        const provider = rpcManager.getProvider(network, rpcUrl);
+        const wallet = new import_ethers4.ethers.Wallet(hotPrivateKey, provider);
         const tx = await wallet.sendTransaction({
           to: toAddress,
-          value: import_ethers3.ethers.parseEther(amount)
+          value: import_ethers4.ethers.parseEther(amount)
         });
         return tx.hash;
       });
@@ -5128,17 +5157,17 @@ var EvmRpcProvider = class {
     }
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
-        const wallet = new import_ethers3.ethers.Wallet(signerKey, provider);
+        const provider = rpcManager.getProvider(network, rpcUrl);
+        const wallet = new import_ethers4.ethers.Wallet(signerKey, provider);
         if (netConfig?.contractAddress) {
-          const contract = new import_ethers3.ethers.Contract(netConfig.contractAddress, ERC20_ABI, wallet);
+          const contract = new import_ethers4.ethers.Contract(netConfig.contractAddress, ERC20_ABI, wallet);
           const parsedAmount = denormalizeAmount(amount, netConfig.decimals);
           const tx = await contract.transfer(toAddress, parsedAmount);
           return tx.hash;
         } else {
           const tx = await wallet.sendTransaction({
             to: toAddress,
-            value: import_ethers3.ethers.parseEther(amount)
+            value: import_ethers4.ethers.parseEther(amount)
           });
           return tx.hash;
         }
@@ -5152,7 +5181,7 @@ var EvmRpcProvider = class {
    * Validate EVM address
    */
   async validateAddress(_network, address) {
-    return import_ethers3.ethers.isAddress(address);
+    return import_ethers4.ethers.isAddress(address);
   }
   /**
    * Fetch transaction details and verify confirmations
@@ -5162,7 +5191,7 @@ var EvmRpcProvider = class {
     const decimals = netConfig?.decimals ?? 18;
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = new import_ethers3.ethers.JsonRpcProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const [tx, receipt, currentBlock] = await Promise.all([
           provider.getTransaction(txHash),
           provider.getTransactionReceipt(txHash),
@@ -5175,7 +5204,7 @@ var EvmRpcProvider = class {
         let amount = "0.00000000";
         let sender = tx.from;
         let receiver = tx.to || "";
-        const iface = new import_ethers3.ethers.Interface(ERC20_ABI);
+        const iface = new import_ethers4.ethers.Interface(ERC20_ABI);
         for (const log of receipt.logs) {
           const isContractMatch = !netConfig?.contractAddress || log.address.toLowerCase() === netConfig.contractAddress.toLowerCase();
           try {
@@ -5192,7 +5221,7 @@ var EvmRpcProvider = class {
           }
         }
         if (amount === "0.00000000" && tx.value > 0n) {
-          amount = import_ethers3.ethers.formatEther(tx.value);
+          amount = import_ethers4.ethers.formatEther(tx.value);
         }
         return {
           hash: txHash,
@@ -11343,7 +11372,7 @@ var transactionMonitor = new TransactionMonitor();
 var transactionMonitor2 = transactionMonitor;
 
 // server/blockchain/services/RpcDepositScanner.ts
-var import_ethers4 = require("ethers");
+var import_ethers5 = require("ethers");
 var import_drizzle_orm38 = require("drizzle-orm");
 init_db();
 init_schema();
@@ -11366,19 +11395,6 @@ var RpcDepositScanner = class {
   constructor() {
     this.timer = null;
     this.isScanning = false;
-    // Cache JsonRpcProvider instances per rpcUrl to avoid instantiating new objects every scan cycle
-    this.providerCache = /* @__PURE__ */ new Map();
-  }
-  /**
-   * Get or create a cached JsonRpcProvider for a given rpcUrl
-   */
-  getProvider(rpcUrl) {
-    let provider = this.providerCache.get(rpcUrl);
-    if (!provider) {
-      provider = new import_ethers4.ethers.JsonRpcProvider(rpcUrl);
-      this.providerCache.set(rpcUrl, provider);
-    }
-    return provider;
   }
   /**
    * Start background block/event scanner loop
@@ -11439,7 +11455,7 @@ var RpcDepositScanner = class {
     let toBlock = 0;
     try {
       await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = this.getProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
         const currentBlock = await withTimeout(
           provider.getBlockNumber(),
           1e4,
@@ -11472,7 +11488,7 @@ var RpcDepositScanner = class {
           if (!log.topics || log.topics.length < 3) continue;
           try {
             const rawTo = log.topics[2];
-            const toAddress = import_ethers4.ethers.getAddress("0x" + rawTo.slice(26));
+            const toAddress = import_ethers5.ethers.getAddress("0x" + rawTo.slice(26));
             const addrRecord = await depositAddressRepository.findByAddress(toAddress);
             if (!addrRecord) continue;
             matchingAddresses++;

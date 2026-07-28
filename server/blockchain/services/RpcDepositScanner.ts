@@ -42,21 +42,6 @@ export class RpcDepositScanner {
   private timer: NodeJS.Timeout | null = null;
   private isScanning = false;
 
-  // Cache JsonRpcProvider instances per rpcUrl to avoid instantiating new objects every scan cycle
-  private providerCache: Map<string, ethers.JsonRpcProvider> = new Map();
-
-  /**
-   * Get or create a cached JsonRpcProvider for a given rpcUrl
-   */
-  private getProvider(rpcUrl: string): ethers.JsonRpcProvider {
-    let provider = this.providerCache.get(rpcUrl);
-    if (!provider) {
-      provider = new ethers.JsonRpcProvider(rpcUrl);
-      this.providerCache.set(rpcUrl, provider);
-    }
-    return provider;
-  }
-
   /**
    * Start background block/event scanner loop
    */
@@ -126,7 +111,7 @@ export class RpcDepositScanner {
 
     try {
       await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const provider = this.getProvider(rpcUrl);
+        const provider = rpcManager.getProvider(network, rpcUrl);
 
         // Fetch current block with 10s RPC timeout protection
         const currentBlock = await withTimeout(

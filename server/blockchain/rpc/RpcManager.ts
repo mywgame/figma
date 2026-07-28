@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ethers } from 'ethers';
 import { blockchainConfig } from '../config/blockchainConfig.ts';
 
 export interface RpcEndpoint {
@@ -14,9 +15,39 @@ export interface RpcEndpoint {
 
 export class RpcManager {
   private endpoints: Record<string, RpcEndpoint[]> = {};
+  private providerCache: Map<string, ethers.JsonRpcProvider> = new Map();
 
   constructor() {
     this.initializeEndpoints();
+  }
+
+  /**
+   * Get chain ID for EVM networks
+   */
+  public getChainId(network: string): number {
+    const isTestnet = blockchainConfig.isTestnet;
+    if (network === 'USDT_BEP20') {
+      return isTestnet ? 97 : 56;
+    }
+    if (network === 'USDT_POLYGON') {
+      return isTestnet ? 80002 : 137;
+    }
+    return 1;
+  }
+
+  /**
+   * Get or create a cached static JsonRpcProvider instance per rpcUrl
+   * Prevents ethers v6 background eth_chainId auto-detection retries and warnings
+   */
+  public getProvider(network: string, rpcUrl: string): ethers.JsonRpcProvider {
+    let provider = this.providerCache.get(rpcUrl);
+    if (!provider) {
+      const chainId = this.getChainId(network);
+      const networkObj = ethers.Network.from(chainId);
+      provider = new ethers.JsonRpcProvider(rpcUrl, networkObj, { staticNetwork: networkObj });
+      this.providerCache.set(rpcUrl, provider);
+    }
+    return provider;
   }
 
   private initializeEndpoints() {
