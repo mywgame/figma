@@ -155,7 +155,9 @@ export class EvmRpcProvider implements BlockchainProvider {
           provider.getBlockNumber(),
         ]);
 
-        if (!tx || !receipt) return null;
+        if (!tx || !receipt) {
+          throw new Error(`Transaction ${txHash} or receipt not found on RPC endpoint (${rpcUrl})`);
+        }
 
         const isSuccessful = receipt.status === 1;
         const txBlock = receipt.blockNumber || currentBlock;

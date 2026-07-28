@@ -177,7 +177,9 @@ export class TronRpcProvider implements BlockchainProvider {
           this.tronFetch<any>(rpcUrl, '/wallet/getnowblock').catch(() => null),
         ]);
 
-        if (!txInfo && !txData) return null;
+        if (!txInfo && !txData) {
+          throw new Error(`TRON transaction ${txHash} not found on RPC endpoint (${rpcUrl})`);
+        }
 
         const isSuccessful = txInfo?.result === 'SUCCESS' || txInfo?.receipt?.result === 'SUCCESS';
         const currentBlock = blockNow?.block_header?.raw_data?.number || 100;
