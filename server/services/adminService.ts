@@ -18,6 +18,7 @@ import { notificationService } from './notificationService.ts';
 import { vipService } from './vipService.ts';
 import { referralService } from './referralService.ts';
 import { settingsService } from './settingsService.ts';
+import { salaryService } from './salaryService.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
 import { db } from '../../src/db/index.ts';
 import { users, wallets, deposits, withdrawals, supportTickets, activityLogs, vipStatus, sessions } from '../../src/db/schema.ts';
@@ -1050,19 +1051,53 @@ export class AdminService {
   }
 
   /**
-   * Salary Module: Process Monthly Payouts
+   * Salary Module: Process Weekly Leadership Incentive Payouts
+   *
+   * Business Logic Spec Section 12 — Weekly Leadership Incentive & Section 17 —
+   * Service Ownership Matrix: SalaryService is the single owning service for this
+   * business rule. AdminService only orchestrates the batch run across all users and
+   * never recalculates or duplicates the reward logic itself.
    */
   async processMonthlySalaryPayouts(adminUid: string) {
-    // Audit execution
+    const payPeriodEnd = new Date();
+    const payPeriodStart = new Date(payPeriodEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Fetch every registered user — this is an admin-triggered batch job, not a
+    // paginated UI listing, so we intentionally request a high ceiling.
+    const allUsers = await userRepository.findAll({ limit: 100000, offset: 0 });
+
+    let processedCount = 0;
+    let totalTransmitted = 0;
+
+    for (const user of allUsers) {
+      try {
+        const result = await salaryService.processWeeklySalaryForUser(user.id, payPeriodStart, payPeriodEnd);
+        if (result.paid) {
+          processedCount++;
+          totalTransmitted += result.reward;
+        }
+      } catch (err: any) {
+        console.error(`Failed to process Weekly Leadership Incentive for user ${user.id}:`, err.message);
+      }
+    }
+
+    const totalTransmittedStr = totalTransmitted.toFixed(2);
+
+    // Audit execution — records the real outcome, not a placeholder.
     await SecurityLogger.logAudit({
       actorUid: adminUid,
-      action: 'PROCESS_MONTHLY_SALARY_PAYOUTS',
+      action: 'PROCESS_WEEKLY_SALARY_PAYOUTS',
       resource: 'salary/payouts',
       oldValue: '',
-      newValue: 'executed',
+      newValue: JSON.stringify({ payPeriodStart, payPeriodEnd, processedCount, totalTransmitted: totalTransmittedStr }),
     });
 
-    return { processedCount: 3116, totalTransmitted: '$318,400' };
+    return {
+      processedCount,
+      totalTransmitted: `$${totalTransmittedStr}`,
+      payPeriodStart,
+      payPeriodEnd,
+    };
   }
 
   /**

@@ -70,6 +70,8 @@ export interface DashboardData {
     amount: string;
     durationDays: number;
     activeTrialBalance: string;
+    trialExpiresAt: string | null;
+    isActive: boolean;
   };
 }
 

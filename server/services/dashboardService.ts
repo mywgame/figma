@@ -15,12 +15,17 @@ import { depositAddressRepository } from '../repositories/depositAddressReposito
 import { claimService } from './claimService.ts';
 import { userRepository } from '../repositories/userRepository.ts';
 import { incomeRepository } from '../repositories/incomeRepository.ts';
+import { trialFundService } from './trialFundService.ts';
 
 export class DashboardService {
   /**
    * Aggregate all metrics and states to compile the comprehensive user dashboard payload
    */
   async getDashboardData(userId: string) {
+    // 0. Lazily expire the Trial Principal if its configured duration has passed
+    // (Business Logic Spec Section 4). Safe no-op if already expired/inactive.
+    await trialFundService.checkAndExpireTrialFund(userId);
+
     // 1. Fetch wallet balances and calculations
     const wallet = await walletRepository.findByUserId(userId);
     if (!wallet) {
@@ -29,7 +34,10 @@ export class DashboardService {
 
     const availableBalance = parseFloat(wallet.availableBalance);
     const lockedBalance = parseFloat(wallet.lockedBalance);
-    const totalAssets = availableBalance + lockedBalance;
+    const trialBalance = parseFloat(wallet.trialBalance);
+    const isTrialActive = trialBalance > 0 && (!wallet.trialExpiresAt || new Date(wallet.trialExpiresAt) > new Date());
+    // Business Logic Spec Section 4: Trial Fund is "Displayed together with the Main Wallet in the UI."
+    const totalAssets = availableBalance + lockedBalance + (isTrialActive ? trialBalance : 0);
 
     // 2. Fetch categorized earnings totals
     const earnings = await incomeService.getUserIncomeSummary(userId);
@@ -249,6 +257,7 @@ export class DashboardService {
         durationDays: trialDurationSetting ? parseInt(trialDurationSetting.value) : 3,
         activeTrialBalance: wallet.trialBalance,
         trialExpiresAt: wallet.trialExpiresAt,
+        isActive: isTrialActive,
       },
     };
   }

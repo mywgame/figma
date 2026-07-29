@@ -43,7 +43,12 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
     return <DashboardSkeleton />;
   }
 
-  const totalBalance = parseFloat(dashboardData.wallet.availableBalance);
+  // Business Logic Spec Section 4 — Trial Fund is "Displayed together with the Main
+  // Wallet in the UI." Only the active (non-expired) trial balance is included.
+  const activeTrialBalance = dashboardData.trialFundInfo?.isActive
+    ? parseFloat(dashboardData.trialFundInfo.activeTrialBalance || '0')
+    : 0;
+  const totalBalance = parseFloat(dashboardData.wallet.availableBalance) + activeTrialBalance;
   const totalEarned = parseFloat(dashboardData.earnings.dailyYield) +
                       parseFloat(dashboardData.earnings.referralIncome) +
                       parseFloat(dashboardData.earnings.teamIncome) +

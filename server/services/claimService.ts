@@ -11,7 +11,12 @@ import { notificationRepository } from '../repositories/notificationRepository.t
 import { incomeRepository } from '../repositories/incomeRepository.ts';
 import { auditRepository } from '../repositories/auditRepository.ts';
 import { referralService } from './referralService.ts';
+import { trialFundService } from './trialFundService.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
+
+// Business Logic Spec Section 4 — Trial Fund: "Generates DPY using the VIP1 rate."
+// This rate is fixed regardless of the user's actual VIP tier.
+const TRIAL_FUND_DPY_RATE = 0.0060;
 
 export class ClaimService {
   /**
@@ -34,6 +39,10 @@ export class ClaimService {
    * Generate a pending daily claim record for a single user for a given date
    */
   async generateClaimForUser(userId: string, date: Date = new Date()) {
+    // Lazily expire the Trial Principal first (Business Logic Spec Section 4) so an
+    // already-expired trial balance never generates a fresh day's DPY.
+    await trialFundService.checkAndExpireTrialFund(userId);
+
     const wallet = await walletRepository.findByUserId(userId);
     if (!wallet) return null;
 
@@ -46,7 +55,16 @@ export class ClaimService {
     // and must NOT keep earning yield until they return to the active wallet (or the
     // withdrawal is rejected and refunded back to availableBalance).
     const activeBalance = parseFloat(wallet.availableBalance);
-    const rewardAmount = activeBalance * rate;
+    const mainComponent = activeBalance * rate;
+
+    // BUSINESS RULE (Section 4 — Trial Fund): Trial Balance generates DPY at the FIXED
+    // VIP1 rate, independent of the user's actual VIP tier. Only counts if not yet expired.
+    const trialBalance = parseFloat(wallet.trialBalance);
+    const trialActive = trialBalance > 0 && (!wallet.trialExpiresAt || new Date(wallet.trialExpiresAt) > date);
+    const trialComponent = trialActive ? trialBalance * TRIAL_FUND_DPY_RATE : 0;
+
+    const totalEligibleBalance = activeBalance + (trialActive ? trialBalance : 0);
+    const rewardAmount = mainComponent + trialComponent;
 
     if (rewardAmount <= 0) {
       return null; // No assets to generate DPY
@@ -67,7 +85,7 @@ export class ClaimService {
       claimDate: date,
       claimStatus: 'PENDING',
       rewardAmount: rewardAmount.toFixed(8),
-      totalAssets: activeBalance.toFixed(8),
+      totalAssets: totalEligibleBalance.toFixed(8),
       vipTier,
       vipRate: rate.toFixed(4),
       claimWindowOpenTime: openTime,

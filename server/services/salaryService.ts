@@ -45,6 +45,22 @@ export class SalaryService {
       throw new Error(`Wallet not found for user ${userId}`);
     }
 
+    // BUSINESS RULE: Prevent double-payout — if an admin (accidentally or deliberately)
+    // triggers the weekly batch job more than once for an overlapping window, a user
+    // must never be paid twice for the same Weekly Leadership Incentive period.
+    const overlapping = await salaryRepository.findOverlappingPayout(userId, payPeriodStart, payPeriodEnd);
+    if (overlapping) {
+      return {
+        userId,
+        qualifiedVip2Count: overlapping.qualifiedVip2Count,
+        starTitle: overlapping.starTitle || 'Unqualified',
+        reward: 0,
+        paid: false,
+        skipped: true,
+        reason: `Already paid for an overlapping period on ${new Date(overlapping.paidAt).toISOString()}.`,
+      };
+    }
+
     // 1. Fetch all Level A to D descendants
     const descendants = await referralService.getDownlineDescendants(userId);
 

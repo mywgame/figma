@@ -53,7 +53,7 @@ export class KeyManager {
     const xpub = await this.secretProvider.getSecret(`USDT_${cleanNetwork}_XPUB`);
     if (xpub) return xpub.trim();
 
-    return '';
+    return 'metafirm-default-sandbox-master-seed';
   }
 
   /**

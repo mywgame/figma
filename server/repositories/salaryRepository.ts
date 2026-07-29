@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, gt, lt } from 'drizzle-orm';
 import { db } from '../../src/db/index.ts';
 import { salaryHistory } from '../../src/db/schema.ts';
 
@@ -54,6 +54,33 @@ export class SalaryRepository {
     } catch (error) {
       console.error('Database query (findByUserId) failed:', error);
       throw new Error('Failed to query user salary history.');
+    }
+  }
+
+  /**
+   * Check whether a user already has a PAID Weekly Leadership Incentive record whose
+   * pay period overlaps the given window. Used to prevent double-processing a user
+   * if an admin triggers the batch payout job more than once within the same week.
+   */
+  async findOverlappingPayout(userId: string, payPeriodStart: Date, payPeriodEnd: Date) {
+    try {
+      const result = await db
+        .select()
+        .from(salaryHistory)
+        .where(
+          and(
+            eq(salaryHistory.userId, userId),
+            eq(salaryHistory.status, 'PAID'),
+            // Overlap condition: existing.start < newEnd AND existing.end > newStart
+            lt(salaryHistory.payPeriodStart, payPeriodEnd),
+            gt(salaryHistory.payPeriodEnd, payPeriodStart)
+          )
+        )
+        .limit(1);
+      return result[0] || null;
+    } catch (error) {
+      console.error('Database query (findOverlappingPayout) failed:', error);
+      throw new Error('Failed to check for overlapping salary payout.');
     }
   }
 

@@ -1,1 +1,0 @@
-ALTER TABLE "wallets" ADD COLUMN "trial_expires_at" timestamp;

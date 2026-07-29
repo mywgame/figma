@@ -55,14 +55,19 @@ export class UserService {
         // Read Trial Fund configuration dynamically from Admin System Settings
         const trialAmountSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_AMOUNT');
         const trialDurationSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_DURATION_DAYS');
+        const trialEnabledSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_ENABLED');
 
         const trialAmountRaw = trialAmountSetting ? trialAmountSetting.value : '100.00000000';
         const trialDurationRaw = trialDurationSetting ? trialDurationSetting.value : '3';
+        // Default to enabled when the admin has never explicitly set the toggle (preserves existing behavior).
+        const trialEnabledRaw = trialEnabledSetting ? trialEnabledSetting.value === 'true' : true;
 
         const trialAmountNum = parseFloat(trialAmountRaw);
         const trialDurationDays = parseInt(trialDurationRaw, 10);
 
-        const isTrialEnabled = !isNaN(trialAmountNum) && trialAmountNum > 0;
+        // Admin toggle is authoritative: even if an amount is configured, a disabled
+        // program must never grant a Trial Fund to newly registered users.
+        const isTrialEnabled = trialEnabledRaw && !isNaN(trialAmountNum) && trialAmountNum > 0;
         const trialAmountStr = isTrialEnabled ? trialAmountNum.toFixed(8) : '0.00000000';
 
         let trialExpiresAt: Date | null = null;
