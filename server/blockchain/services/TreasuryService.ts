@@ -10,6 +10,7 @@ import { activeBlockchainProvider } from '../providers/index.ts';
 import { logger } from '../../utils/logger.ts';
 import { auditRepository } from '../../repositories/auditRepository.ts';
 import { keyManager } from '../keys/KeyManager.ts';
+import { normalizeEvmAddress } from '../utils/blockchainUtils.ts';
 
 export interface TreasuryWalletConfig {
   network: string;
@@ -22,15 +23,15 @@ export interface TreasuryWalletConfig {
 const DEFAULT_TREASURY_CONFIGS: Record<string, TreasuryWalletConfig> = {
   USDT_BEP20: {
     network: 'USDT_BEP20',
-    hotAddress: '0xBE0c8838B296bc8e6307B2D26786a3449339e0E7',
-    coldAddress: '0x9Be6F66a87754d924fD08873E47A70176D5Bf92b',
+    hotAddress: normalizeEvmAddress('0xBE0c8838B296bc8e6307B2D26786a3449339e0E7'),
+    coldAddress: normalizeEvmAddress('0x9Be6F66a87754d924fD08873E47A70176D5Bf92b'),
     autoSweepEnabled: true,
     autoSweepThreshold: '50.00000000',
   },
   USDT_POLYGON: {
     network: 'USDT_POLYGON',
-    hotAddress: '0x71C7656EC7ab88b098defB751B7401B5f6d1476B',
-    coldAddress: '0x89205A0A3b2a2512f410529A98c39e8023e3E01a',
+    hotAddress: normalizeEvmAddress('0x71C7656EC7ab88b098defB751B7401B5f6d1476B'),
+    coldAddress: normalizeEvmAddress('0x89205A0A3b2a2512f410529A98c39e8023e3E01a'),
     autoSweepEnabled: true,
     autoSweepThreshold: '50.00000000',
   },
@@ -58,7 +59,12 @@ export class TreasuryService {
       .limit(1);
 
     if (existing.length > 0) {
-      return existing[0];
+      const record = existing[0];
+      if (!cleanNetwork.includes('TRC20')) {
+        record.hotAddress = normalizeEvmAddress(record.hotAddress);
+        record.coldAddress = normalizeEvmAddress(record.coldAddress);
+      }
+      return record;
     }
 
     const defaultConfig = DEFAULT_TREASURY_CONFIGS[cleanNetwork];
@@ -80,7 +86,12 @@ export class TreasuryService {
       })
       .returning();
 
-    return inserted[0];
+    const result = inserted[0];
+    if (!cleanNetwork.includes('TRC20')) {
+      result.hotAddress = normalizeEvmAddress(result.hotAddress);
+      result.coldAddress = normalizeEvmAddress(result.coldAddress);
+    }
+    return result;
   }
 
   /**

@@ -8,8 +8,20 @@ import { Link as LinkIcon, Copy, Check, ChevronRight } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { MockNetworkSummary } from '../../types/index.ts';
 
+export interface NetworkSummaryData {
+  referralLink: string;
+  commissionRateLabel: string;
+  thisMonthEarnings: number;
+  totalMembers: number;
+  levels: Array<{
+    level: string;
+    count: number;
+    earnings: number;
+  }>;
+}
+
 interface NetworkLevelsProps {
-  network: MockNetworkSummary;
+  network: NetworkSummaryData;
 }
 
 const LEVEL_COLORS = [
@@ -45,7 +57,7 @@ export const NetworkLevels: React.FC<NetworkLevelsProps> = ({ network }) => {
 
       <div className="space-y-3">
         {network.levels.map((lvl, i) => {
-          const pct = Math.round((lvl.count / network.totalMembers) * 100);
+          const pct = Math.round((lvl.count / (network.totalMembers || 1)) * 100);
           return (
             <div key={lvl.level}>
               <div className="flex items-center justify-between mb-1.5">
@@ -84,11 +96,13 @@ export const NetworkLevels: React.FC<NetworkLevelsProps> = ({ network }) => {
 
         <div className="flex justify-between text-xs mt-3">
           <span className={t.textSub}>Commission Rate</span>
-          <span className="font-semibold text-cyan-500">{network.commissionRate}%</span>
+          <span className="font-semibold text-cyan-500">{network.commissionRateLabel}</span>
         </div>
         <div className="flex justify-between text-xs mt-1.5">
           <span className={t.textSub}>This Month</span>
-          <span className="font-semibold text-green-500">${network.thisMonthEarnings.toLocaleString()}</span>
+          <span className="font-semibold text-green-500">
+            ${network.thisMonthEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import { keyManager } from '../keys/KeyManager.ts';
 import { rpcManager } from '../rpc/RpcManager.ts';
 import type { BlockchainProvider, BlockchainTransaction } from '../interfaces/BlockchainProvider.ts';
 import { normalizeAmount, denormalizeAmount } from '../utils/amountUtils.ts';
+import { normalizeEvmAddress } from '../utils/blockchainUtils.ts';
 
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
@@ -21,7 +22,8 @@ export class EvmRpcProvider implements BlockchainProvider {
    * Derive EVM deposit address using KeyManager / HD engine
    */
   async generateDepositAddress(network: string, derivationIndex: number): Promise<string> {
-    return keyManager.deriveAddress(network, derivationIndex);
+    const rawAddr = await keyManager.deriveAddress(network, derivationIndex);
+    return normalizeEvmAddress(rawAddr);
   }
 
   /**
@@ -31,11 +33,14 @@ export class EvmRpcProvider implements BlockchainProvider {
     const netConfig = blockchainConfig.networks[network];
     if (!netConfig || !netConfig.contractAddress) return '0.00000000';
 
+    const normalizedAddress = normalizeEvmAddress(address);
+    const normalizedContract = normalizeEvmAddress(netConfig.contractAddress);
+
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
         const provider = rpcManager.getProvider(network, rpcUrl);
-        const contract = new ethers.Contract(netConfig.contractAddress, ERC20_ABI, provider);
-        const rawBal: bigint = await contract.balanceOf(address);
+        const contract = new ethers.Contract(normalizedContract, ERC20_ABI, provider);
+        const rawBal: bigint = await contract.balanceOf(normalizedAddress);
         return normalizeAmount(rawBal.toString(), netConfig.decimals);
       });
     } catch (err: any) {
@@ -48,10 +53,11 @@ export class EvmRpcProvider implements BlockchainProvider {
    * Get native network balance (BNB, MATIC/POL, ETH)
    */
   async getNativeBalance(network: string, address: string): Promise<string> {
+    const normalizedAddress = normalizeEvmAddress(address);
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
         const provider = rpcManager.getProvider(network, rpcUrl);
-        const rawBal = await provider.getBalance(address);
+        const rawBal = await provider.getBalance(normalizedAddress);
         return ethers.formatEther(rawBal);
       });
     } catch (err: any) {
@@ -66,11 +72,12 @@ export class EvmRpcProvider implements BlockchainProvider {
   async fundGas(network: string, toAddress: string, amount: string): Promise<string> {
     const netConfig = blockchainConfig.networks[network];
     const hotPrivateKey = netConfig?.hotPrivateKey;
+    const normalizedTo = normalizeEvmAddress(toAddress);
 
     if (!hotPrivateKey) {
       // Simulation mode fallback
       const mockTxHash = `0x${Math.random().toString(16).substring(2, 66).padStart(64, '0')}`;
-      console.log(`[EvmRpcProvider] [SIMULATION] Funded ${amount} gas to ${toAddress} on ${network}. Mock Hash: ${mockTxHash}`);
+      console.log(`[EvmRpcProvider] [SIMULATION] Funded ${amount} gas to ${normalizedTo} on ${network}. Mock Hash: ${mockTxHash}`);
       return mockTxHash;
     }
 
@@ -79,16 +86,16 @@ export class EvmRpcProvider implements BlockchainProvider {
         const provider = rpcManager.getProvider(network, rpcUrl);
         const wallet = new ethers.Wallet(hotPrivateKey, provider);
         const tx = await wallet.sendTransaction({
-          to: toAddress,
+          to: normalizedTo,
           value: ethers.parseEther(amount),
         });
         return tx.hash;
       });
     } catch (err: any) {
-      console.error(`[EvmRpcProvider] Native gas funding failed on ${network} to ${toAddress}:`, err.message);
+      console.error(`[EvmRpcProvider] Native gas funding failed on ${network} to ${normalizedTo}:`, err.message);
       if (blockchainConfig.isTestnet || blockchainConfig.env === 'sandbox' || blockchainConfig.env === 'development') {
         const mockTxHash = `0x${Math.random().toString(16).substring(2, 66).padStart(64, '0')}`;
-        console.log(`[EvmRpcProvider] [TESTNET FALLBACK] Funded ${amount} gas to ${toAddress} on ${network}. Mock Hash: ${mockTxHash}`);
+        console.log(`[EvmRpcProvider] [TESTNET FALLBACK] Funded ${amount} gas to ${normalizedTo} on ${network}. Mock Hash: ${mockTxHash}`);
         return mockTxHash;
       }
       throw err;
@@ -106,10 +113,11 @@ export class EvmRpcProvider implements BlockchainProvider {
   ): Promise<string> {
     const netConfig = blockchainConfig.networks[network];
     const signerKey = fromPrivateKey || netConfig?.hotPrivateKey;
+    const normalizedTo = normalizeEvmAddress(toAddress);
 
     if (!signerKey) {
       const mockTxHash = `0x${Math.random().toString(16).substring(2, 66).padStart(64, '0')}`;
-      console.log(`[EvmRpcProvider] [SIMULATION] Broadcasted ${amount} token transfer to ${toAddress} on ${network}. Mock Hash: ${mockTxHash}`);
+      console.log(`[EvmRpcProvider] [SIMULATION] Broadcasted ${amount} token transfer to ${normalizedTo} on ${network}. Mock Hash: ${mockTxHash}`);
       return mockTxHash;
     }
 
@@ -119,13 +127,14 @@ export class EvmRpcProvider implements BlockchainProvider {
         const wallet = new ethers.Wallet(signerKey, provider);
 
         if (netConfig?.contractAddress) {
-          const contract = new ethers.Contract(netConfig.contractAddress, ERC20_ABI, wallet);
+          const normalizedContract = normalizeEvmAddress(netConfig.contractAddress);
+          const contract = new ethers.Contract(normalizedContract, ERC20_ABI, wallet);
           const parsedAmount = denormalizeAmount(amount, netConfig.decimals);
-          const tx = await contract.transfer(toAddress, parsedAmount);
+          const tx = await contract.transfer(normalizedTo, parsedAmount);
           return tx.hash;
         } else {
           const tx = await wallet.sendTransaction({
-            to: toAddress,
+            to: normalizedTo,
             value: ethers.parseEther(amount),
           });
           return tx.hash;
@@ -135,7 +144,7 @@ export class EvmRpcProvider implements BlockchainProvider {
       console.error(`[EvmRpcProvider] Broadcast transaction failed on ${network}:`, err.message);
       if (blockchainConfig.isTestnet || blockchainConfig.env === 'sandbox' || blockchainConfig.env === 'development') {
         const mockTxHash = `0x${Math.random().toString(16).substring(2, 66).padStart(64, '0')}`;
-        console.log(`[EvmRpcProvider] [TESTNET FALLBACK] Broadcasted ${amount} token transfer to ${toAddress} on ${network}. Mock Hash: ${mockTxHash}`);
+        console.log(`[EvmRpcProvider] [TESTNET FALLBACK] Broadcasted ${amount} token transfer to ${normalizedTo} on ${network}. Mock Hash: ${mockTxHash}`);
         return mockTxHash;
       }
       throw err;
@@ -146,7 +155,10 @@ export class EvmRpcProvider implements BlockchainProvider {
    * Validate EVM address
    */
   async validateAddress(_network: string, address: string): Promise<boolean> {
-    return ethers.isAddress(address);
+    if (!address || typeof address !== 'string') return false;
+    const trimmed = address.trim();
+    if (!trimmed.startsWith('0x')) return false;
+    return ethers.isAddress(normalizeEvmAddress(trimmed));
   }
 
   /**

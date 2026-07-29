@@ -39,8 +39,16 @@ export class DashboardService {
     // Business Logic Spec Section 4: Trial Fund is "Displayed together with the Main Wallet in the UI."
     const totalAssets = availableBalance + lockedBalance + (isTrialActive ? trialBalance : 0);
 
-    // 2. Fetch categorized earnings totals
-    const earnings = await incomeService.getUserIncomeSummary(userId);
+    // 2. Fetch categorized earnings totals (lifetime & today)
+    const lifetimeEarnings = await incomeService.getUserIncomeSummary(userId);
+    const nowForToday = new Date();
+    const startOfToday = new Date(Date.UTC(nowForToday.getUTCFullYear(), nowForToday.getUTCMonth(), nowForToday.getUTCDate(), 0, 0, 0, 0));
+    const todayEarnings = await incomeService.getTodayUserIncomeSummary(userId, startOfToday);
+
+    const earnings = {
+      ...lifetimeEarnings,
+      ...todayEarnings,
+    };
 
     // 3. Fetch VIP status and matrix eligibility
     let vip = await vipRepository.findByUserId(userId);
@@ -206,6 +214,18 @@ export class DashboardService {
       }
     }
 
+    // 12. Fetch active referral system configuration and current month referral earnings
+    const refModeSetting = await settingsRepository.findSystemSettingByKey('REFERRAL_REWARD_MODE');
+    const refPctSetting = await settingsRepository.findSystemSettingByKey('REFERRAL_REWARD_PERCENTAGE');
+    const refFixedSetting = await settingsRepository.findSystemSettingByKey('REFERRAL_REWARD_FIXED_AMOUNT');
+
+    const rewardMode = (refModeSetting?.value || 'PERCENTAGE').toUpperCase() as 'PERCENTAGE' | 'FIXED';
+    const rewardPercentage = refPctSetting?.value || '10';
+    const rewardFixedAmount = refFixedSetting?.value || '20';
+
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    const thisMonthReferralEarnings = await incomeRepository.getMonthlyReferralEarnings(userId, startOfMonth);
+
     return {
       wallet: {
         id: wallet.id,
@@ -258,6 +278,12 @@ export class DashboardService {
         activeTrialBalance: wallet.trialBalance,
         trialExpiresAt: wallet.trialExpiresAt,
         isActive: isTrialActive,
+      },
+      referralConfig: {
+        mode: rewardMode,
+        percentage: rewardPercentage,
+        fixedAmount: rewardFixedAmount,
+        thisMonthReferralEarnings: thisMonthReferralEarnings.toFixed(2),
       },
     };
   }

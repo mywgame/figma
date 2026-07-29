@@ -45,35 +45,46 @@ export class SettingsRepository {
    * Update or create a system setting (by key)
    */
   async upsertSystemSetting(data: {
-    id: number;
+    id?: number;
     key: string;
     value: string;
     description?: string;
     updatedBy?: string;
   }) {
     try {
-      const result = await db
-        .insert(systemSettings)
-        .values({
-          id: data.id,
-          key: data.key,
-          value: data.value,
-          description: data.description || null,
-          updatedBy: data.updatedBy || 'SYSTEM',
-        })
-        .onConflictDoUpdate({
-          target: systemSettings.key,
-          set: {
+      const existing = await db
+        .select()
+        .from(systemSettings)
+        .where(eq(systemSettings.key, data.key));
+
+      if (existing.length > 0) {
+        const result = await db
+          .update(systemSettings)
+          .set({
+            value: data.value,
+            description: data.description !== undefined ? data.description : existing[0].description,
+            updatedBy: data.updatedBy || 'SYSTEM',
+            updatedAt: new Date(),
+          })
+          .where(eq(systemSettings.key, data.key))
+          .returning();
+        return result[0];
+      } else {
+        const newId = data.id || Math.floor(100000 + Math.random() * 899999);
+        const result = await db
+          .insert(systemSettings)
+          .values({
+            id: newId,
+            key: data.key,
             value: data.value,
             description: data.description || null,
             updatedBy: data.updatedBy || 'SYSTEM',
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
-      return result[0];
-    } catch (error) {
-      console.error('Database query (upsertSystemSetting) failed:', error);
+          })
+          .returning();
+        return result[0];
+      }
+    } catch (error: any) {
+      console.error('Database query (upsertSystemSetting) failed:', error?.message || error);
       throw new Error('Failed to upsert system configuration.');
     }
   }

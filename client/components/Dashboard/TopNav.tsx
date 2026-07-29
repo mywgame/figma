@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Menu, X, User, Lock, Settings, HelpCircle, LogOut } from 'lucide-react';
+import { Menu, X, User, Lock, Fingerprint, Wallet, Settings, HelpCircle, LogOut } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { useAvatar } from '../../hooks/useAvatar.ts';
 import { ThemeSwitch } from '../ui/ThemeSwitch.tsx';
@@ -112,6 +112,8 @@ export const TopNav: React.FC<TopNavProps> = ({ identity, activeTab, onNavigate,
                   {[
                     { id: 'profile' as DashboardTab, label: 'Profile', icon: User },
                     { id: 'security' as DashboardTab, label: 'Security', icon: Lock },
+                    { id: 'twoFactor' as DashboardTab, label: 'Two-Factor Authentication', icon: Fingerprint },
+                    { id: 'withdrawalAddresses' as DashboardTab, label: 'Withdrawal Addresses', icon: Wallet },
                     { id: 'settings' as DashboardTab, label: 'Settings', icon: Settings },
                     { id: 'support' as DashboardTab, label: 'Support', icon: HelpCircle },
                   ].map((item) => {

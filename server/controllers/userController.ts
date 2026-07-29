@@ -33,6 +33,15 @@ import { userRepository } from '../repositories/userRepository.ts';
 import { walletRepository } from '../repositories/walletRepository.ts';
 import { vipRepository } from '../repositories/vipRepository.ts';
 
+function isValidCryptoAddress(network: string, address: string): boolean {
+  if (network === 'USDT_BEP20' || network === 'USDT_POLYGON') {
+    return /^0x[a-fA-F0-9]{40}$/.test(address);
+  } else if (network === 'USDT_TRC20') {
+    return /^T[a-zA-Z0-9]{33}$/.test(address);
+  }
+  return false;
+}
+
 export class UserController {
   /**
    * Sync authenticated User credentials to local PostgreSQL database
@@ -741,6 +750,16 @@ export class UserController {
       if (!req.user) {
         throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
       }
+      const { network, address } = req.body;
+      if (network && address) {
+        if (!isValidCryptoAddress(network, address)) {
+          const expected = (network === 'USDT_TRC20') 
+            ? 'Tron TRC20 address starting with "T" (34 characters).' 
+            : 'EVM (BEP20/Polygon) 0x-prefixed hex address (42 characters).';
+          throw new ApiError(400, `Invalid address format for ${network}. Expected ${expected}`, 'BAD_REQUEST');
+        }
+      }
+
       const user = await userService.getUserProfile(req.user.uid);
       const { otp } = await otpService.generateAndStoreOtp(user.email, 'withdrawal-address');
       
@@ -765,6 +784,13 @@ export class UserController {
       const { network, address, otp } = req.body;
       if (!network || !address || !otp) {
         throw new ApiError(400, 'Network, address, and OTP code are required.', 'BAD_REQUEST');
+      }
+
+      if (!isValidCryptoAddress(network, address)) {
+        const expected = (network === 'USDT_TRC20') 
+          ? 'Tron TRC20 address starting with "T" (34 characters).' 
+          : 'EVM (BEP20/Polygon) 0x-prefixed hex address (42 characters).';
+        throw new ApiError(400, `Invalid address format for ${network}. Expected ${expected}`, 'BAD_REQUEST');
       }
 
       const user = await userService.getUserProfile(req.user.uid);
@@ -793,6 +819,43 @@ export class UserController {
 
       return sendSuccess(res, {
         message: 'Withdrawal address added and verified successfully!',
+        addresses
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Deletes a registered withdrawal address
+   */
+  async deleteWithdrawalAddress(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { network, address } = req.body;
+      if (!network || !address) {
+        throw new ApiError(400, 'Network and address are required.', 'BAD_REQUEST');
+      }
+
+      const user = await userService.getUserProfile(req.user.uid);
+      const settings = await settingsRepository.findUserSettingsByUserId(user.id);
+      
+      const addresses = settings && settings.withdrawalAddresses 
+        ? JSON.parse(settings.withdrawalAddresses) 
+        : { USDT_BEP20: [], USDT_POLYGON: [], USDT_TRC20: [] };
+
+      if (addresses[network]) {
+        addresses[network] = addresses[network].filter((a: string) => a !== address);
+      }
+
+      await settingsRepository.updateUserSettings(user.id, {
+        withdrawalAddresses: JSON.stringify(addresses)
+      });
+
+      return sendSuccess(res, {
+        message: 'Withdrawal address deleted successfully.',
         addresses
       }, 200);
     } catch (error) {

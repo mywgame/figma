@@ -3,7 +3,29 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ethers } from 'ethers';
 import { normalizeAmount } from './amountUtils.ts';
+
+/**
+ * Safely normalizes EVM addresses to valid checksummed format according to EIP-55.
+ * Handles invalid mixed-case checksum strings by lowercasing first.
+ * Leaves non-EVM addresses untouched if passed accidentally.
+ */
+export function normalizeEvmAddress(address: string): string {
+  if (!address || typeof address !== 'string') return address;
+  const trimmed = address.trim();
+  if (!trimmed.startsWith('0x')) return trimmed;
+
+  try {
+    return ethers.getAddress(trimmed);
+  } catch (_err) {
+    try {
+      return ethers.getAddress(trimmed.toLowerCase());
+    } catch (_err2) {
+      return trimmed;
+    }
+  }
+}
 
 /**
  * Mask the middle part of a blockchain address for privacy/display

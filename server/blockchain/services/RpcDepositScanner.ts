@@ -4,6 +4,7 @@
  */
 
 import { ethers } from 'ethers';
+import { normalizeEvmAddress } from '../utils/blockchainUtils.ts';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../src/db/index.ts';
 import { systemSettings } from '../../../src/db/schema.ts';
@@ -163,7 +164,7 @@ export class RpcDepositScanner {
           try {
             // Topic 2 contains the recipient address in EVM Transfer topic
             const rawTo = log.topics[2];
-            const toAddress = ethers.getAddress('0x' + rawTo.slice(26));
+            const toAddress = normalizeEvmAddress('0x' + rawTo.slice(26));
 
             // Check indexed deposit_addresses database table
             const addrRecord = await depositAddressRepository.findByAddress(toAddress);

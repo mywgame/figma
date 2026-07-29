@@ -23,13 +23,15 @@ import {
   ChevronRight,
   Shield,
   Sparkles,
-  Vault
+  Vault,
+  Share2
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 
 export type AdminTab = 
   | 'dashboard'
   | 'users'
+  | 'referral'
   | 'deposits'
   | 'withdrawals'
   | 'vip'
@@ -58,12 +60,12 @@ interface AdminSidebarProps {
 // Role-Based Access Control mapping for Admin Sidebar items
 const ROLE_PERMISSIONS: Record<string, AdminTab[]> = {
   admin: [
-    'dashboard', 'users', 'deposits', 'withdrawals', 'vip', 
+    'dashboard', 'users', 'referral', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
     'audit', 'security', 'settings', 'trial_fund', 'treasury'
   ],
   superadmin: [
-    'dashboard', 'users', 'deposits', 'withdrawals', 'vip', 
+    'dashboard', 'users', 'referral', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
     'audit', 'security', 'settings', 'trial_fund', 'treasury'
   ],
@@ -104,6 +106,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'referral', label: 'Referral System', icon: Share2, color: 'text-emerald-400' },
     { id: 'deposits', label: 'Deposits', icon: ArrowDownLeft, color: 'text-emerald-500' },
     { id: 'withdrawals', label: 'Withdrawals', icon: ArrowUpRight, color: 'text-amber-500' },
     { id: 'treasury', label: 'Treasury Vault', icon: Vault, color: 'text-amber-400' },

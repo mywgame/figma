@@ -28,6 +28,7 @@ export class SweepQueueProcessor {
   private intervalId: NodeJS.Timeout | null = null;
   private isProcessing = false;
   private activeLocks: Set<string> = new Set(); // Prevent concurrent operations on the same address/wallet
+  private hasLoggedManualMode = false; // Prevents spamming log messages on every scheduler tick
 
   constructor(private readonly provider = activeBlockchainProvider) {}
 
@@ -70,9 +71,14 @@ export class SweepQueueProcessor {
       );
 
       if (!hasAutoOrHybrid) {
-        logger.info('[SweepQueueProcessor] Sweep Mode is MANUAL. Automatic sweep processing is disabled.');
+        if (!this.hasLoggedManualMode) {
+          logger.info('[SweepQueueProcessor] All networks are in MANUAL sweep mode. Automatic sweep processing is skipped.');
+          this.hasLoggedManualMode = true;
+        }
         return;
       }
+
+      this.hasLoggedManualMode = false;
 
       // Find all active queue items that are not finished or cancelled
       const activeItems = await db

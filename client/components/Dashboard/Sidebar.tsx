@@ -23,7 +23,7 @@ import { useTheme } from '../../hooks/useTheme.ts';
 import logoImg from '../../../assets/images/branding/logo.png';
 import logoMarkImg from '../../../assets/images/branding/logo-mark.png';
 
-export type DashboardTab = 'dashboard' | 'vip' | 'profile' | 'team' | 'transactions' | 'security' | 'settings' | 'support' | 'deposit' | 'withdrawal' | 'rewards' | 'task';
+export type DashboardTab = 'dashboard' | 'vip' | 'profile' | 'team' | 'transactions' | 'security' | 'twoFactor' | 'withdrawalAddresses' | 'settings' | 'support' | 'deposit' | 'withdrawal' | 'rewards' | 'task';
 
 interface SidebarProps {
   activeTab: DashboardTab;

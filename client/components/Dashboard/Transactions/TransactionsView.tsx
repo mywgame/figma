@@ -57,7 +57,7 @@ export const TransactionsView: React.FC = () => {
             const dateStr = dbTx.createdAt ? new Date(dbTx.createdAt).toLocaleString() : 'N/A';
 
             return {
-              id: dbTx.referenceId || `TX-${dbTx.id.slice(0, 8)}`,
+              id: dbTx.id,
               type: mappedType,
               amount: formattedAmount,
               status: mappedStatus,

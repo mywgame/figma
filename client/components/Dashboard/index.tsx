@@ -31,6 +31,8 @@ import { DashboardHome } from './DashboardHome.tsx';
 import { TeamView } from './Team/TeamView.tsx';
 import { ProfileView } from './ProfileView.tsx';
 import { SecurityView } from './SecurityView.tsx';
+import { TwoFactorView } from './TwoFactorView.tsx';
+import { WithdrawalAddressesView } from './WithdrawalAddressesView.tsx';
 import { SettingsView } from './SettingsView.tsx';
 import { SupportView } from './SupportView.tsx';
 import { TransactionsView } from './Transactions/TransactionsView.tsx';
@@ -255,6 +257,10 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
         return <TransactionsView />;
       case 'security':
         return <SecurityView />;
+      case 'twoFactor':
+        return <TwoFactorView />;
+      case 'withdrawalAddresses':
+        return <WithdrawalAddressesView />;
       case 'settings':
         return wrapLegacyView(<SettingsView />);
       case 'support':

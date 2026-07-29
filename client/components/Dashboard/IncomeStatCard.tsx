@@ -43,19 +43,19 @@ export const IncomeStatCard: React.FC<IncomeStatCardProps> = ({ label, today, to
         <span className={`text-xs font-semibold uppercase tracking-wider ${t.textMuted}`}>{label}</span>
       </div>
 
-      {/* Today */}
+      {/* Total Earned (Primary Metric) */}
       <div className={`rounded-xl px-3 py-2 mb-2 ${t.inset}`}>
-        <p className={`text-[10px] uppercase tracking-widest mb-0.5 ${t.textMuted}`}>Today</p>
+        <p className={`text-[10px] uppercase tracking-widest mb-0.5 ${t.textMuted}`}>Total Earned</p>
         <p className={`text-lg font-extrabold ${a.valueText}`}>
-          +${today.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
       </div>
 
-      {/* Total earned */}
-      <div>
-        <p className={`text-[10px] uppercase tracking-widest mb-0.5 ${t.textMuted}`}>Earned Till Now</p>
+      {/* Today (Secondary Metric) */}
+      <div className="px-1">
+        <p className={`text-[10px] uppercase tracking-widest mb-0.5 ${t.textMuted}`}>Today</p>
         <p className={`text-sm font-bold ${t.text}`}>
-          ${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          +${today.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
       </div>
     </div>

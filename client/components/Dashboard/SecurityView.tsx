@@ -59,7 +59,7 @@ export const SecurityView: React.FC = () => {
   const { user, token, syncProfile } = useAuth();
   const { t } = useTheme();
 
-  const [activeSubTab, setActiveSubTab] = useState<'password' | 'email' | 'sessions' | 'twoFactor' | 'withdrawal'>('password');
+  const [activeSubTab, setActiveSubTab] = useState<'password' | 'email' | 'sessions'>('password');
 
   // Password Form States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -284,8 +284,6 @@ export const SecurityView: React.FC = () => {
     { id: 'password', label: 'Change Password' },
     { id: 'email', label: 'Update Email' },
     { id: 'sessions', label: 'Active Sessions', badge: sessions.length > 1 ? sessions.length : undefined },
-    { id: 'twoFactor', label: 'Two-Factor Auth' },
-    { id: 'withdrawal', label: 'Withdrawal Addresses' },
   ];
 
   return (
@@ -452,80 +450,6 @@ export const SecurityView: React.FC = () => {
                   })}
                 </div>
               )}
-            </div>
-          )}
-
-          {activeSubTab === 'twoFactor' && (
-            <div className={`rounded-2xl border p-6 backdrop-blur-lg space-y-6 ${t.card}`}>
-              <div className={`pb-4 border-b ${t.sep}`}>
-                <h3 className={`text-sm font-extrabold flex items-center gap-2 ${t.text}`}><Fingerprint className="w-4 h-4 text-cyan-500" /> Multi-Factor Authentication</h3>
-                <p className={`text-xs mt-1 ${t.textMuted}`}>Add an extra layer of protection using your Google Authenticator or compatible app.</p>
-              </div>
-
-              <Mfa
-                onSuccess={(enabled) => {
-                  setMfaEnabled(enabled);
-                  fetchSecuritySummary();
-                }}
-              />
-            </div>
-          )}
-
-          {activeSubTab === 'withdrawal' && (
-            <div className={`rounded-2xl border p-6 backdrop-blur-lg space-y-5 ${t.card}`}>
-              <div className={`pb-4 border-b ${t.sep}`}>
-                <h3 className={`text-sm font-extrabold flex items-center gap-2 ${t.text}`}><Wallet className="w-4 h-4 text-cyan-500" /> Withdrawal Wallet Addresses</h3>
-                <p className={`text-xs mt-1 ${t.textMuted}`}>Adding or changing an address requires Email OTP verification.</p>
-              </div>
-
-              <div className="space-y-3">
-                {withdrawAddresses.map((wa) => {
-                  const meta = NETWORK_META[wa.network];
-                  const isEditingThis = editingNetwork === wa.network;
-                  return (
-                    <div key={wa.network} className={`rounded-xl border p-4 ${t.inset}`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: meta.color }} />
-                          <div className="min-w-0">
-                            <p className={`text-xs font-bold ${t.text}`}>{meta.label}</p>
-                            <p className={`text-[11px] font-mono truncate ${t.textMuted}`}>{wa.address || 'No address set'}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {wa.address && (
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full ${wa.verified ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'}`}>
-                              <BadgeCheck className="w-3 h-3" /> {wa.verified ? 'Verified' : 'Unverified'}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => startEdit(wa.network)}
-                            className={`p-2 rounded-lg border transition-colors cursor-pointer ${t.isDark ? 'border-white/15 hover:bg-white/10' : 'border-black/10 hover:bg-black/5'} ${t.text}`}
-                          >
-                            {wa.address ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {isEditingThis && (
-                        <div className={`mt-4 pt-4 border-t space-y-3 ${t.sep}`}>
-                          <SecurityVerification
-                            token={token || ''}
-                            network={wa.network}
-                            networkLabel={meta.label}
-                            userEmail={user?.email}
-                            onSuccess={() => {
-                              setEditingNetwork(null);
-                              fetchWithdrawalAddresses();
-                            }}
-                            onCancel={() => setEditingNetwork(null)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           )}
         </div>

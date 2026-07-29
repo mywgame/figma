@@ -40,18 +40,27 @@ export class TrialFundService {
 
     const expiredAmountStr = trialBalance.toFixed(8);
 
+    // Check if an expiry transaction has already been recorded for this user/wallet
+    const existingExpiries = await transactionRepository.findByUserId(userId, { limit: 50 });
+    const hasExpiryTx = existingExpiries.some((tx) => tx.type === 'TRIAL_EXPIRY');
+
     // 1. Zero out ONLY the Trial Principal. Main Wallet balances are untouched —
     //    any DPY already claimed from the trial balance stays in availableBalance forever.
     const updatedWallet = await walletRepository.updateBalances(wallet.id, {
       trialBalance: '0.00000000',
     });
 
+    if (hasExpiryTx) {
+      // Expiry transaction already recorded in ledger; return updated wallet without duplicate transaction
+      return updatedWallet;
+    }
+
     // 2. Immutable transaction ledger entry for transparency
     await transactionRepository.createTransaction({
       userId,
       walletId: wallet.id,
       type: 'TRIAL_EXPIRY',
-      referenceId: wallet.id,
+      referenceId: `EXPIRY-${wallet.id}`,
       status: 'COMPLETED',
       description: `Trial Fund principal of ${expiredAmountStr} USDT expired and was forfeited. Any earnings generated from it remain in your Main Wallet.`,
       amount: expiredAmountStr,

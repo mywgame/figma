@@ -29,6 +29,10 @@ export interface DashboardData {
     dailyYield: string;
     teamIncome: string;
     incentiveIncome: string;
+    todayReferralIncome?: string;
+    todayDailyYield?: string;
+    todayTeamIncome?: string;
+    todayIncentiveIncome?: string;
   };
   vip: {
     tier: string;
@@ -72,6 +76,12 @@ export interface DashboardData {
     activeTrialBalance: string;
     trialExpiresAt: string | null;
     isActive: boolean;
+  };
+  referralConfig?: {
+    mode: 'PERCENTAGE' | 'FIXED';
+    percentage: string;
+    fixedAmount: string;
+    thisMonthReferralEarnings: string;
   };
 }
 

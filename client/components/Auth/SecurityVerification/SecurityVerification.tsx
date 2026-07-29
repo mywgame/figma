@@ -30,8 +30,28 @@ export const SecurityVerification: React.FC<SecurityVerificationProps> = ({
   const [otpError, setOtpError] = useState('');
   const [otpSuccess, setOtpSuccess] = useState('');
 
+  const validateAddress = (addr: string): string | null => {
+    const trimmed = addr.trim();
+    if (!trimmed) return 'Address cannot be empty.';
+    if (network === 'USDT_BEP20' || network === 'USDT_POLYGON') {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+        return 'Invalid EVM address format. Must be a 0x-prefixed 40-character hex string (42 characters total).';
+      }
+    } else if (network === 'USDT_TRC20') {
+      if (!/^T[a-zA-Z0-9]{33}$/.test(trimmed)) {
+        return 'Invalid Tron address format. Must start with "T" and be exactly 34 characters long.';
+      }
+    }
+    return null;
+  };
+
   const sendOtp = async () => {
-    if (!draftAddress.trim()) return;
+    const errorMsg = validateAddress(draftAddress);
+    if (errorMsg) {
+      setOtpError(errorMsg);
+      return;
+    }
+
     setOtpBusy(true);
     setOtpError('');
     setOtpSuccess('');

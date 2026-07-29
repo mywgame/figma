@@ -177,83 +177,6 @@ router.patch(
 );
 
 /**
- * @route GET /api/v1/admin/treasury/:network
- * @desc Retrieve treasury wallet configurations, balances, and deposit addresses for a network
- */
-router.get(
-  '/treasury/:network',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.getTreasuryOverview
-);
-
-/**
- * @route POST /api/v1/admin/treasury/sweep/address
- * @desc Sweep a specific user deposit address to Hot Wallet
- */
-router.post(
-  '/treasury/sweep/address',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.sweepUserDepositAddress
-);
-
-/**
- * @route POST /api/v1/admin/treasury/sweep/all
- * @desc Sweep all positive-balance deposit addresses on a network
- */
-router.post(
-  '/treasury/sweep/all',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.sweepAllEligibleAddresses
-);
-
-/**
- * @route POST /api/v1/admin/treasury/sweep/hot-to-cold
- * @desc Sweep funds from Hot Wallet to Cold Wallet
- */
-router.post(
-  '/treasury/sweep/hot-to-cold',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.sweepHotToCold
-);
-
-/**
- * @route POST /api/v1/admin/treasury/sweep/retry
- * @desc Retry a failed sweep job
- */
-router.post(
-  '/treasury/sweep/retry',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.sweepRetryJob
-);
-
-/**
- * @route POST /api/v1/admin/treasury/config
- * @desc Update auto-sweep configuration (enabled/threshold) for a network
- */
-router.post(
-  '/treasury/config',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.updateAutoSweepConfig
-);
-
-/**
- * @route GET /api/v1/admin/treasury/jobs
- * @desc Get list of all sweep jobs
- */
-router.get(
-  '/treasury-jobs',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.getSweepJobs
-);
-
-/**
  * @route GET /api/v1/admin/treasury/sweep-queue
  * @desc Retrieve current sweep queue items with real-time native gas balances
  */
@@ -262,6 +185,17 @@ router.get(
   requireAuth,
   requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
   adminController.getSweepQueue
+);
+
+/**
+ * @route GET /api/v1/admin/treasury/:network
+ * @desc Retrieve treasury wallet configurations, balances, and deposit addresses for a network
+ */
+router.get(
+  '/treasury/:network',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getTreasuryOverview
 );
 
 /**

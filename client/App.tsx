@@ -130,11 +130,12 @@ function MainAppContent() {
     }
   }, [user, currentView, authLoading]);
 
-  // 3. Automatically transition to dashboard/admin upon successful login/registration from Auth Modal
-  const prevUserRef = React.useRef(user);
+  // 3. Automatically transition logged in users to dashboard/admin immediately
   useEffect(() => {
-    if (!prevUserRef.current && user && isAuthModalOpen) {
-      setIsAuthModalOpen(false);
+    if (!authLoading && user && currentView === 'landing') {
+      if (isAuthModalOpen) {
+        setIsAuthModalOpen(false);
+      }
       const role = (user.role || '').toLowerCase();
       if (['admin', 'superadmin', 'operator', 'support', 'finance', 'auditor'].includes(role)) {
         setCurrentView('admin');
@@ -142,8 +143,7 @@ function MainAppContent() {
         setCurrentView('dashboard');
       }
     }
-    prevUserRef.current = user;
-  }, [user, isAuthModalOpen]);
+  }, [user, currentView, authLoading, isAuthModalOpen]);
 
   // Section Tracking for Navbar Highlighter
   useEffect(() => {
@@ -436,21 +436,6 @@ function MainAppContent() {
         initialMode={authModalMode} 
         initialReferralCode={referralCodeForAuth}
       />
-
-      {/* 5. Floating Quick-Link to original sync dashboard when authenticated */}
-      {user && (
-        <div className="fixed bottom-6 right-6 z-30">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className="flex items-center space-x-2 px-5 py-3.5 bg-gray-950 text-white rounded-full text-xs font-bold hover:bg-gray-800 shadow-xl border border-gray-800 transition-all cursor-pointer transform hover:scale-105 active:scale-95"
-            title="Open Developer Ledger Dashboard"
-            id="floating-dashboard-shortcut"
-          >
-            <LayoutDashboard className="w-4 h-4 text-blue-400" />
-            <span>Developer Core Dashboard</span>
-          </button>
-        </div>
-      )}
 
     </motion.div>
   </>

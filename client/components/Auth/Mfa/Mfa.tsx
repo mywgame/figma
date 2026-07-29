@@ -4,19 +4,31 @@
  */
 
 import React, { useState } from 'react';
+import { useAuth } from '../../../hooks/useAuth.ts';
 import { Input } from '../../ui/index.ts';
 
 interface MfaProps {
-  token: string;
-  mfaEnabled: boolean;
-  onMfaStatusChange: (enabled: boolean) => void;
+  token?: string;
+  mfaEnabled?: boolean;
+  onMfaStatusChange?: (enabled: boolean) => void;
+  onSuccess?: (enabled: boolean) => void;
 }
 
 export const Mfa: React.FC<MfaProps> = ({
-  token,
-  mfaEnabled,
+  token: propToken,
+  mfaEnabled: propMfaEnabled,
   onMfaStatusChange,
+  onSuccess,
 }) => {
+  const { token: authToken, user } = useAuth();
+  const token = propToken || authToken || '';
+  const mfaEnabled = propMfaEnabled !== undefined ? propMfaEnabled : ((user as any)?.mfaEnabled || false);
+
+  const notifyStatusChange = (enabled: boolean) => {
+    if (onMfaStatusChange) onMfaStatusChange(enabled);
+    if (onSuccess) onSuccess(enabled);
+  };
+
   const [setupStep, setSetupStep] = useState<'idle' | 'configuring'>('idle');
   const [mfaSecret, setMfaSecret] = useState('');
   const [mfaQrCode, setMfaQrCode] = useState('');
@@ -38,9 +50,7 @@ export const Mfa: React.FC<MfaProps> = ({
       if (!res.ok) throw new Error(body.error?.message || 'MFA initialization failed.');
 
       setMfaSecret(body.data.secret);
-      // Generate standard QR code URL or get it from API
-      // Since qrcode library is server-side, we should use the URL returned or generate one from Google charts API
-      const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=${encodeURIComponent(body.data.otpauthUrl)}`;
+      const qrUrl = body.data.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(body.data.otpauthUrl)}`;
       setMfaQrCode(qrUrl);
       setSetupStep('configuring');
     } catch (err: any) {
@@ -72,7 +82,7 @@ export const Mfa: React.FC<MfaProps> = ({
       const body = await res.json();
       if (!res.ok) throw new Error(body.error?.message || 'MFA activation failed.');
 
-      onMfaStatusChange(true);
+      notifyStatusChange(true);
       setSetupStep('idle');
       setMfaCode('');
       setMfaSecret('');
@@ -106,7 +116,7 @@ export const Mfa: React.FC<MfaProps> = ({
       const body = await res.json();
       if (!res.ok) throw new Error(body.error?.message || 'Failed to disable MFA.');
 
-      onMfaStatusChange(false);
+      notifyStatusChange(false);
       setMfaCode('');
       setMfaMsgSuccess('Google Authenticator 2FA has been disabled.');
     } catch (err: any) {

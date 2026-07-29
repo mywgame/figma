@@ -140,6 +140,57 @@ export class IncomeRepository {
       return [];
     }
   }
+
+  /**
+   * Get aggregate metrics of user earnings for today grouped by income category type
+   */
+  async getTodayIncomeSummaryByUserId(userId: string, startOfDay: Date) {
+    try {
+      const result = await db
+        .select({
+          type: incomeHistory.type,
+          totalAmount: sql<string>`sum(${incomeHistory.amount})`,
+        })
+        .from(incomeHistory)
+        .where(
+          and(
+            eq(incomeHistory.userId, userId),
+            gte(incomeHistory.createdAt, startOfDay)
+          )
+        )
+        .groupBy(incomeHistory.type);
+      return result;
+    } catch (error) {
+      console.error('Database query (getTodayIncomeSummaryByUserId) failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get total referral income earned by user in the current calendar month
+   */
+  async getMonthlyReferralEarnings(userId: string, startDate: Date): Promise<number> {
+    try {
+      const result = await db
+        .select({
+          totalAmount: sql<string>`sum(${incomeHistory.amount})`,
+        })
+        .from(incomeHistory)
+        .where(
+          and(
+            eq(incomeHistory.userId, userId),
+            sql`${incomeHistory.type} IN ('REFERRAL', 'REFERRAL_INCOME')`,
+            gte(incomeHistory.createdAt, startDate)
+          )
+        );
+
+      const val = parseFloat(result[0]?.totalAmount || '0');
+      return isNaN(val) ? 0 : val;
+    } catch (error) {
+      console.error('Database query (getMonthlyReferralEarnings) failed:', error);
+      return 0;
+    }
+  }
 }
 
 export const incomeRepository = new IncomeRepository();

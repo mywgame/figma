@@ -197,13 +197,25 @@ export class DepositService {
       const parentWallet = await walletRepository.findByUserId(parentId);
       if (!parentWallet) return;
 
-      // Determine referral reward percentage from system configurations
-      const configKey = 'REFERRAL_REWARD_PERCENTAGE';
-      const configSetting = await settingsRepository.findSystemSettingByKey(configKey);
-      const rewardRate = configSetting ? parseFloat(configSetting.value) : 0.10; // Default: 10%
+      // Determine referral reward mode and rates from system configurations
+      const modeSetting = await settingsRepository.findSystemSettingByKey('REFERRAL_REWARD_MODE');
+      const rewardMode = (modeSetting?.value || 'PERCENTAGE').toUpperCase();
 
       const depositAmount = parseFloat(depositAmountStr);
-      const rewardAmount = depositAmount * rewardRate;
+      let rewardAmount = 0;
+
+      if (rewardMode === 'FIXED') {
+        const fixedSetting = await settingsRepository.findSystemSettingByKey('REFERRAL_REWARD_FIXED_AMOUNT');
+        const fixedVal = fixedSetting ? parseFloat(fixedSetting.value) : 10;
+        rewardAmount = isNaN(fixedVal) ? 0 : Math.max(0, fixedVal);
+      } else {
+        // PERCENTAGE mode (default)
+        const configSetting = await settingsRepository.findSystemSettingByKey('REFERRAL_REWARD_PERCENTAGE');
+        let pctVal = configSetting ? parseFloat(configSetting.value) : 10;
+        if (isNaN(pctVal)) pctVal = 10;
+        const rate = pctVal > 1 ? pctVal / 100 : pctVal;
+        rewardAmount = depositAmount * rate;
+      }
 
       if (rewardAmount <= 0) return;
 

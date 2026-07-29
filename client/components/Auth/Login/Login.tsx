@@ -48,10 +48,7 @@ export const Login: React.FC<LoginProps> = ({
     setBusy(true);
     try {
       await login(email.trim(), password, false);
-      onSuccessMsg('Authentication successful. Loading corporate dashboard...');
-      setTimeout(() => {
-        onSuccess();
-      }, 1000);
+      onSuccess();
     } catch (err: any) {
       onError(err.message || 'An unexpected authentication error occurred.');
     } finally {

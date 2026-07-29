@@ -84,31 +84,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigateToSection,
           {/* Authentication Action Buttons */}
           <div className="hidden lg:flex items-center space-x-4" id="navbar-auth-actions">
             {user ? (
-              <div className="flex items-center space-x-4">
-                {/* Logged in state info */}
-                <div className="text-right">
-                  <p className="text-[9px] font-mono text-ink-500 font-extrabold leading-none uppercase">Synced Session</p>
-                  <p className="text-xs font-bold text-white truncate max-w-[130px]">{user.email}</p>
-                </div>
-
-                {/* Dashboard Shortcut link */}
-                <button
-                  onClick={() => handleLinkClick('dashboard-dev')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold border border-white/10 transition-colors cursor-pointer"
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5 text-brand-cyan" />
-                  <span>Dashboard</span>
-                </button>
-
-                {/* Logout Button */}
-                <button
-                  onClick={logout}
-                  className="p-2 text-ink-500 hover:text-brand-magenta-light hover:bg-brand-magenta/10 rounded-xl transition-all border border-transparent hover:border-brand-magenta/20 cursor-pointer"
-                  title="Sign Out Session"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                onClick={() => handleLinkClick('dashboard-dev')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-gradient text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-[0_4px_16px_rgba(233,30,140,0.45)] transition-all cursor-pointer"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span>Dashboard</span>
+              </button>
             ) : (
               <div className="flex items-center space-x-3">
                 <button
@@ -168,28 +150,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigateToSection,
           {/* Mobile auth buttons */}
           <div className="pt-4 border-t border-white/5 flex flex-col space-y-2.5">
             {user ? (
-              <div className="space-y-3 px-2">
-                <div className="text-left py-1">
-                  <p className="text-[9px] font-mono text-ink-500 font-extrabold uppercase">Synced Session</p>
-                  <p className="text-xs font-bold text-white break-all">{user.email}</p>
-                </div>
-                
-                <button
-                  onClick={() => handleLinkClick('dashboard-dev')}
-                  className="w-full py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <LayoutDashboard className="w-4 h-4 text-brand-cyan" />
-                  <span>Go to Core Dashboard</span>
-                </button>
-
-                <button
-                  onClick={logout}
-                  className="w-full py-2.5 bg-brand-magenta/10 border border-brand-magenta/20 text-brand-magenta-light rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Terminate Session</span>
-                </button>
-              </div>
+              <button
+                onClick={() => handleLinkClick('dashboard-dev')}
+                className="w-full py-2.5 bg-brand-gradient text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Dashboard</span>
+              </button>
             ) : (
               <div className="grid grid-cols-2 gap-3 px-2">
                 <button

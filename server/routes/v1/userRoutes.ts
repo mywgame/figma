@@ -381,6 +381,17 @@ router.post(
 );
 
 /**
+ * @route DELETE /api/v1/users/security/withdrawal-addresses
+ * @desc Delete a registered withdrawal address
+ * @access Private
+ */
+router.delete(
+  '/security/withdrawal-addresses',
+  requireAuth,
+  userController.deleteWithdrawalAddress
+);
+
+/**
  * @route POST /api/v1/users/withdrawals/send-otp
  * @desc Send verification OTP for withdrawal processing
  * @access Private

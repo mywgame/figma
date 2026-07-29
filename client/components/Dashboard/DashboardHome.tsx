@@ -109,10 +109,23 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
       status: dashboardData.dailyClaim.status,
     };
 
+    const referralConfig = dashboardData.referralConfig || {
+      mode: 'PERCENTAGE',
+      percentage: '10',
+      fixedAmount: '20',
+      thisMonthReferralEarnings: '0.00',
+    };
+
+    const commissionRateLabel = referralConfig.mode === 'FIXED'
+      ? `${parseFloat(referralConfig.fixedAmount)} USDT (Fixed)`
+      : `${parseFloat(referralConfig.percentage)}%`;
+
+    const thisMonthReferralEarned = parseFloat(referralConfig.thisMonthReferralEarnings || '0');
+
     const realNetwork = {
       referralLink,
-      commissionRate: 8,
-      thisMonthEarnings: totalTeamIncome,
+      commissionRateLabel,
+      thisMonthEarnings: thisMonthReferralEarned,
       totalMembers,
       levels: [
         { level: 'L1', count: levelACount, earnings: Math.round(getLevelEarnings(levelACount, l1Weight) * 100) / 100 },
@@ -124,9 +137,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
 
     const realIncomeCards = [
       { key: 'dailyYield', label: 'Daily Yield', today: parseFloat(dashboardData.dailyClaim.amount), total: parseFloat(dashboardData.earnings.dailyYield), icon: Zap, accent: 'emerald' },
-      { key: 'referralIncome', label: 'Referral Income', today: 0.00, total: parseFloat(dashboardData.earnings.referralIncome), icon: LinkIcon, accent: 'cyan' },
-      { key: 'teamIncome', label: 'Team Income', today: 0.00, total: parseFloat(dashboardData.earnings.teamIncome), icon: Users, accent: 'purple' },
-      { key: 'incentiveIncome', label: 'Incentive Income', today: 0.00, total: parseFloat(dashboardData.earnings.incentiveIncome), icon: Award, accent: 'amber' },
+      { key: 'referralIncome', label: 'Referral Income', today: parseFloat(dashboardData.earnings.todayReferralIncome || '0'), total: parseFloat(dashboardData.earnings.referralIncome), icon: LinkIcon, accent: 'cyan' },
+      { key: 'teamIncome', label: 'Team Income', today: parseFloat(dashboardData.earnings.todayTeamIncome || '0'), total: parseFloat(dashboardData.earnings.teamIncome), icon: Users, accent: 'purple' },
+      { key: 'incentiveIncome', label: 'Incentive Income', today: parseFloat(dashboardData.earnings.todayIncentiveIncome || '0'), total: parseFloat(dashboardData.earnings.incentiveIncome), icon: Award, accent: 'amber' },
     ];
 
     const realRecentTransactions = (dashboardData.recentTransactions || []).map((tx: any) => {

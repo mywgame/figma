@@ -83,6 +83,44 @@ export class IncomeService {
       totalEarned: (referralIncome + dailyYield + teamIncome + incentiveIncome).toFixed(8),
     };
   }
+
+  /**
+   * Retrieve today's summary metrics for user dashboard display card
+   */
+  async getTodayUserIncomeSummary(userId: string, startOfDay: Date) {
+    const summaryList = await incomeRepository.getTodayIncomeSummaryByUserId(userId, startOfDay);
+
+    let referralIncome = 0;
+    let dailyYield = 0;
+    let teamIncome = 0;
+    let incentiveIncome = 0;
+
+    for (const item of summaryList) {
+      const amount = parseFloat(item.totalAmount || '0.0');
+      switch (item.type) {
+        case 'REFERRAL':
+        case 'REFERRAL_INCOME':
+          referralIncome += amount;
+          break;
+        case 'DAILY_YIELD':
+          dailyYield += amount;
+          break;
+        case 'TEAM_INCOME':
+          teamIncome += amount;
+          break;
+        default:
+          incentiveIncome += amount;
+          break;
+      }
+    }
+
+    return {
+      todayReferralIncome: referralIncome.toFixed(8),
+      todayDailyYield: dailyYield.toFixed(8),
+      todayTeamIncome: teamIncome.toFixed(8),
+      todayIncentiveIncome: incentiveIncome.toFixed(8),
+    };
+  }
 }
 
 export const incomeService = new IncomeService();
