@@ -40,6 +40,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(JSON.parse(savedUser));
     }
     setLoading(false);
+
+    const handleUnauthorized = () => {
+      setToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener('metafirm_unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('metafirm_unauthorized', handleUnauthorized);
+    };
   }, []);
 
   /**
@@ -57,6 +67,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('metafirm_token');
+          localStorage.removeItem('metafirm_user');
+          setToken(null);
+          setUser(null);
+        }
         throw new Error('Failed to fetch user state from MetaFirm backend.');
       }
 

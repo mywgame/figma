@@ -79,6 +79,8 @@ export const NotificationBell: React.FC = () => {
 
   // Fetch user notifications from API
   const fetchNotifications = async () => {
+    const token = localStorage.getItem('metafirm_token');
+    if (!token) return;
     try {
       const response = await api.getNotifications();
       if (response.success && response.data) {

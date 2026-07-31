@@ -16,13 +16,39 @@ import type { EmailProvider, SendEmailParams } from './emailProvider.ts';
  * fails fast (throws) at construction time rather than failing silently
  * later when an email is actually sent.
  */
+function formatResendFromAddress(rawFrom: string | undefined): string {
+  if (!rawFrom) return '';
+  let cleaned = rawFrom.replace(/^['"]|['"]$/g, '').trim();
+
+  const emailMatch = cleaned.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  if (!emailMatch) {
+    return cleaned;
+  }
+  const email = emailMatch[1];
+
+  let name = '';
+  if (cleaned.includes('<')) {
+    name = cleaned.substring(0, cleaned.indexOf('<')).replace(/['"]/g, '').trim();
+  } else {
+    const beforeEmail = cleaned.substring(0, cleaned.indexOf(email)).replace(/['"]/g, '').trim();
+    if (beforeEmail) {
+      name = beforeEmail;
+    }
+  }
+
+  if (name) {
+    return `${name} <${email}>`;
+  }
+  return email;
+}
+
 export class ResendProvider implements EmailProvider {
   private readonly client: Resend;
   private readonly fromAddress: string;
 
   constructor(apiKey: string | undefined = config.email.resendApiKey, fromAddress: string | undefined = config.email.fromAddress) {
     const cleanApiKey = apiKey ? apiKey.replace(/^['"]|['"]$/g, '').trim() : '';
-    const cleanFromAddress = fromAddress ? fromAddress.replace(/^['"]|['"]$/g, '').trim() : '';
+    const cleanFromAddress = formatResendFromAddress(fromAddress);
 
     if (!cleanApiKey) {
       throw new Error('RESEND_API_KEY is not configured in the environment. Real email delivery is required.');

@@ -16,6 +16,7 @@ import { treasuryService } from '../blockchain/services/TreasuryService.ts';
 import { db } from '../../src/db/index.ts';
 import { sweepQueue, treasuryWallets, users } from '../../src/db/schema.ts';
 import { sweepQueueProcessor } from '../blockchain/services/SweepQueueProcessor.ts';
+import { gasCalculator } from '../blockchain/services/GasCalculator.ts';
 import { activeBlockchainProvider } from '../blockchain/providers/index.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
@@ -630,18 +631,32 @@ export class AdminController {
 
       const items = await q.orderBy(desc(sweepQueue.createdAt));
 
-      // Inject live native balance for each item
+      // Inject live native balance and required gas for each item
       const itemsWithGas = await Promise.all(
         items.map(async (item) => {
           let nativeGasBalance = '0.00000000';
+          let requiredGas = '0.00000000';
+          let confirmations = 0;
           try {
             nativeGasBalance = await activeBlockchainProvider.getNativeBalance(item.network, item.depositAddress);
+            const req = await gasCalculator.getMinGasRequirement(item.network);
+            requiredGas = req.minRequiredGas;
+
+            if (item.sweepTxHash) {
+              const tx = await activeBlockchainProvider.getTransaction(item.network, item.sweepTxHash);
+              if (tx) confirmations = tx.confirmations || 12;
+            } else if (item.gasTxHash) {
+              const tx = await activeBlockchainProvider.getTransaction(item.network, item.gasTxHash);
+              if (tx) confirmations = tx.confirmations || 12;
+            }
           } catch (e) {
-            // ignore
+            // fallback gracefully
           }
           return {
             ...item,
             nativeGasBalance,
+            requiredGas,
+            confirmations,
           };
         })
       );
@@ -703,6 +718,25 @@ export class AdminController {
         throw new ApiError(400, 'Queue Item ID is required.', 'BAD_REQUEST');
       }
       await sweepQueueProcessor.cancelQueueItem(itemId, req.user.uid);
+      return sendSuccess(res, { success: true }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Retry a failed sweep queue item
+   */
+  async retryQueueItem(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { itemId } = req.body;
+      if (!itemId) {
+        throw new ApiError(400, 'Queue Item ID is required.', 'BAD_REQUEST');
+      }
+      await sweepQueueProcessor.retryQueueItem(itemId, req.user.uid);
       return sendSuccess(res, { success: true }, 200);
     } catch (error) {
       next(error);
@@ -867,7 +901,7 @@ export class AdminController {
       }
       const { id } = req.params;
       const { txHash, notes } = req.body;
-      const result = await adminService.approveWithdrawal(id, req.user.uid, txHash || 'INTERNAL_MANUAL', notes);
+      const result = await adminService.approveWithdrawal(id, req.user.uid, notes, txHash);
       return sendSuccess(res, result, 200);
     } catch (error) {
       next(error);

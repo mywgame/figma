@@ -107,7 +107,7 @@ export const EnterpriseAdminDashboard: React.FC<EnterpriseAdminDashboardProps> =
   };
 
   return (
-    <div className={`relative flex min-h-screen font-sans transition-colors duration-300 ${t.pageBg} ${t.text}`} id="superadmin-root">
+    <div className={`relative flex h-screen overflow-hidden font-sans transition-colors duration-300 ${t.pageBg} ${t.text}`} id="superadmin-root">
       {/* 1. Sidebar navigation (Desktop and Mobile Slideout) */}
       <AdminSidebar
         activeTab={activeTab}
@@ -121,7 +121,7 @@ export const EnterpriseAdminDashboard: React.FC<EnterpriseAdminDashboardProps> =
       />
 
       {/* 2. Main Chassis Workspace Area */}
-      <div className="flex-grow flex flex-col min-w-0">
+      <div className="flex-grow flex flex-col h-screen overflow-y-auto min-w-0">
         {/* 2.1 Header bar navigation */}
         <AdminTopbar
           onMobileMenuToggle={() => setIsMobileOpen(true)}
@@ -129,7 +129,7 @@ export const EnterpriseAdminDashboard: React.FC<EnterpriseAdminDashboardProps> =
         />
 
         {/* 2.2 Scrollable Canvas Space */}
-        <main className="flex-grow p-4 sm:p-6 md:p-8 overflow-y-auto max-w-7xl w-full mx-auto pb-12">
+        <main className="flex-grow p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto pb-12">
           {renderViewContent()}
         </main>
       </div>

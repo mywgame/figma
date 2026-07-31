@@ -127,6 +127,26 @@ export class KeyManager {
     const hash = crypto.createHash('sha256').update(seed).digest('hex');
     return `0x${hash}`;
   }
+
+  /**
+   * Get configured Hot Wallet private key for a network and wallet number (1, 2, 3...)
+   */
+  public async getHotWalletPrivateKey(network: string, walletNumber: number = 1): Promise<string | null> {
+    const cleanNetwork = network.toUpperCase();
+    const netShort = cleanNetwork.replace(/^USDT_/, '');
+
+    // Check USDT_<NET>_HOT<N>_PRIVATE_KEY or <NET>_HOT<N>_PRIVATE_KEY
+    let key = await this.secretProvider.getSecret(`USDT_${netShort}_HOT${walletNumber}_PRIVATE_KEY`) ||
+              await this.secretProvider.getSecret(`${cleanNetwork}_HOT${walletNumber}_PRIVATE_KEY`);
+
+    if (!key && walletNumber === 1) {
+      key = await this.secretProvider.getSecret(`USDT_${netShort}_HOT_PRIVATE_KEY`) ||
+            await this.secretProvider.getSecret(`${cleanNetwork}_HOT_PRIVATE_KEY`) ||
+            await this.secretProvider.getSecret('HOT_WALLET_PRIVATE_KEY');
+    }
+
+    return key ? key.trim() : null;
+  }
 }
 
 export const keyManager = new KeyManager();

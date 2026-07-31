@@ -143,25 +143,20 @@ export class TronRpcProvider implements BlockchainProvider {
     const signerKey = fromPrivateKey || netConfig?.hotPrivateKey;
 
     if (!signerKey) {
-      const mockTxHash = Math.random().toString(16).substring(2, 66).padStart(64, '0');
-      console.log(`[TronRpcProvider] [SIMULATION] Broadcasted ${amount} TRC20 transfer to ${toAddress}. Mock Hash: ${mockTxHash}`);
-      return mockTxHash;
+      throw new Error(
+        `Hot wallet private key is not configured for network '${network}'. Please configure TRON_HOT_PRIVATE_KEY or HOT_WALLET_PRIVATE_KEY.`
+      );
     }
 
     try {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
-        const mockTxHash = Math.random().toString(16).substring(2, 66).padStart(64, '0');
-        console.log(`[TronRpcProvider] Initiating TRC20 transfer to ${toAddress} amount ${amount} on ${network} via ${rpcUrl}`);
-        return mockTxHash;
+        // Broadcast via Tron node
+        console.log(`[TronRpcProvider] Broadcasting TRC20 transfer to ${toAddress} amount ${amount} on ${network} via ${rpcUrl}`);
+        throw new Error(`Tron RPC broadcast transaction not configured for ${network}.`);
       });
     } catch (err: any) {
       console.error(`[TronRpcProvider] Broadcast TRC20 transaction failed on ${network}:`, err.message);
-      if (blockchainConfig.isTestnet || blockchainConfig.env === 'sandbox' || blockchainConfig.env === 'development') {
-        const mockTxHash = Math.random().toString(16).substring(2, 66).padStart(64, '0');
-        console.log(`[TronRpcProvider] [TESTNET FALLBACK] Broadcasted ${amount} TRC20 transfer to ${toAddress}. Mock Hash: ${mockTxHash}`);
-        return mockTxHash;
-      }
-      throw err;
+      throw new Error(`Broadcast TRC20 transaction failed on ${network}: ${err.message}`);
     }
   }
 

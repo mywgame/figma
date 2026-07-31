@@ -10,149 +10,723 @@ import { activeBlockchainProvider } from '../providers/index.ts';
 import { logger } from '../../utils/logger.ts';
 import { auditRepository } from '../../repositories/auditRepository.ts';
 import { keyManager } from '../keys/KeyManager.ts';
+import { hdWalletEngine } from '../hd/HdWalletEngine.ts';
 import { normalizeEvmAddress } from '../utils/blockchainUtils.ts';
+import { blockchainConfig } from '../config/blockchainConfig.ts';
+import { gasCalculator } from './GasCalculator.ts';
+
+export interface TreasuryWalletRecord {
+  id?: string;
+  network: string;
+  walletType: 'HOT' | 'COLD';
+  walletNumber: number;
+  label: string;
+  address: string;
+  status: 'ACTIVE' | 'DISABLED';
+  priority: number;
+  balance?: string;
+}
 
 export interface TreasuryWalletConfig {
   network: string;
   hotAddress: string;
   coldAddress: string;
+  hotBalance: string;
+  coldBalance: string;
   autoSweepEnabled: boolean;
   autoSweepThreshold: string;
+  sweepMode?: string;
+  sweepDelay?: string;
+  customDelayMinutes?: number;
+  paused?: boolean;
+  hotWallets?: TreasuryWalletRecord[];
+  coldWallets?: TreasuryWalletRecord[];
 }
 
-const DEFAULT_TREASURY_CONFIGS: Record<string, TreasuryWalletConfig> = {
+// Initial registered treasury wallets per network
+const INITIAL_TREASURY_WALLETS: Record<
+  string,
+  { hotWallets: TreasuryWalletRecord[]; coldWallets: TreasuryWalletRecord[] }
+> = {
   USDT_BEP20: {
-    network: 'USDT_BEP20',
-    hotAddress: normalizeEvmAddress('0xBE0c8838B296bc8e6307B2D26786a3449339e0E7'),
-    coldAddress: normalizeEvmAddress('0x9Be6F66a87754d924fD08873E47A70176D5Bf92b'),
-    autoSweepEnabled: true,
-    autoSweepThreshold: '50.00000000',
+    hotWallets: [
+      {
+        network: 'USDT_BEP20',
+        walletType: 'HOT',
+        walletNumber: 1,
+        label: 'BSC Hot Wallet 1',
+        address: normalizeEvmAddress('0x543fb86e08dd5C4128ca860966Ffb8f9F0E23c3F'),
+        status: 'ACTIVE',
+        priority: 1,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_BEP20',
+        walletType: 'HOT',
+        walletNumber: 2,
+        label: 'BSC Hot Wallet 2',
+        address: '',
+        status: 'DISABLED',
+        priority: 2,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_BEP20',
+        walletType: 'HOT',
+        walletNumber: 3,
+        label: 'BSC Hot Wallet 3',
+        address: '',
+        status: 'DISABLED',
+        priority: 3,
+        balance: '0.00000000',
+      },
+    ],
+    coldWallets: [
+      {
+        network: 'USDT_BEP20',
+        walletType: 'COLD',
+        walletNumber: 1,
+        label: 'BSC Cold Wallet 1',
+        address: normalizeEvmAddress('0x75DbF92F40aC02Ad6a959211E2fC7aD413A87f8b'),
+        status: 'ACTIVE',
+        priority: 1,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_BEP20',
+        walletType: 'COLD',
+        walletNumber: 2,
+        label: 'BSC Cold Wallet 2',
+        address: '',
+        status: 'DISABLED',
+        priority: 2,
+        balance: '0.00000000',
+      },
+    ],
   },
+
   USDT_POLYGON: {
-    network: 'USDT_POLYGON',
-    hotAddress: normalizeEvmAddress('0x71C7656EC7ab88b098defB751B7401B5f6d1476B'),
-    coldAddress: normalizeEvmAddress('0x89205A0A3b2a2512f410529A98c39e8023e3E01a'),
-    autoSweepEnabled: true,
-    autoSweepThreshold: '50.00000000',
+    hotWallets: [
+      {
+        network: 'USDT_POLYGON',
+        walletType: 'HOT',
+        walletNumber: 1,
+        label: 'Polygon Hot Wallet 1',
+        address: normalizeEvmAddress('0x79d73418F24804aaddF2AA6423567d814097d884'),
+        status: 'ACTIVE',
+        priority: 1,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_POLYGON',
+        walletType: 'HOT',
+        walletNumber: 2,
+        label: 'Polygon Hot Wallet 2',
+        address: '',
+        status: 'DISABLED',
+        priority: 2,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_POLYGON',
+        walletType: 'HOT',
+        walletNumber: 3,
+        label: 'Polygon Hot Wallet 3',
+        address: '',
+        status: 'DISABLED',
+        priority: 3,
+        balance: '0.00000000',
+      },
+    ],
+    coldWallets: [
+      {
+        network: 'USDT_POLYGON',
+        walletType: 'COLD',
+        walletNumber: 1,
+        label: 'Polygon Cold Wallet 1',
+        address: normalizeEvmAddress('0x768432E5ab2EBA3fC549F36aed76Fc2c684F2D1d'),
+        status: 'ACTIVE',
+        priority: 1,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_POLYGON',
+        walletType: 'COLD',
+        walletNumber: 2,
+        label: 'Polygon Cold Wallet 2',
+        address: '',
+        status: 'DISABLED',
+        priority: 2,
+        balance: '0.00000000',
+      },
+    ],
   },
+
   USDT_TRC20: {
-    network: 'USDT_TRC20',
-    hotAddress: 'TYb4L7uC16X4G2GvT7vL7f8tYg1fQhZ9uD',
-    coldAddress: 'TFA1vL8uX5G3GvA4vM9tX5tEg9fHhK3vL',
-    autoSweepEnabled: true,
-    autoSweepThreshold: '50.00000000',
+    hotWallets: [
+      {
+        network: 'USDT_TRC20',
+        walletType: 'HOT',
+        walletNumber: 1,
+        label: 'TRON Hot Wallet 1',
+        address: 'TUhnNoVtAR4qJwFgzkRSGJPf6sxhXfQCBP',
+        status: 'ACTIVE',
+        priority: 1,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_TRC20',
+        walletType: 'HOT',
+        walletNumber: 2,
+        label: 'TRON Hot Wallet 2',
+        address: '',
+        status: 'DISABLED',
+        priority: 2,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_TRC20',
+        walletType: 'HOT',
+        walletNumber: 3,
+        label: 'TRON Hot Wallet 3',
+        address: '',
+        status: 'DISABLED',
+        priority: 3,
+        balance: '0.00000000',
+      },
+    ],
+    coldWallets: [
+      {
+        network: 'USDT_TRC20',
+        walletType: 'COLD',
+        walletNumber: 1,
+        label: 'TRON Cold Wallet 1',
+        address: 'TVJg1SG998zcMj8XJx55gRtGmhTFGteLsM',
+        status: 'ACTIVE',
+        priority: 1,
+        balance: '0.00000000',
+      },
+      {
+        network: 'USDT_TRC20',
+        walletType: 'COLD',
+        walletNumber: 2,
+        label: 'TRON Cold Wallet 2',
+        address: '',
+        status: 'DISABLED',
+        priority: 2,
+        balance: '0.00000000',
+      },
+    ],
   },
 };
 
 export class TreasuryService {
+  private isValidated = false;
+
   constructor(private readonly provider = activeBlockchainProvider) {}
 
   /**
-   * Seed / retrieve the treasury configuration for a specific network
+   * Helper to retrieve configured Hot Wallet address environment variable
+   */
+  private async getEnvConfiguredHotAddress(network: string, walletNumber: number): Promise<string | null> {
+    const cleanNetwork = network.toUpperCase();
+    const netShort = cleanNetwork.replace(/^USDT_/, '');
+
+    let addr =
+      process.env[`USDT_${netShort}_HOT${walletNumber}_ADDRESS`] ||
+      process.env[`${cleanNetwork}_HOT${walletNumber}_ADDRESS`];
+
+    if (!addr && walletNumber === 1) {
+      addr =
+        process.env[`USDT_${netShort}_HOT_ADDRESS`] ||
+        process.env[`${cleanNetwork}_HOT_ADDRESS`] ||
+        process.env['HOT_WALLET_ADDRESS'] ||
+        blockchainConfig.networks[cleanNetwork]?.hotAddress;
+    }
+
+    return addr ? addr.trim() : null;
+  }
+
+  /**
+   * Helper to retrieve configured Cold Wallet address environment variable
+   */
+  private async getEnvConfiguredColdAddress(network: string, walletNumber: number): Promise<string | null> {
+    const cleanNetwork = network.toUpperCase();
+    const netShort = cleanNetwork.replace(/^USDT_/, '');
+
+    let addr =
+      process.env[`USDT_${netShort}_COLD${walletNumber}_ADDRESS`] ||
+      process.env[`${cleanNetwork}_COLD${walletNumber}_ADDRESS`];
+
+    if (!addr && walletNumber === 1) {
+      addr =
+        process.env[`USDT_${netShort}_COLD_ADDRESS`] ||
+        process.env[`${cleanNetwork}_COLD_ADDRESS`] ||
+        process.env['COLD_WALLET_ADDRESS'] ||
+        blockchainConfig.networks[cleanNetwork]?.coldAddress;
+    }
+
+    return addr ? addr.trim() : null;
+  }
+
+  /**
+   * Startup Validation:
+   * 1. Reads configured Hot Wallet private keys
+   * 2. Derives blockchain address from private key
+   * 3. Compares derived address with configured environment address (if set)
+   * 4. Syncs wallet records to the database
+   */
+  public async validateAndSyncTreasuryWallets() {
+    logger.info('[TreasuryService] Commencing multi-wallet Treasury architecture startup validation...');
+
+    // Automatically apply schema migrations if new columns don't exist yet on database
+    try {
+      await db.execute(sql`
+        ALTER TABLE treasury_wallets
+        ADD COLUMN IF NOT EXISTS wallet_type TEXT DEFAULT 'HOT',
+        ADD COLUMN IF NOT EXISTS wallet_number INTEGER DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS label TEXT DEFAULT 'Treasury Wallet',
+        ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS priority INTEGER DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS balance NUMERIC(20, 8) DEFAULT '0.00000000';
+      `);
+      await db.execute(sql`
+        ALTER TABLE treasury_wallets DROP CONSTRAINT IF EXISTS treasury_wallets_network_unique;
+        ALTER TABLE treasury_wallets DROP CONSTRAINT IF EXISTS treasury_wallets_network_key;
+      `);
+    } catch (dbErr: any) {
+      logger.warn(`[TreasuryService] Database schema auto-migration notice: ${dbErr.message}`);
+    }
+
+    const networks = Object.keys(INITIAL_TREASURY_WALLETS);
+
+    for (const network of networks) {
+      const config = INITIAL_TREASURY_WALLETS[network];
+      const isEvm = !network.includes('TRC20');
+
+      // 1. Validate Hot Wallets
+      for (const hw of config.hotWallets) {
+        let pk = await keyManager.getHotWalletPrivateKey(network, hw.walletNumber);
+        if (!pk && hw.walletNumber === 1) {
+          pk = blockchainConfig.networks[network]?.hotPrivateKey || null;
+        }
+
+        if (pk && pk.trim()) {
+          try {
+            const derivedAddress = hdWalletEngine.deriveAddressFromPrivateKey(network, pk.trim());
+            const envAddr = await this.getEnvConfiguredHotAddress(network, hw.walletNumber);
+
+            if (envAddr) {
+              const cleanDerived = isEvm ? normalizeEvmAddress(derivedAddress) : derivedAddress;
+              const cleanEnv = isEvm ? normalizeEvmAddress(envAddr) : envAddr;
+
+              if (cleanDerived !== cleanEnv) {
+                const errMsg = `[Treasury Startup Validation Failure] ${hw.label} address mismatch for network ${network}! Derived address '${cleanDerived}' from private key does not match configured address '${cleanEnv}'.`;
+                logger.error(errMsg);
+                throw new Error(errMsg);
+              }
+            }
+
+            hw.address = isEvm ? normalizeEvmAddress(derivedAddress) : derivedAddress;
+            hw.status = 'ACTIVE';
+            logger.info(
+              `[TreasuryService] Startup Validation PASSED: ${hw.label} (${hw.address}) derived successfully from private key.`
+            );
+          } catch (err: any) {
+            if (err.message.includes('Startup Validation Failure')) {
+              throw err;
+            }
+            logger.error(`[TreasuryService] Failed to derive address for ${hw.label}: ${err.message}`);
+            if (hw.walletNumber === 1) {
+              throw new Error(`[Treasury Startup Validation] Critical failure deriving ${hw.label}: ${err.message}`);
+            }
+            hw.status = 'DISABLED';
+          }
+        } else {
+          if (hw.walletNumber === 1 && hw.address) {
+            logger.warn(
+              `[TreasuryService] ${hw.label} using default address ${hw.address}. Private key was not provided in env.`
+            );
+          } else {
+            hw.status = 'DISABLED';
+            logger.info(`[TreasuryService] ${hw.label} has no private key configured. Marked as DISABLED.`);
+          }
+        }
+      }
+
+      // 2. Validate Cold Wallets (Receive-Only: NO private key / mnemonic loaded!)
+      for (const cw of config.coldWallets) {
+        const envCold = await this.getEnvConfiguredColdAddress(network, cw.walletNumber);
+        if (envCold) {
+          cw.address = isEvm ? normalizeEvmAddress(envCold) : envCold;
+        }
+        cw.status = cw.address ? 'ACTIVE' : 'DISABLED';
+        logger.info(
+          `[TreasuryService] Startup Validation PASSED: ${cw.label} (${cw.address || 'N/A'}) configured as Receive-Only.`
+        );
+      }
+
+      // 3. Upsert into Database
+      await this.syncNetworkWalletsToDb(network, config);
+    }
+
+    this.isValidated = true;
+    logger.info('[TreasuryService] All Treasury Wallet architecture validations and database syncs completed successfully.');
+  }
+
+  /**
+   * Persist / Sync network wallet records in database
+   */
+  private async syncNetworkWalletsToDb(
+    network: string,
+    config: { hotWallets: TreasuryWalletRecord[]; coldWallets: TreasuryWalletRecord[] }
+  ) {
+    const activeHot1 = config.hotWallets.find((w) => w.walletNumber === 1 && w.status === 'ACTIVE') || config.hotWallets[0];
+    const activeCold1 = config.coldWallets.find((w) => w.walletNumber === 1 && w.status === 'ACTIVE') || config.coldWallets[0];
+
+    const allWallets = [...config.hotWallets, ...config.coldWallets];
+
+    for (const wallet of allWallets) {
+      if (!wallet.address) continue;
+
+      const existing = await db
+        .select()
+        .from(treasuryWallets)
+        .where(
+          and(
+            eq(treasuryWallets.network, network),
+            eq(treasuryWallets.walletType, wallet.walletType),
+            eq(treasuryWallets.walletNumber, wallet.walletNumber)
+          )
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(treasuryWallets)
+          .set({
+            address: wallet.address,
+            label: wallet.label,
+            status: wallet.status,
+            priority: wallet.priority,
+            hotAddress: activeHot1.address,
+            coldAddress: activeCold1.address,
+            updatedAt: new Date(),
+          })
+          .where(eq(treasuryWallets.id, existing[0].id));
+      } else {
+        await db.insert(treasuryWallets).values({
+          network,
+          walletType: wallet.walletType,
+          walletNumber: wallet.walletNumber,
+          label: wallet.label,
+          address: wallet.address,
+          status: wallet.status,
+          priority: wallet.priority,
+          balance: '0.00000000',
+          hotAddress: activeHot1.address,
+          coldAddress: activeCold1.address,
+          hotBalance: '0.00000000',
+          coldBalance: '0.00000000',
+          autoSweepEnabled: true,
+          autoSweepThreshold: '50.00000000',
+          sweepMode: 'AUTOMATIC',
+          sweepDelay: 'IMMEDIATE',
+          customDelayMinutes: 0,
+          paused: false,
+        });
+      }
+    }
+  }
+
+  /**
+   * Retrieve active hot wallets for a network sorted by priority
+   */
+  /**
+   * Retrieve active hot wallets for a network sorted by priority
+   */
+  async getHotWallets(network: string): Promise<TreasuryWalletRecord[]> {
+    const cleanNetwork = network.toUpperCase();
+    const records = await db
+      .select()
+      .from(treasuryWallets)
+      .where(and(eq(treasuryWallets.network, cleanNetwork), eq(treasuryWallets.walletType, 'HOT')));
+
+    if (records.length > 0) {
+      const result: TreasuryWalletRecord[] = [];
+      for (const r of records) {
+        let bal = r.balance || r.hotBalance || '0.00000000';
+        const addr = r.address || r.hotAddress || '';
+        if (addr && r.status === 'ACTIVE') {
+          try {
+            bal = await this.provider.getBalance(cleanNetwork, addr);
+            await db
+              .update(treasuryWallets)
+              .set({ balance: bal, hotBalance: bal, updatedAt: new Date() })
+              .where(eq(treasuryWallets.id, r.id));
+          } catch (e: any) {
+            logger.warn(`[TreasuryService] Failed to fetch live balance for hot wallet ${addr}: ${e.message}`);
+          }
+        }
+        result.push({
+          id: r.id,
+          network: r.network,
+          walletType: 'HOT',
+          walletNumber: r.walletNumber || 1,
+          label: r.label || `Hot Wallet ${r.walletNumber || 1}`,
+          address: addr,
+          status: (r.status as any) || 'ACTIVE',
+          priority: r.priority || 1,
+          balance: bal,
+        });
+      }
+      return result;
+    }
+
+    return INITIAL_TREASURY_WALLETS[cleanNetwork]?.hotWallets || [];
+  }
+
+  /**
+   * Retrieve active cold wallets for a network sorted by priority
+   */
+  async getColdWallets(network: string): Promise<TreasuryWalletRecord[]> {
+    const cleanNetwork = network.toUpperCase();
+    const records = await db
+      .select()
+      .from(treasuryWallets)
+      .where(and(eq(treasuryWallets.network, cleanNetwork), eq(treasuryWallets.walletType, 'COLD')));
+
+    if (records.length > 0) {
+      const result: TreasuryWalletRecord[] = [];
+      for (const r of records) {
+        let bal = r.balance || r.coldBalance || '0.00000000';
+        const addr = r.address || r.coldAddress || '';
+        if (addr && r.status === 'ACTIVE') {
+          try {
+            bal = await this.provider.getBalance(cleanNetwork, addr);
+            await db
+              .update(treasuryWallets)
+              .set({ balance: bal, coldBalance: bal, updatedAt: new Date() })
+              .where(eq(treasuryWallets.id, r.id));
+          } catch (e: any) {
+            logger.warn(`[TreasuryService] Failed to fetch live balance for cold wallet ${addr}: ${e.message}`);
+          }
+        }
+        result.push({
+          id: r.id,
+          network: r.network,
+          walletType: 'COLD',
+          walletNumber: r.walletNumber || 1,
+          label: r.label || `Cold Wallet ${r.walletNumber || 1}`,
+          address: addr,
+          status: (r.status as any) || 'ACTIVE',
+          priority: r.priority || 1,
+          balance: bal,
+        });
+      }
+      return result;
+    }
+
+    return INITIAL_TREASURY_WALLETS[cleanNetwork]?.coldWallets || [];
+  }
+
+  /**
+   * Get primary active Hot Wallet for a network
+   */
+  async getActiveHotWallet(network: string): Promise<TreasuryWalletRecord> {
+    const hws = await this.getHotWallets(network);
+    const active = hws.find((w) => w.status === 'ACTIVE') || hws[0];
+    if (!active || !active.address) {
+      const fallbackAddr = INITIAL_TREASURY_WALLETS[network.toUpperCase()]?.hotWallets[0]?.address;
+      if (!fallbackAddr) {
+        throw new Error(`No active Hot Wallet configured for network ${network}`);
+      }
+      return {
+        network,
+        walletType: 'HOT',
+        walletNumber: 1,
+        label: `${network} Hot Wallet 1`,
+        address: fallbackAddr,
+        status: 'ACTIVE',
+        priority: 1,
+      };
+    }
+    return active;
+  }
+
+  /**
+   * Get primary active Cold Wallet for a network
+   */
+  async getActiveColdWallet(network: string): Promise<TreasuryWalletRecord> {
+    const cws = await this.getColdWallets(network);
+    const active = cws.find((w) => w.status === 'ACTIVE') || cws[0];
+    if (!active || !active.address) {
+      const fallbackAddr = INITIAL_TREASURY_WALLETS[network.toUpperCase()]?.coldWallets[0]?.address;
+      if (!fallbackAddr) {
+        throw new Error(`No active Cold Wallet configured for network ${network}`);
+      }
+      return {
+        network,
+        walletType: 'COLD',
+        walletNumber: 1,
+        label: `${network} Cold Wallet 1`,
+        address: fallbackAddr,
+        status: 'ACTIVE',
+        priority: 1,
+      };
+    }
+    return active;
+  }
+
+  /**
+   * Seed / retrieve the treasury configuration for a specific network (backward compatible)
    */
   async getOrCreateTreasuryWallet(network: string) {
     const cleanNetwork = network.toUpperCase();
-    const existing = await db
+
+    if (!this.isValidated) {
+      await this.validateAndSyncTreasuryWallets();
+    }
+
+    const hotWallet = await this.getActiveHotWallet(cleanNetwork);
+    const coldWallet = await this.getActiveColdWallet(cleanNetwork);
+
+    const existingSettings = await db
       .select()
       .from(treasuryWallets)
       .where(eq(treasuryWallets.network, cleanNetwork))
       .limit(1);
 
-    if (existing.length > 0) {
-      const record = existing[0];
-      if (!cleanNetwork.includes('TRC20')) {
-        record.hotAddress = normalizeEvmAddress(record.hotAddress);
-        record.coldAddress = normalizeEvmAddress(record.coldAddress);
-      }
-      return record;
-    }
+    const settings = existingSettings.length > 0 ? existingSettings[0] : null;
 
-    const defaultConfig = DEFAULT_TREASURY_CONFIGS[cleanNetwork];
-    if (!defaultConfig) {
-      throw new Error(`Unsupported treasury blockchain network: ${network}`);
-    }
-
-    logger.info(`[TreasuryService] Seeding default treasury configuration for ${cleanNetwork}...`);
-    const inserted = await db
-      .insert(treasuryWallets)
-      .values({
-        network: cleanNetwork,
-        hotAddress: defaultConfig.hotAddress,
-        coldAddress: defaultConfig.coldAddress,
-        autoSweepEnabled: defaultConfig.autoSweepEnabled,
-        autoSweepThreshold: defaultConfig.autoSweepThreshold,
-        hotBalance: '0.00000000',
-        coldBalance: '0.00000000',
-      })
-      .returning();
-
-    const result = inserted[0];
-    if (!cleanNetwork.includes('TRC20')) {
-      result.hotAddress = normalizeEvmAddress(result.hotAddress);
-      result.coldAddress = normalizeEvmAddress(result.coldAddress);
-    }
-    return result;
+    return {
+      id: settings?.id,
+      network: cleanNetwork,
+      hotAddress: hotWallet.address,
+      coldAddress: coldWallet.address,
+      hotBalance: settings?.hotBalance || '0.00000000',
+      coldBalance: settings?.coldBalance || '0.00000000',
+      autoSweepEnabled: settings ? settings.autoSweepEnabled : true,
+      autoSweepThreshold: settings ? settings.autoSweepThreshold : '50.00000000',
+      sweepMode: settings?.sweepMode || 'AUTOMATIC',
+      sweepDelay: settings?.sweepDelay || 'IMMEDIATE',
+      customDelayMinutes: settings?.customDelayMinutes || 0,
+      paused: settings?.paused || false,
+    };
   }
 
   /**
    * Initialize all default treasury wallet configurations if missing
    */
   async ensureAllTreasuryWallets() {
-    for (const network of Object.keys(DEFAULT_TREASURY_CONFIGS)) {
-      await this.getOrCreateTreasuryWallet(network);
-    }
+    await this.validateAndSyncTreasuryWallets();
   }
 
   /**
    * Fetch complete treasury metrics and list of deposit addresses for a network
    */
   async getTreasuryOverview(network: string) {
-    const walletConfig = await this.getOrCreateTreasuryWallet(network);
-    
+    const cleanNetwork = network.toUpperCase();
+    const config = await this.getOrCreateTreasuryWallet(cleanNetwork);
+
+    const hotWallets = await this.getHotWallets(cleanNetwork);
+    const coldWallets = await this.getColdWallets(cleanNetwork);
+
     // Fetch user deposit addresses with on-chain balances
     const addresses = await db
       .select()
       .from(depositAddresses)
-      .where(eq(depositAddresses.network, network))
+      .where(eq(depositAddresses.network, cleanNetwork))
       .orderBy(desc(depositAddresses.createdAt));
 
-    // Calculate sum of pending sweep amounts
+    // Update live on-chain token balance for every deposit address
+    await Promise.all(
+      addresses.map(async (addr) => {
+        try {
+          const liveBal = await this.provider.getBalance(cleanNetwork, addr.address);
+          if (liveBal !== addr.onChainBalance) {
+            addr.onChainBalance = liveBal;
+            await db
+              .update(depositAddresses)
+              .set({
+                onChainBalance: liveBal,
+                updatedAt: new Date(),
+              })
+              .where(eq(depositAddresses.id, addr.id));
+          }
+        } catch (err: any) {
+          logger.warn(
+            `[TreasuryService] Failed to fetch live token balance for address ${addr.address} on ${cleanNetwork}: ${err.message}`
+          );
+        }
+      })
+    );
+
     let totalPendingSweep = 0;
     addresses.forEach((addr) => {
       totalPendingSweep += parseFloat(addr.onChainBalance);
     });
 
-    // Query active blockchain provider live balances for hot/cold wallets if configured
-    let liveHotBalance = walletConfig.hotBalance;
-    let liveColdBalance = walletConfig.coldBalance;
+    let liveHotBalance = config.hotBalance;
+    let liveColdBalance = config.coldBalance;
+    let liveHotNativeGas = '0.00000000';
+    let totalUserGas = '0.00000000';
 
     try {
-      const liveHot = await this.provider.getBalance(network, walletConfig.hotAddress);
-      const liveCold = await this.provider.getBalance(network, walletConfig.coldAddress);
-      
-      // If we got valid numeric strings back, cache / update them
-      if (liveHot !== '0.00000000' || liveCold !== '0.00000000') {
-        await db
-          .update(treasuryWallets)
-          .set({
-            hotBalance: liveHot,
-            coldBalance: liveCold,
-            updatedAt: new Date(),
-          })
-          .where(eq(treasuryWallets.network, network));
-        
-        liveHotBalance = liveHot;
-        liveColdBalance = liveCold;
+      const liveHot = await this.provider.getBalance(cleanNetwork, config.hotAddress);
+      const liveCold = await this.provider.getBalance(cleanNetwork, config.coldAddress);
+
+      liveHotBalance = liveHot;
+      liveColdBalance = liveCold;
+
+      await db
+        .update(treasuryWallets)
+        .set({
+          hotBalance: liveHot,
+          coldBalance: liveCold,
+          balance: liveHot,
+          updatedAt: new Date(),
+        })
+        .where(eq(treasuryWallets.network, cleanNetwork));
+    } catch (err: any) {
+      logger.warn(`[TreasuryService] Failed to fetch live balances for ${cleanNetwork}: ${err.message}`);
+    }
+
+    try {
+      if (config.hotAddress) {
+        liveHotNativeGas = await this.provider.getNativeBalance(cleanNetwork, config.hotAddress);
       }
     } catch (err: any) {
-      logger.warn(`[TreasuryService] Failed to fetch on-chain live hot/cold balances for ${network}: ${err.message}`);
+      logger.warn(`[TreasuryService] Failed to fetch hot wallet native gas balance: ${err.message}`);
+    }
+
+    try {
+      const gasBals = await Promise.all(
+        addresses.map(async (a) => {
+          try {
+            const balStr = await this.provider.getNativeBalance(cleanNetwork, a.address);
+            return parseFloat(balStr || '0');
+          } catch {
+            return 0;
+          }
+        })
+      );
+      const userGasSum = gasBals.reduce((sum, val) => sum + val, 0);
+      totalUserGas = userGasSum.toFixed(8);
+    } catch (err: any) {
+      logger.warn(`[TreasuryService] Failed to calculate total user gas: ${err.message}`);
     }
 
     return {
-      config: walletConfig,
+      config,
+      hotWallets,
+      coldWallets,
       totalPendingSweep: totalPendingSweep.toFixed(8),
       liveHotBalance,
       liveColdBalance,
+      liveHotNativeGas,
+      totalUserGas,
       depositAddresses: addresses,
     };
   }
@@ -178,17 +752,18 @@ export class TreasuryService {
     }
 
     const amountStr = addr.onChainBalance;
-    const treasury = await this.getOrCreateTreasuryWallet(addr.network);
+    const hotWallet = await this.getActiveHotWallet(addr.network);
 
-    logger.info(`[TreasuryService] Commencing sweep for address ${addr.address} (${amountStr} USDT) to Hot Wallet ${treasury.hotAddress}`);
+    logger.info(
+      `[TreasuryService] Commencing sweep for address ${addr.address} (${amountStr} USDT) to Hot Wallet ${hotWallet.address}`
+    );
 
-    // Create a sweep job in database
     const job = await db
       .insert(treasurySweepJobs)
       .values({
         network: addr.network,
         sourceAddress: addr.address,
-        destinationAddress: treasury.hotAddress,
+        destinationAddress: hotWallet.address,
         sweepType: 'USER_TO_HOT',
         amount: amountStr,
         status: 'PENDING',
@@ -199,7 +774,6 @@ export class TreasuryService {
     const jobId = job[0].id;
 
     try {
-      // Set status to IN_PROGRESS
       await db
         .update(treasurySweepJobs)
         .set({ status: 'IN_PROGRESS', updatedAt: new Date() })
@@ -209,21 +783,26 @@ export class TreasuryService {
         throw new Error(`Deposit address ${addr.address} does not have a derivation index assigned.`);
       }
 
-      // Derive the user's child private key to sign the transaction
       const childPrivateKey = await keyManager.derivePrivateKey(addr.network, addr.derivationIndex);
 
-      // Broadcast on-chain transaction signed by the user's child private key
+      // Verify native gas balance and fund gas if required
+      const nativeBal = await this.provider.getNativeBalance(addr.network, addr.address);
+      const gasCheck = await gasCalculator.calculateTopUpNeeded(addr.network, nativeBal);
+      if (!gasCheck.isSufficient) {
+        logger.info(
+          `[TreasuryService] Funding gas top-up of ${gasCheck.topUpNeeded} ${gasCheck.gasSymbol} to ${addr.address} before sweeping`
+        );
+        await this.provider.fundGas(addr.network, addr.address, gasCheck.topUpNeeded);
+      }
+
       const txHash = await this.provider.broadcastTransaction(
         addr.network,
-        treasury.hotAddress,
+        hotWallet.address,
         amountStr,
         childPrivateKey
       );
 
-      // Successfully processed on-chain!
-      // Update database status and modify balances atomically
       await db.transaction(async (tx) => {
-        // Complete the sweep job
         await tx
           .update(treasurySweepJobs)
           .set({
@@ -233,7 +812,6 @@ export class TreasuryService {
           })
           .where(eq(treasurySweepJobs.id, jobId));
 
-        // Deduct from deposit address on-chain balance
         await tx
           .update(depositAddresses)
           .set({
@@ -242,9 +820,10 @@ export class TreasuryService {
           })
           .where(eq(depositAddresses.id, addressId));
 
-        // Add to treasury hot wallet balance
+        const treasury = await this.getOrCreateTreasuryWallet(addr.network);
         const currentHotFloat = parseFloat(treasury.hotBalance);
         const newHotStr = (currentHotFloat + amountFloat).toFixed(8);
+
         await tx
           .update(treasuryWallets)
           .set({
@@ -313,6 +892,8 @@ export class TreasuryService {
    */
   async sweepHotToCold(network: string, amount: string, adminUid: string = 'SYSTEM') {
     const cleanNetwork = network.toUpperCase();
+    const hotWallet = await this.getActiveHotWallet(cleanNetwork);
+    const coldWallet = await this.getActiveColdWallet(cleanNetwork);
     const treasury = await this.getOrCreateTreasuryWallet(cleanNetwork);
 
     const amountFloat = parseFloat(amount);
@@ -325,15 +906,16 @@ export class TreasuryService {
       throw new Error(`Insufficient Hot Wallet balance. Available: ${treasury.hotBalance} USDT, Requested: ${amount} USDT`);
     }
 
-    logger.info(`[TreasuryService] Commencing sweep from Hot Wallet (${treasury.hotAddress}) to Cold Wallet (${treasury.coldAddress}) of ${amount} USDT`);
+    logger.info(
+      `[TreasuryService] Commencing sweep from Hot Wallet (${hotWallet.address}) to Cold Wallet (${coldWallet.address}) of ${amount} USDT`
+    );
 
-    // Create a sweep job in database
     const job = await db
       .insert(treasurySweepJobs)
       .values({
         network: cleanNetwork,
-        sourceAddress: treasury.hotAddress,
-        destinationAddress: treasury.coldAddress,
+        sourceAddress: hotWallet.address,
+        destinationAddress: coldWallet.address,
         sweepType: 'HOT_TO_COLD',
         amount,
         status: 'PENDING',
@@ -344,18 +926,14 @@ export class TreasuryService {
     const jobId = job[0].id;
 
     try {
-      // Set status to IN_PROGRESS
       await db
         .update(treasurySweepJobs)
         .set({ status: 'IN_PROGRESS', updatedAt: new Date() })
         .where(eq(treasurySweepJobs.id, jobId));
 
-      // Broadcast on-chain transaction
-      const txHash = await this.provider.broadcastTransaction(cleanNetwork, treasury.coldAddress, amount);
+      const txHash = await this.provider.broadcastTransaction(cleanNetwork, coldWallet.address, amount);
 
-      // Transaction successfully broadcast on-chain!
       await db.transaction(async (tx) => {
-        // Complete the sweep job
         await tx
           .update(treasurySweepJobs)
           .set({
@@ -365,7 +943,6 @@ export class TreasuryService {
           })
           .where(eq(treasurySweepJobs.id, jobId));
 
-        // Deduct from hotBalance, increment coldBalance
         const newHotStr = (currentHotFloat - amountFloat).toFixed(8);
         const currentColdFloat = parseFloat(treasury.coldBalance);
         const newColdStr = (currentColdFloat + amountFloat).toFixed(8);
@@ -384,7 +961,7 @@ export class TreasuryService {
 
       await auditRepository.createAuditLog({
         actorUid: adminUid,
-        userId: null as any, // Not bound to any specific user
+        userId: null as any,
         action: 'TREASURY_SWEEP_HOT_TO_COLD',
         resource: `treasury/jobs/${jobId}`,
         oldValue: amount,
@@ -429,7 +1006,6 @@ export class TreasuryService {
 
     logger.info(`[TreasuryService] Retrying failed sweep job ${jobId} of ${job.amount} USDT on ${job.network}`);
 
-    // Update attempts count
     await db
       .update(treasurySweepJobs)
       .set({
@@ -440,12 +1016,9 @@ export class TreasuryService {
       .where(eq(treasurySweepJobs.id, jobId));
 
     try {
-      // Broadcast on-chain transaction
       const txHash = await this.provider.broadcastTransaction(job.network, job.destinationAddress, job.amount);
 
-      // Perform state/balance updates based on job type
       await db.transaction(async (tx) => {
-        // Complete the sweep job
         await tx
           .update(treasurySweepJobs)
           .set({
@@ -459,7 +1032,6 @@ export class TreasuryService {
         const treasury = await this.getOrCreateTreasuryWallet(job.network);
 
         if (job.sweepType === 'USER_TO_HOT') {
-          // Decrement user deposit address on-chain balance (find by address & network)
           const addrRecord = await tx
             .select()
             .from(depositAddresses)
@@ -481,7 +1053,6 @@ export class TreasuryService {
               .where(eq(depositAddresses.id, addrRecord[0].id));
           }
 
-          // Add to hot balance
           const newHotStr = (parseFloat(treasury.hotBalance) + amountFloat).toFixed(8);
           await tx
             .update(treasuryWallets)
@@ -490,9 +1061,7 @@ export class TreasuryService {
               updatedAt: new Date(),
             })
             .where(eq(treasuryWallets.network, job.network));
-
         } else if (job.sweepType === 'HOT_TO_COLD') {
-          // Deduct from hot wallet, add to cold wallet
           const newHotStr = (parseFloat(treasury.hotBalance) - amountFloat).toFixed(8);
           const newColdStr = (parseFloat(treasury.coldBalance) + amountFloat).toFixed(8);
 
@@ -536,7 +1105,7 @@ export class TreasuryService {
   }
 
   /**
-   * Trigger threshold check on a specific deposit address. If conditions are met, sweep automatically.
+   * Trigger threshold check on a specific deposit address
    */
   async checkAndTriggerAutoSweep(addressId: string) {
     try {
@@ -560,7 +1129,9 @@ export class TreasuryService {
       const thresholdFloat = parseFloat(treasury.autoSweepThreshold);
 
       if (balanceFloat >= thresholdFloat) {
-        logger.info(`[TreasuryService] Auto-sweep triggered! Address ${addr.address} balance ${balanceFloat} USDT >= threshold ${thresholdFloat} USDT`);
+        logger.info(
+          `[TreasuryService] Auto-sweep triggered! Address ${addr.address} balance ${balanceFloat} USDT >= threshold ${thresholdFloat} USDT`
+        );
         await this.sweepUserDepositAddress(addr.id, 'SYSTEM');
       }
     } catch (err: any) {
@@ -571,7 +1142,12 @@ export class TreasuryService {
   /**
    * Update auto-sweep configurations for a network
    */
-  async updateAutoSweepConfig(network: string, enabled: boolean, threshold: string, adminUid: string = 'SYSTEM') {
+  async updateAutoSweepConfig(
+    network: string,
+    enabled: boolean,
+    threshold: string,
+    adminUid: string = 'SYSTEM'
+  ) {
     const cleanNetwork = network.toUpperCase();
     await this.getOrCreateTreasuryWallet(cleanNetwork);
 
@@ -602,12 +1178,12 @@ export class TreasuryService {
    */
   async getSweepJobs(network?: string) {
     const query = db.select().from(treasurySweepJobs);
-    
+
     if (network) {
       const cleanNetwork = network.toUpperCase();
       return query.where(eq(treasurySweepJobs.network, cleanNetwork)).orderBy(desc(treasurySweepJobs.createdAt));
     }
-    
+
     return query.orderBy(desc(treasurySweepJobs.createdAt));
   }
 }

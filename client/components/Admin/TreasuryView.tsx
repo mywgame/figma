@@ -86,6 +86,8 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const [liveHotBalance, setLiveHotBalance] = useState('0.00000000');
   const [liveColdBalance, setLiveColdBalance] = useState('0.00000000');
   const [totalPendingSweep, setTotalPendingSweep] = useState('0.00000000');
+  const [liveHotNativeGas, setLiveHotNativeGas] = useState('0.00000000');
+  const [totalUserGas, setTotalUserGas] = useState('0.00000000');
   const [depositAddresses, setDepositAddresses] = useState<DepositAddress[]>([]);
   const [jobs, setJobs] = useState<SweepJob[]>([]);
 
@@ -120,6 +122,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
 
   // Single queue item action states
   const [processingQueueId, setProcessingQueueId] = useState<string | null>(null);
+  const [selectedItemDetails, setSelectedItemDetails] = useState<any | null>(null);
 
   const fetchQueueData = async (network: string) => {
     try {
@@ -149,6 +152,8 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
         setLiveHotBalance(payload.liveHotBalance || '0.00000000');
         setLiveColdBalance(payload.liveColdBalance || '0.00000000');
         setTotalPendingSweep(payload.totalPendingSweep || '0.00000000');
+        setLiveHotNativeGas(payload.liveHotNativeGas || '0.00000000');
+        setTotalUserGas(payload.totalUserGas || '0.00000000');
         setDepositAddresses(payload.depositAddresses || []);
         setJobs(payload.jobs || []);
 
@@ -369,6 +374,22 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
     }
   };
 
+  // 9b. Single Sweep Queue: Retry Item
+  const handleQueueRetry = async (itemId: string) => {
+    try {
+      setProcessingQueueId(itemId);
+      const res = await api.retrySweepQueueItem(itemId);
+      if (!res.success) throw new Error(res.error?.message || 'Failed to retry queue item.');
+
+      showFeedback('Sweep job successfully queued for retry!', null);
+      refreshAll();
+    } catch (err: any) {
+      showFeedback(null, err.message);
+    } finally {
+      setProcessingQueueId(null);
+    }
+  };
+
   // 10. Bulk Queue Action
   const handleBulkQueueAction = async (action: 'FUND_GAS' | 'SWEEP' | 'FUND_AND_SWEEP') => {
     if (selectedQueueIds.length === 0) return;
@@ -497,7 +518,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
       ) : (
         <>
           {/* Key Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               {
                 title: 'Hot Wallet Balance',
@@ -524,14 +545,28 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
                 value: `${(parseFloat(liveHotBalance) + parseFloat(liveColdBalance) + parseFloat(totalPendingSweep)).toFixed(4)} USDT`,
                 desc: 'Hot + Cold + Pending Sweep combined',
                 descColor: 'text-blue-500'
+              },
+              {
+                title: 'Hot Wallet Native Gas',
+                value: `${parseFloat(liveHotNativeGas).toFixed(4)} ${selectedNetwork === 'USDT_BEP20' ? 'BNB' : selectedNetwork === 'USDT_POLYGON' ? 'POL' : 'TRX'}`,
+                desc: 'Live hot wallet gas reserve',
+                descColor: 'text-emerald-400',
+                address: config?.hotAddress || '',
+                label: 'hotGas'
+              },
+              {
+                title: 'Total User Gas Balance',
+                value: `${parseFloat(totalUserGas).toFixed(4)} ${selectedNetwork === 'USDT_BEP20' ? 'BNB' : selectedNetwork === 'USDT_POLYGON' ? 'POL' : 'TRX'}`,
+                desc: 'Sum across deposit wallets',
+                descColor: 'text-purple-400'
               }
             ].map((metric) => (
-              <Card key={metric.title} className="p-4 flex flex-col justify-between min-h-[110px] relative border-slate-800">
+              <Card key={metric.title} className="p-3.5 flex flex-col justify-between min-h-[110px] relative border-slate-800">
                 <div>
                   <span className={`text-[9px] font-mono font-bold tracking-wider ${t.textMuted} uppercase`}>
                     {metric.title}
                   </span>
-                  <div className={`text-lg font-extrabold font-display leading-tight mt-1.5`}>
+                  <div className={`text-base font-extrabold font-display leading-tight mt-1`}>
                     {metric.value}
                   </div>
                 </div>
@@ -539,7 +574,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
                   {metric.desc}
                   {metric.address && (
                     <div className="flex items-center gap-1 mt-1 font-mono text-[9px] text-gray-500 bg-slate-900/50 p-1 rounded border border-slate-800">
-                      <span className="truncate max-w-[120px]">{metric.address}</span>
+                      <span className="truncate max-w-[100px]">{metric.address}</span>
                       <button
                         onClick={() => handleCopy(metric.address, metric.label)}
                         className="text-blue-400 hover:text-blue-300 ml-auto shrink-0"
@@ -738,12 +773,22 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
           <Card className="p-0 overflow-hidden border-slate-800">
             <div className="p-4 border-b border-gray-200/10 bg-slate-900/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <h3 className="text-xs font-bold font-mono tracking-wider uppercase flex items-center gap-1.5">
-                  <Coins className="w-4 h-4 text-emerald-400" />
-                  Gas & Sweep Processing Queue (State Machine)
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold font-mono tracking-wider uppercase flex items-center gap-1.5">
+                    <Coins className="w-4 h-4 text-emerald-400" />
+                    Gas & Sweep Processing Queue (State Machine)
+                  </h3>
+                  <button
+                    onClick={() => fetchQueueData(selectedNetwork)}
+                    disabled={queueLoading}
+                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                    title="Refresh Queue"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${queueLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  Active state tracking for deposit sweeps, live gas balances, and transaction dispatch pipelines.
+                  Active state machine tracking for deposit sweeps, dynamic gas calculations, and transaction dispatch pipelines.
                 </p>
               </div>
 
@@ -781,7 +826,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-900/20 text-[10px] font-mono tracking-wider uppercase text-gray-400 border-b border-gray-200/10">
-                    <th className="py-2.5 px-4 w-10">
+                    <th className="py-2.5 px-3 w-8">
                       <input
                         type="checkbox"
                         checked={selectedQueueIds.length > 0 && selectedQueueIds.length === sweepQueueItems.filter(i => i.status !== 'COMPLETED' && i.status !== 'CANCELLED').length}
@@ -789,28 +834,32 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
                         className="rounded border-slate-800"
                       />
                     </th>
-                    <th className="py-2.5 px-4">User & Deposit ID</th>
-                    <th className="py-2.5 px-4">Address</th>
-                    <th className="py-2.5 px-4 text-right">USDT Amount</th>
-                    <th className="py-2.5 px-4">Sweep Status</th>
-                    <th className="py-2.5 px-4">Native Gas Balance</th>
-                    <th className="py-2.5 px-4 text-center">Override Actions</th>
+                    <th className="py-2.5 px-3">Queue ID / User</th>
+                    <th className="py-2.5 px-3">Deposit Address</th>
+                    <th className="py-2.5 px-3 text-right">Amount</th>
+                    <th className="py-2.5 px-3">Native / Required Gas</th>
+                    <th className="py-2.5 px-3">Gas Status</th>
+                    <th className="py-2.5 px-3">State Machine Status</th>
+                    <th className="py-2.5 px-3 text-center">Retries</th>
+                    <th className="py-2.5 px-3 text-center">Operations</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/10 text-xs font-mono">
                   {sweepQueueItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-gray-500 text-xs">
+                      <td colSpan={9} className="py-8 text-center text-gray-500 text-xs">
                         No active items in the processing queue for this network.
                       </td>
                     </tr>
                   ) : (
-                    sweepQueueItems.map((item) => {
+                    sweepQueueItems.map((item: any) => {
                       const isFinished = item.status === 'COMPLETED' || item.status === 'CANCELLED';
                       const isSelected = selectedQueueIds.includes(item.id);
+                      const symbol = item.network === 'USDT_BEP20' ? 'BNB' : item.network === 'USDT_POLYGON' ? 'POL' : 'TRX';
+                      
                       return (
-                        <tr key={item.id} className="hover:bg-slate-900/10">
-                          <td className="py-2.5 px-4">
+                        <tr key={item.id} className="hover:bg-slate-900/20 transition-colors">
+                          <td className="py-2.5 px-3">
                             {!isFinished ? (
                               <input
                                 type="checkbox"
@@ -822,102 +871,128 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
                               <span className="text-gray-600">—</span>
                             )}
                           </td>
-                          <td className="py-2.5 px-4">
+                          <td className="py-2.5 px-3">
                             <div className="flex flex-col">
-                              <span className="text-[11px] font-semibold text-slate-200 truncate max-w-[140px]" title={item.userEmail}>
-                                {item.userEmail}
+                              <span className="text-[10px] font-bold text-slate-200">
+                                {item.id.slice(0, 8)}...
                               </span>
-                              <span className="text-[9px] text-gray-500">
-                                Dep: {item.depositId.slice(0, 8)}...
+                              <span className="text-[9px] text-gray-400 truncate max-w-[120px]" title={item.userEmail}>
+                                {item.userEmail}
                               </span>
                             </div>
                           </td>
-                          <td className="py-2.5 px-4 text-gray-400">
+                          <td className="py-2.5 px-3 text-gray-400">
                             <div className="flex items-center gap-1">
-                              <span className="text-[11px]">{item.depositAddress.slice(0, 8)}...{item.depositAddress.slice(-8)}</span>
+                              <span className="text-[10px] font-mono">{item.depositAddress.slice(0, 6)}...{item.depositAddress.slice(-6)}</span>
                               <button
                                 onClick={() => handleCopy(item.depositAddress, item.id + '_addr')}
                                 className="text-gray-500 hover:text-gray-300"
                               >
-                                {copiedText === item.id + '_addr' ? 'Copied' : <Copy className="w-3 h-3" />}
+                                {copiedText === item.id + '_addr' ? 'Copied' : <Copy className="w-2.5 h-2.5" />}
                               </button>
                             </div>
                           </td>
-                          <td className="py-2.5 px-4 text-right font-bold text-slate-100">
-                            {parseFloat(item.amount).toFixed(4)} USDT
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-100 text-[11px]">
+                            {parseFloat(item.amount).toFixed(2)} USDT
                           </td>
-                          <td className="py-2.5 px-4">
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
-                              item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                              item.status === 'READY_TO_SWEEP' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse' :
-                              item.status === 'SWEEPING' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 animate-pulse' :
-                              item.status === 'GAS_FUNDING' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse' :
-                              item.status === 'WAITING_GAS' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-                              item.status === 'WAITING_DELAY' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 animate-pulse' :
-                              item.status === 'FAILED' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                              item.status === 'CANCELLED' ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' :
-                              'bg-slate-500/10 text-slate-400 border border-slate-500/20'
-                            }`}>
-                              {item.status}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-4">
+                          <td className="py-2.5 px-3">
                             <div className="flex flex-col">
-                              <span className="text-[11px] text-slate-300">
-                                {parseFloat(item.nativeGasBalance || '0.00000000').toFixed(6)} {item.network === 'USDT_BEP20' ? 'BNB' : item.network === 'USDT_POLYGON' ? 'POL' : 'TRX'}
+                              <span className="text-[10px] font-semibold text-slate-200">
+                                Bal: {parseFloat(item.nativeGasBalance || '0').toFixed(5)} {symbol}
                               </span>
-                              <span className={`text-[9px] font-semibold ${
-                                item.gasStatus === 'OK' ? 'text-emerald-500' :
-                                item.gasStatus === 'FUNDING_SENT' ? 'text-blue-500 animate-pulse' :
-                                item.gasStatus === 'LOW' ? 'text-amber-500' : 'text-rose-500'
-                              }`}>
-                                Gas status: {item.gasStatus}
+                              <span className="text-[9px] text-gray-400">
+                                Req: {parseFloat(item.requiredGas || '0').toFixed(5)} {symbol}
                               </span>
                             </div>
                           </td>
-                          <td className="py-2.5 px-4 text-center">
-                            {!isFinished ? (
-                              <div className="flex items-center justify-center gap-1.5">
+                          <td className="py-2.5 px-3">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              item.gasStatus === 'OK' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                              item.gasStatus === 'FUNDING_SENT' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse' :
+                              item.gasStatus === 'LOW' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                              'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            }`}>
+                              {item.gasStatus}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                item.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
+                                item.status === 'READY_TO_SWEEP' ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400 animate-pulse' :
+                                item.status === 'SWEEPING' || item.status === 'WAITING_SWEEP_CONFIRMATION' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 animate-pulse' :
+                                item.status === 'GAS_FUNDING' || item.status === 'WAITING_GAS_CONFIRMATION' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse' :
+                                item.status === 'WAITING_FOR_GAS' || item.status === 'WAITING_GAS' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                                item.status === 'WAITING_DELAY' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' :
+                                item.status === 'FAILED' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
+                                item.status === 'RETRY_PENDING' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-pulse' :
+                                'bg-slate-500/20 text-slate-300 border border-slate-500/40'
+                              }`}>
+                                {item.status}
+                              </span>
+                              {item.errorMessage && (
+                                <span className="text-[8px] text-rose-400 max-w-[100px] truncate" title={item.errorMessage}>
+                                  Error: {item.errorMessage}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-center text-slate-300 text-[10px]">
+                            {item.attempts || 0}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {!isFinished && (
+                                <>
+                                  <button
+                                    onClick={() => handleQueueFundGas(item.id)}
+                                    disabled={processingQueueId === item.id || item.status === 'READY_TO_SWEEP' || item.status === 'SWEEPING'}
+                                    className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/10 border border-blue-600/30 text-blue-400 hover:bg-blue-600/20 transition-colors disabled:opacity-30"
+                                    title="Fund Gas"
+                                  >
+                                    Fund Gas
+                                  </button>
+                                  <button
+                                    onClick={() => handleQueueSweep(item.id)}
+                                    disabled={processingQueueId === item.id || item.status === 'SWEEPING'}
+                                    className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-600/10 border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/20 transition-colors disabled:opacity-30"
+                                    title="Sweep"
+                                  >
+                                    Sweep
+                                  </button>
+                                </>
+                              )}
+
+                              {item.status === 'FAILED' && (
                                 <button
-                                  onClick={() => handleQueueFundGas(item.id)}
-                                  disabled={processingQueueId === item.id || item.status === 'READY_TO_SWEEP' || item.status === 'SWEEPING'}
-                                  className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/10 border border-blue-600/30 text-blue-400 hover:bg-blue-600/20 transition-colors disabled:opacity-40"
+                                  onClick={() => handleQueueRetry(item.id)}
+                                  disabled={processingQueueId === item.id}
+                                  className="text-[9px] px-1.5 py-0.5 rounded bg-amber-600/10 border border-amber-600/30 text-amber-400 hover:bg-amber-600/20 transition-colors disabled:opacity-30"
+                                  title="Retry Failed Job"
                                 >
-                                  Fund Gas
+                                  Retry
                                 </button>
-                                <button
-                                  onClick={() => handleQueueSweep(item.id)}
-                                  disabled={processingQueueId === item.id || item.status === 'SWEEPING'}
-                                  className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-600/10 border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/20 transition-colors disabled:opacity-40"
-                                >
-                                  Sweep
-                                </button>
+                              )}
+
+                              {!isFinished && (
                                 <button
                                   onClick={() => handleQueueCancel(item.id)}
                                   disabled={processingQueueId === item.id}
-                                  className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 transition-colors disabled:opacity-40"
+                                  className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 transition-colors disabled:opacity-30"
+                                  title="Cancel Job"
                                 >
                                   Cancel
                                 </button>
-                              </div>
-                            ) : item.status === 'COMPLETED' ? (
-                              <div className="flex flex-col items-center justify-center">
-                                <span className="text-[9px] text-gray-500">Completed</span>
-                                {item.sweepTxHash && (
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <span className="text-[8px] text-gray-400 max-w-[60px] truncate">{item.sweepTxHash}</span>
-                                    <button
-                                      onClick={() => handleCopy(item.sweepTxHash!, item.id + '_tx')}
-                                      className="text-gray-500 hover:text-gray-300"
-                                    >
-                                      {copiedText === item.id + '_tx' ? 'Copied' : <Copy className="w-2.5 h-2.5" />}
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-600">Shelved</span>
-                            )}
+                              )}
+
+                              <button
+                                onClick={() => setSelectedItemDetails(item)}
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-purple-600/10 border border-purple-600/30 text-purple-300 hover:bg-purple-600/20 transition-colors"
+                                title="View Queue Item Details"
+                              >
+                                Details
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1106,6 +1181,113 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
               </table>
             </div>
           </Card>
+          {/* Queue Item Details Modal */}
+          {selectedItemDetails && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono text-xs">
+              <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-xl w-full overflow-hidden shadow-2xl">
+                <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-purple-400" />
+                    <h3 className="font-bold text-slate-100 uppercase tracking-wider">Queue Item Details</h3>
+                  </div>
+                  <button
+                    onClick={() => setSelectedItemDetails(null)}
+                    className="text-slate-400 hover:text-slate-200 text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="p-5 space-y-3 text-slate-300">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Queue ID</span>
+                      <span className="font-bold text-slate-200 break-all">{selectedItemDetails.id}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Network</span>
+                      <span className="font-bold text-slate-200">{selectedItemDetails.network}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">User Email</span>
+                      <span className="font-bold text-slate-200">{selectedItemDetails.userEmail}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">User ID</span>
+                      <span className="font-bold text-slate-200 break-all">{selectedItemDetails.userId}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Deposit Address</span>
+                      <span className="font-bold text-slate-200 break-all">{selectedItemDetails.depositAddress}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Amount</span>
+                      <span className="font-bold text-emerald-400">{selectedItemDetails.amount} USDT</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Native Gas Balance</span>
+                      <span className="font-bold text-slate-200">{selectedItemDetails.nativeGasBalance || '0.00000000'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Required Minimum Gas</span>
+                      <span className="font-bold text-slate-200">{selectedItemDetails.requiredGas || '0.00000000'}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-[11px] bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">State Machine Status</span>
+                      <span className="font-bold text-purple-400">{selectedItemDetails.status}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Gas Funding Status</span>
+                      <span className="font-bold text-blue-400">{selectedItemDetails.gasStatus}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Retry Attempts</span>
+                      <span className="font-bold text-amber-400">{selectedItemDetails.attempts || 0}</span>
+                    </div>
+                  </div>
+
+                  {selectedItemDetails.gasTxHash && (
+                    <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-[11px]">
+                      <span className="text-slate-500 block text-[9px] uppercase">Gas Funding Tx Hash</span>
+                      <span className="font-bold text-blue-400 break-all">{selectedItemDetails.gasTxHash}</span>
+                    </div>
+                  )}
+
+                  {selectedItemDetails.sweepTxHash && (
+                    <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-[11px]">
+                      <span className="text-slate-500 block text-[9px] uppercase">Sweep Tx Hash</span>
+                      <span className="font-bold text-emerald-400 break-all">{selectedItemDetails.sweepTxHash}</span>
+                    </div>
+                  )}
+
+                  {selectedItemDetails.errorMessage && (
+                    <div className="bg-rose-950/30 p-3 rounded-lg border border-rose-800 text-[11px]">
+                      <span className="text-rose-400 block text-[9px] uppercase font-bold">Last Error Message</span>
+                      <span className="text-rose-300 break-all">{selectedItemDetails.errorMessage}</span>
+                    </div>
+                  )}
+
+                  <div className="text-[10px] text-slate-500 flex justify-between pt-1">
+                    <span>Created: {new Date(selectedItemDetails.createdAt).toLocaleString()}</span>
+                    <span>Updated: {new Date(selectedItemDetails.updatedAt).toLocaleString()}</span>
+                  </div>
+                </div>
+                <div className="p-3 border-t border-slate-800 bg-slate-950 flex justify-end">
+                  <button
+                    onClick={() => setSelectedItemDetails(null)}
+                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

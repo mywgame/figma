@@ -236,7 +236,17 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                     </td>
                     <td className={`px-5 py-4 font-medium ${t.textMuted}`}>{wd.date}</td>
                     <td className="px-5 py-4">
-                      <Badge variant={wd.status === 'Approved' ? 'emerald' : wd.status === 'Pending' ? 'amber' : 'rose'}>
+                      <Badge
+                        variant={
+                          wd.status === 'Completed' || wd.status === 'COMPLETED' || wd.status === 'Approved'
+                            ? 'emerald'
+                            : wd.status === 'Processing' || wd.status === 'PROCESSING'
+                            ? 'blue'
+                            : wd.status === 'Pending' || wd.status === 'PENDING'
+                            ? 'amber'
+                            : 'rose'
+                        }
+                      >
                         {wd.status === 'Approved' ? 'Completed' : wd.status}
                       </Badge>
                     </td>

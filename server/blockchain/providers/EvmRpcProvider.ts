@@ -116,9 +116,9 @@ export class EvmRpcProvider implements BlockchainProvider {
     const normalizedTo = normalizeEvmAddress(toAddress);
 
     if (!signerKey) {
-      const mockTxHash = `0x${Math.random().toString(16).substring(2, 66).padStart(64, '0')}`;
-      console.log(`[EvmRpcProvider] [SIMULATION] Broadcasted ${amount} token transfer to ${normalizedTo} on ${network}. Mock Hash: ${mockTxHash}`);
-      return mockTxHash;
+      throw new Error(
+        `Hot wallet private key is not configured for network '${network}'. Please configure USDT_BEP20_HOT_PRIVATE_KEY or HOT_WALLET_PRIVATE_KEY.`
+      );
     }
 
     try {
@@ -142,12 +142,7 @@ export class EvmRpcProvider implements BlockchainProvider {
       });
     } catch (err: any) {
       console.error(`[EvmRpcProvider] Broadcast transaction failed on ${network}:`, err.message);
-      if (blockchainConfig.isTestnet || blockchainConfig.env === 'sandbox' || blockchainConfig.env === 'development') {
-        const mockTxHash = `0x${Math.random().toString(16).substring(2, 66).padStart(64, '0')}`;
-        console.log(`[EvmRpcProvider] [TESTNET FALLBACK] Broadcasted ${amount} token transfer to ${normalizedTo} on ${network}. Mock Hash: ${mockTxHash}`);
-        return mockTxHash;
-      }
-      throw err;
+      throw new Error(`Failed to broadcast transaction on ${network}: ${err.message}`);
     }
   }
 

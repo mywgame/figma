@@ -42,6 +42,11 @@ class ApiService {
 
       const data: ApiResponse<T> = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('metafirm_token');
+          localStorage.removeItem('metafirm_user');
+          window.dispatchEvent(new Event('metafirm_unauthorized'));
+        }
         throw new Error(data.error?.message || `HTTP Request failed with status ${response.status}`);
       }
 
@@ -687,6 +692,13 @@ class ApiService {
    */
   async cancelQueueItem(itemId: string): Promise<ApiResponse<any>> {
     return this.post<any>('/admin/treasury/sweep-queue/cancel', { itemId });
+  }
+
+  /**
+   * Admin: Retry a failed sweep queue item
+   */
+  async retrySweepQueueItem(itemId: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep-queue/retry', { itemId });
   }
 
   /**

@@ -557,8 +557,8 @@ export class AdminService {
    * Delegates ALL ledger/wallet/VIP logic to WithdrawalService (single source of truth)
    * and only adds the admin-specific audit trail on top.
    */
-  async approveWithdrawal(withdrawalId: string, adminUid: string, txHash: string, notes?: string) {
-    const updatedW = await withdrawalService.approveWithdrawal(withdrawalId, txHash, adminUid);
+  async approveWithdrawal(withdrawalId: string, adminUid: string, notes?: string, manualTxHash?: string) {
+    const updatedW = await withdrawalService.processWithdrawalApproval(withdrawalId, adminUid, notes, manualTxHash);
 
     await auditRepository.createAuditLog({
       actorUid: adminUid,

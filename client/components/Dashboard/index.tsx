@@ -133,6 +133,8 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
 
   // Background polling for auto-verified deposits
   const checkAutoVerifiedDeposits = useCallback(async () => {
+    const token = localStorage.getItem('metafirm_token');
+    if (!token) return;
     try {
       const res = await api.getUserDeposits();
       if (res.success && Array.isArray(res.data)) {

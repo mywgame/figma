@@ -10,6 +10,7 @@ import { useAuth } from '../../../hooks/useAuth.ts';
 import { DashboardLayout } from '../Layout/DashboardLayout.tsx';
 import { Input } from '../../ui/Inputs/index.tsx';
 import { Button } from '../../ui/Buttons/index.tsx';
+import { WithdrawalSuccessModal } from './WithdrawalSuccessModal.tsx';
 
 interface WithdrawalViewProps {
   showToast: (msg: string) => void;
@@ -35,6 +36,9 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [withdrawalsHistory, setWithdrawalsHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const [submittedWithdrawalAmount, setSubmittedWithdrawalAmount] = useState<string | null>(null);
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
 
   const fetchWithdrawalAddresses = async () => {
     if (!token) return;
@@ -159,6 +163,8 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
       }
 
       showToast('Withdrawal request submitted successfully for administrative review!');
+      setSubmittedWithdrawalAmount(withdrawAmountState);
+      setShowWithdrawalModal(true);
       setEmailOtp('');
       setGoogleAuth2fa('');
       setDebugOtp(null);
@@ -319,9 +325,23 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
                   <div className="flex justify-between text-gray-400 text-[10px]">
                     <span>{new Date(item.createdAt).toLocaleString()}</span>
                     <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${
-                      item.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
+                      item.status === 'PENDING'
+                        ? 'bg-amber-500/10 text-amber-400'
+                        : item.status === 'PROCESSING'
+                        ? 'bg-blue-500/10 text-blue-400'
+                        : item.status === 'COMPLETED'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : 'bg-rose-500/10 text-rose-400'
                     }`}>
-                      {item.status}
+                      {item.status === 'PENDING'
+                        ? 'Waiting for Approval'
+                        : item.status === 'PROCESSING'
+                        ? 'Sending Funds'
+                        : item.status === 'COMPLETED'
+                        ? 'Withdrawal Successful'
+                        : item.status === 'FAILED'
+                        ? 'Withdrawal Failed'
+                        : item.status}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[10px] border-t border-white/5 pt-2 font-mono text-gray-500">
@@ -352,6 +372,13 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
         </div>
 
       </div>
+
+      <WithdrawalSuccessModal
+        isOpen={showWithdrawalModal}
+        amount={submittedWithdrawalAmount || '0'}
+        currency="USDT"
+        onClose={() => setShowWithdrawalModal(false)}
+      />
     </DashboardLayout>
   );
 };

@@ -217,7 +217,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     <>
       {/* Desktop Sidebar container */}
       <aside 
-        className={`hidden md:block h-screen flex-shrink-0 transition-all duration-300 ease-in-out ${
+        className={`hidden md:block sticky top-0 h-screen flex-shrink-0 transition-all duration-300 ease-in-out z-30 ${
           isCollapsed ? 'w-16' : 'w-56'
         }`}
       >

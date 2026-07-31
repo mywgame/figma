@@ -136,6 +136,8 @@ export class SettingsRepository {
   async createUserSettings(data: {
     userId: string;
     mfaEnabled?: boolean;
+    mfaSecret?: string | null;
+    withdrawalAddresses?: string | null;
     emailNotifications?: boolean;
     marketingConsent?: boolean;
     language?: string;
@@ -147,6 +149,8 @@ export class SettingsRepository {
         .values({
           userId: data.userId,
           mfaEnabled: data.mfaEnabled ?? false,
+          mfaSecret: data.mfaSecret ?? null,
+          withdrawalAddresses: data.withdrawalAddresses ?? null,
           emailNotifications: data.emailNotifications ?? true,
           marketingConsent: data.marketingConsent ?? false,
           language: data.language || 'en',
@@ -176,6 +180,14 @@ export class SettingsRepository {
     }>
   ) {
     try {
+      const existing = await this.findUserSettingsByUserId(userId);
+      if (!existing) {
+        return await this.createUserSettings({
+          userId,
+          ...updates,
+        });
+      }
+
       const result = await db
         .update(userSettings)
         .set({

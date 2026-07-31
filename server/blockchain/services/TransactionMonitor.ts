@@ -4,7 +4,9 @@
  */
 
 import { depositRepository } from '../../repositories/depositRepository.ts';
+import { withdrawalRepository } from '../../repositories/withdrawalRepository.ts';
 import { depositService } from './DepositService.ts';
+import { withdrawalService } from './WithdrawalService.ts';
 import { notificationService } from '../../services/notificationService.ts';
 import { logger } from '../../utils/logger.ts';
 import { BlockchainProvider } from '../interfaces/BlockchainProvider.ts';
@@ -33,11 +35,17 @@ export class TransactionMonitor {
     }
     
     logger.info(`Starting background transaction monitoring loop (Interval: ${intervalMs}ms)...`);
-    this.timer = setInterval(() => this.checkPendingDeposits(), intervalMs);
+    this.timer = setInterval(() => {
+      this.checkPendingDeposits().catch((err) => logger.error('Error in deposit monitor tick:', err));
+      this.checkProcessingWithdrawals().catch((err) => logger.error('Error in withdrawal monitor tick:', err));
+    }, intervalMs);
     
     // Execute first check immediately on boot
     this.checkPendingDeposits().catch((err) => {
-      logger.error('Error in initial transaction monitoring check:', err);
+      logger.error('Error in initial deposit monitoring check:', err);
+    });
+    this.checkProcessingWithdrawals().catch((err) => {
+      logger.error('Error in initial withdrawal monitoring check:', err);
     });
   }
 
@@ -49,6 +57,78 @@ export class TransactionMonitor {
       clearInterval(this.timer);
       this.timer = null;
       logger.info('Transaction monitor loop stopped.');
+    }
+  }
+
+  /**
+   * Scan database for processing withdrawals with txHash and verify on-chain confirmations
+   */
+  async checkProcessingWithdrawals() {
+    try {
+      const processingWithdrawals = await withdrawalRepository.findAll({ status: 'PROCESSING' });
+      const withTxHash = processingWithdrawals.filter((w) => !!w.txHash);
+
+      if (withTxHash.length === 0) {
+        return;
+      }
+
+      logger.debug(`Polling on-chain status for ${withTxHash.length} processing withdrawals...`);
+
+      for (const withdrawal of withTxHash) {
+        const txHash = withdrawal.txHash!;
+        const withdrawalId = withdrawal.id;
+        const key = `w_${withdrawalId}`;
+
+        try {
+          const blockchainTx = await this.provider.getTransaction(withdrawal.network, txHash);
+
+          if (!blockchainTx) {
+            const attempts = (this.queryAttempts[key] || 0) + 1;
+            this.queryAttempts[key] = attempts;
+
+            if (attempts >= this.MAX_ATTEMPTS) {
+              logger.warn(`Withdrawal ${withdrawalId} (hash ${txHash}) timed out on-chain after ${attempts} attempts. Marking as FAILED.`);
+              await withdrawalService.finalizeFailedWithdrawal(
+                withdrawalId,
+                `On-chain monitoring timeout: Transaction hash was not detected within ${this.MAX_ATTEMPTS} poll intervals.`
+              );
+              delete this.queryAttempts[key];
+            } else {
+              logger.debug(`Withdrawal tx ${txHash} not yet found on-chain. Attempt ${attempts}/${this.MAX_ATTEMPTS}`);
+            }
+            continue;
+          }
+
+          this.queryAttempts[key] = 0;
+
+          if (!blockchainTx.isSuccessful) {
+            logger.warn(`Withdrawal transaction hash ${txHash} failed on-chain. Reverting withdrawal ${withdrawalId}.`);
+            await withdrawalService.finalizeFailedWithdrawal(
+              withdrawalId,
+              'Transaction was marked as FAILED by on-chain network explorers.'
+            );
+            delete this.queryAttempts[key];
+            continue;
+          }
+
+          const requiredConfirmations =
+            blockchainConfig.networks[withdrawal.network]?.confirmationsRequired ??
+            (blockchainConfig.isTestnet ? 1 : 6);
+          const confirmations = blockchainTx.confirmations;
+
+          if (confirmations >= requiredConfirmations) {
+            logger.info(`Withdrawal ${withdrawalId} (hash: ${txHash}) reached ${confirmations}/${requiredConfirmations} confirmations. Finalizing withdrawal as COMPLETED.`);
+            await withdrawalService.finalizeSuccessfulWithdrawal(withdrawalId);
+            delete this.queryAttempts[key];
+          } else {
+            logger.info(`Withdrawal ${withdrawalId} (hash: ${txHash}) found on-chain with ${confirmations}/${requiredConfirmations} confirmations. Awaiting additional blocks...`);
+          }
+        } catch (error) {
+          logger.error(`Error processing transaction check for withdrawal ID ${withdrawalId} (hash: ${txHash}):`, error);
+        }
+      }
+    } catch (err) {
+      logger.error('Error in checkProcessingWithdrawals workflow:', err);
     }
   }
 

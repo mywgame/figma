@@ -115,7 +115,7 @@ export class WithdrawalService {
     if (!withdrawal) {
       throw new Error(`Withdrawal not found: ${withdrawalId}`);
     }
-    // Broadcast withdrawal via provider
+    // Broadcast withdrawal via active blockchain provider
     return this.provider.broadcastTransaction(
       withdrawal.network,
       withdrawal.walletAddress,
@@ -124,16 +124,22 @@ export class WithdrawalService {
   }
 
   /**
-   * Approve and complete a pending withdrawal
+   * Approve a pending withdrawal request and broadcast payout on-chain.
+   * Updates status to 'PROCESSING' with real txHash returned from blockchain.
    */
-  async approveWithdrawal(withdrawalId: string, txHash: string, adminUid: string) {
+  async processWithdrawalApproval(
+    withdrawalId: string,
+    adminUid: string,
+    notes?: string,
+    manualTxHash?: string
+  ) {
     const withdrawal = await withdrawalRepository.findById(withdrawalId);
     if (!withdrawal) {
       throw new Error(`Withdrawal not found for ID: ${withdrawalId}`);
     }
 
     if (withdrawal.status !== 'PENDING') {
-      throw new Error(`Withdrawal is already completed/rejected with status: ${withdrawal.status}`);
+      throw new Error(`Withdrawal is not pending approval (current status: ${withdrawal.status})`);
     }
 
     const userId = withdrawal.userId;
@@ -142,23 +148,91 @@ export class WithdrawalService {
       throw new Error(`Wallet not found for user ID: ${userId}`);
     }
 
-    // 1. Mark status as completed and approved
-    const updatedWithdrawal = await withdrawalRepository.updateStatus(withdrawalId, 'COMPLETED', {
-      txHash,
+    // Sanitize manual txHash input (ignore placeholder strings like INTERNAL_MANUAL or mock)
+    let realTxHash = manualTxHash?.trim();
+    if (
+      realTxHash === 'INTERNAL_MANUAL' ||
+      realTxHash === 'mock' ||
+      realTxHash?.toLowerCase().includes('mock') ||
+      realTxHash?.toLowerCase().includes('internal')
+    ) {
+      realTxHash = undefined;
+    }
+
+    // Execute real on-chain payout if no valid manual txHash provided
+    if (!realTxHash) {
+      realTxHash = await this.executeOnChainPayout(withdrawalId);
+    }
+
+    if (!realTxHash || typeof realTxHash !== 'string' || !realTxHash.trim()) {
+      throw new Error('On-chain payout failed: Blockchain provider did not return a valid transaction hash.');
+    }
+
+    // 1. Mark status as PROCESSING (sending funds on-chain)
+    const updatedWithdrawal = await withdrawalRepository.updateStatus(withdrawalId, 'PROCESSING', {
+      txHash: realTxHash,
       adminApprovalStatus: 'APPROVED',
-      adminNotes: `Approved by administrator: ${adminUid}`,
+      adminNotes: notes ? `Approved by ${adminUid}: ${notes}` : `Approved by administrator ${adminUid}. Broadcast on-chain txHash: ${realTxHash}`,
+    });
+
+    // 2. Notify user that withdrawal is processing on-chain
+    await notificationService.createStructuredNotification(userId, {
+      title: 'Withdrawal Processing',
+      description: `Your withdrawal request of ${withdrawal.amount} USDT has been approved and broadcast on-chain. TxHash: ${realTxHash}`,
+      icon: 'Clock',
+      type: 'withdrawal',
+      priority: 'HIGH',
+    });
+
+    return updatedWithdrawal;
+  }
+
+  /**
+   * Backward-compatible helper for approving withdrawals
+   */
+  async approveWithdrawal(withdrawalId: string, txHash?: string, adminUid: string = 'SYSTEM') {
+    return this.processWithdrawalApproval(withdrawalId, adminUid, undefined, txHash);
+  }
+
+  /**
+   * Finalize a processing withdrawal once on-chain confirmations are verified
+   */
+  async finalizeSuccessfulWithdrawal(withdrawalId: string) {
+    const withdrawal = await withdrawalRepository.findById(withdrawalId);
+    if (!withdrawal) {
+      throw new Error(`Withdrawal not found for ID: ${withdrawalId}`);
+    }
+
+    if (withdrawal.status === 'COMPLETED') {
+      return withdrawal;
+    }
+
+    if (withdrawal.status !== 'PROCESSING' && withdrawal.status !== 'PENDING') {
+      throw new Error(`Cannot finalize withdrawal in state: ${withdrawal.status}`);
+    }
+
+    const userId = withdrawal.userId;
+    const wallet = await walletRepository.findByUserId(userId);
+    if (!wallet) {
+      throw new Error(`Wallet not found for user ID: ${userId}`);
+    }
+
+    // 1. Mark status as COMPLETED
+    const updatedWithdrawal = await withdrawalRepository.updateStatus(withdrawalId, 'COMPLETED', {
+      adminApprovalStatus: 'APPROVED',
+      adminNotes: 'Confirmed on-chain by transaction monitor.',
     });
 
     const amount = parseFloat(withdrawal.amount);
 
-    // 2. Clear locked balance, and record history cumulative withdrawal
+    // 2. Clear locked balance and record cumulative totalWithdrawn
     await walletRepository.incrementBalances(wallet.id, {
       lockedBalance: (-amount).toFixed(8),
       totalWithdrawn: amount.toFixed(8),
     });
 
-    // 3. Record immutable ledger entry
-    const balanceBefore = parseFloat(wallet.availableBalance) + amount; // before withdrawal initiation
+    // 3. Record immutable ledger transaction
+    const balanceBefore = parseFloat(wallet.availableBalance) + amount;
     const balanceAfter = parseFloat(wallet.availableBalance);
 
     await transactionRepository.createTransaction({
@@ -167,17 +241,17 @@ export class WithdrawalService {
       type: 'WITHDRAWAL',
       referenceId: withdrawal.id,
       status: 'COMPLETED',
-      description: `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}.`,
+      description: `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}. TxHash: ${withdrawal.txHash}`,
       amount: withdrawal.amount,
       balanceBefore: balanceBefore.toFixed(8),
       balanceAfter: balanceAfter.toFixed(8),
-      createdBy: adminUid,
+      createdBy: 'SYSTEM',
     });
 
     // 4. Create Success notification
     await notificationService.createStructuredNotification(userId, {
-      title: 'Withdrawal Completed',
-      description: `Your withdrawal request of ${withdrawal.amount} USDT has been completed successfully.`,
+      title: 'Withdrawal Successful',
+      description: `Your withdrawal request of ${withdrawal.amount} USDT has been confirmed on the blockchain.`,
       icon: 'ArrowUpCircle',
       type: 'withdrawal',
       priority: 'HIGH',
@@ -185,6 +259,51 @@ export class WithdrawalService {
 
     // 5. Recalculate VIP tier
     await vipService.recalculateVip(userId);
+
+    return updatedWithdrawal;
+  }
+
+  /**
+   * Finalize a processing or pending withdrawal as FAILED (reverts and refunds funds)
+   */
+  async finalizeFailedWithdrawal(withdrawalId: string, reason: string) {
+    const withdrawal = await withdrawalRepository.findById(withdrawalId);
+    if (!withdrawal) {
+      throw new Error(`Withdrawal not found for ID: ${withdrawalId}`);
+    }
+
+    if (withdrawal.status === 'FAILED') {
+      return withdrawal;
+    }
+
+    const userId = withdrawal.userId;
+    const wallet = await walletRepository.findByUserId(userId);
+    if (!wallet) {
+      throw new Error(`Wallet not found for user ID: ${userId}`);
+    }
+
+    // 1. Mark status as FAILED
+    const updatedWithdrawal = await withdrawalRepository.updateStatus(withdrawalId, 'FAILED', {
+      adminApprovalStatus: 'REJECTED',
+      adminNotes: `Withdrawal failed: ${reason}`,
+    });
+
+    const amount = parseFloat(withdrawal.amount);
+
+    // 2. Refund locked balance back to available balance
+    await walletRepository.incrementBalances(wallet.id, {
+      lockedBalance: (-amount).toFixed(8),
+      availableBalance: amount.toFixed(8),
+    });
+
+    // 3. Create failure notification
+    await notificationService.createStructuredNotification(userId, {
+      title: 'Withdrawal Failed',
+      description: `Your withdrawal request of ${withdrawal.amount} USDT failed: ${reason}. Funds have been refunded to your available balance.`,
+      icon: 'ShieldAlert',
+      type: 'withdrawal',
+      priority: 'HIGH',
+    });
 
     return updatedWithdrawal;
   }

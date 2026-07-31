@@ -112,6 +112,35 @@ export class HdWalletEngine {
   public isValidEvmAddress(address: string): boolean {
     return ethers.isAddress(address);
   }
+
+  /**
+   * Derive address directly from a private key for EVM or Tron networks
+   */
+  public deriveAddressFromPrivateKey(network: string, privateKey: string): string {
+    if (!privateKey) {
+      throw new Error('[HdWalletEngine] Private key is required for address derivation');
+    }
+
+    let cleanKey = privateKey.trim();
+    if (!cleanKey.startsWith('0x') && !network.toUpperCase().includes('TRC20')) {
+      cleanKey = `0x${cleanKey}`;
+    }
+
+    const cleanNetwork = network.toUpperCase();
+    if (cleanNetwork.includes('TRC20') || cleanNetwork.includes('TRON')) {
+      if (!cleanKey.startsWith('0x')) cleanKey = `0x${cleanKey}`;
+      const wallet = new ethers.Wallet(cleanKey);
+      const uncompressedPubHex = wallet.signingKey.publicKey.replace(/^0x/, '');
+      const pubKey64 = uncompressedPubHex.length === 130 ? uncompressedPubHex.slice(2) : uncompressedPubHex;
+      const keccakHash = ethers.keccak256(`0x${pubKey64}`).replace(/^0x/, '');
+      const address20 = keccakHash.slice(-40);
+      const tronHex = `41${address20}`;
+      return encodeTronBase58Check(tronHex);
+    } else {
+      const wallet = new ethers.Wallet(cleanKey);
+      return ethers.getAddress(wallet.address);
+    }
+  }
 }
 
 export const hdWalletEngine = new HdWalletEngine();

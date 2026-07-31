@@ -12,6 +12,12 @@ node_modules/
 dist/
 build/
 
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+
 # Logs
 logs/
 *.log
@@ -33,6 +39,7 @@ coverage/
 # IDE
 .vscode/
 .idea/
+*.iml
 
 # OS Files
 .DS_Store
@@ -46,3 +53,7 @@ temp/
 # Local databases (if used)
 *.sqlite
 *.db
+
+# Android signing
+*.jks
+*.keystore

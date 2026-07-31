@@ -10,25 +10,26 @@ import { activeBlockchainProvider } from '../providers/index.ts';
 import { logger } from '../../utils/logger.ts';
 import { auditRepository } from '../../repositories/auditRepository.ts';
 import { treasuryService } from './TreasuryService.ts';
+import { gasCalculator } from './GasCalculator.ts';
 
-// Gas funding configuration thresholds
+// Legacy fallback dictionary for backwards compatibility
 export const MIN_GAS_REQUIRED: Record<string, string> = {
-  USDT_BEP20: '0.005',     // BNB
-  USDT_POLYGON: '0.1',     // MATIC/POL
-  USDT_TRC20: '15.0',      // TRX
+  USDT_BEP20: '0.00025',   // BNB
+  USDT_POLYGON: '0.003',    // MATIC/POL
+  USDT_TRC20: '28.0',      // TRX
 };
 
 export const GAS_FUND_AMOUNT: Record<string, string> = {
-  USDT_BEP20: '0.005',
-  USDT_POLYGON: '0.1',
-  USDT_TRC20: '20.0',
+  USDT_BEP20: '0.001',     // BNB upper limit
+  USDT_POLYGON: '0.05',    // POL upper limit
+  USDT_TRC20: '30.0',      // TRX upper limit
 };
 
 export class SweepQueueProcessor {
   private intervalId: NodeJS.Timeout | null = null;
   private isProcessing = false;
-  private activeLocks: Set<string> = new Set(); // Prevent concurrent operations on the same address/wallet
-  private hasLoggedManualMode = false; // Prevents spamming log messages on every scheduler tick
+  private activeLocks: Set<string> = new Set();
+  private hasLoggedManualMode = false;
 
   constructor(private readonly provider = activeBlockchainProvider) {}
 
@@ -38,8 +39,7 @@ export class SweepQueueProcessor {
   public start() {
     if (this.intervalId) return;
     logger.info('[SweepQueueProcessor] Starting background sweep queue processing loop...');
-    // Poll every 120 seconds (2 minutes) to conserve API credits while maintaining robust processing
-    this.intervalId = setInterval(() => this.processQueue(), 120000);
+    this.intervalId = setInterval(() => this.processQueue(), 60000);
   }
 
   /**
@@ -61,10 +61,8 @@ export class SweepQueueProcessor {
     this.isProcessing = true;
 
     try {
-      // Ensure treasury configs exist
       await treasuryService.ensureAllTreasuryWallets();
 
-      // Check if any active network is configured for AUTOMATIC or HYBRID sweep mode
       const treasuryList = await db.select().from(treasuryWallets);
       const hasAutoOrHybrid = treasuryList.some(
         (t) => (t.sweepMode || 'AUTOMATIC') !== 'MANUAL' && !t.paused
@@ -80,7 +78,6 @@ export class SweepQueueProcessor {
 
       this.hasLoggedManualMode = false;
 
-      // Find all active queue items that are not finished or cancelled
       const activeItems = await db
         .select()
         .from(sweepQueue)
@@ -88,20 +85,23 @@ export class SweepQueueProcessor {
           or(
             eq(sweepQueue.status, 'PENDING'),
             eq(sweepQueue.status, 'WAITING_DELAY'),
+            eq(sweepQueue.status, 'WAITING_FOR_GAS'),
             eq(sweepQueue.status, 'WAITING_GAS'),
             eq(sweepQueue.status, 'GAS_FUNDING'),
-            eq(sweepQueue.status, 'READY_TO_SWEEP')
+            eq(sweepQueue.status, 'WAITING_GAS_CONFIRMATION'),
+            eq(sweepQueue.status, 'READY_TO_SWEEP'),
+            eq(sweepQueue.status, 'SWEEPING'),
+            eq(sweepQueue.status, 'WAITING_SWEEP_CONFIRMATION'),
+            eq(sweepQueue.status, 'RETRY_PENDING')
           )
         );
 
       for (const item of activeItems) {
-        // Skip items for networks in MANUAL mode or paused
         const treasury = await treasuryService.getOrCreateTreasuryWallet(item.network);
         if ((treasury.sweepMode || 'AUTOMATIC') === 'MANUAL' || treasury.paused) {
           continue;
         }
 
-        // Prevent concurrent processing of the same deposit address
         if (this.activeLocks.has(item.depositAddress)) {
           continue;
         }
@@ -128,7 +128,6 @@ export class SweepQueueProcessor {
   private async processQueueItem(item: any) {
     const treasury = await treasuryService.getOrCreateTreasuryWallet(item.network);
 
-    // Global paused check
     if (treasury.paused) {
       logger.debug(`[SweepQueueProcessor] Sweeps are paused for network ${item.network}. Skipping item ${item.id}`);
       return;
@@ -138,7 +137,6 @@ export class SweepQueueProcessor {
     const amountFloat = parseFloat(item.amount);
     const thresholdFloat = parseFloat(treasury.autoSweepThreshold || '1.00000000');
 
-    // Rule: Deposits below threshold are never automatically funded or swept
     if (amountFloat < thresholdFloat) {
       if (item.status !== 'PENDING') {
         await db
@@ -149,7 +147,6 @@ export class SweepQueueProcessor {
       return;
     }
 
-    // Delay evaluation
     const now = new Date();
     if (item.eligibleAt > now) {
       if (item.status !== 'WAITING_DELAY') {
@@ -158,10 +155,9 @@ export class SweepQueueProcessor {
           .set({ status: 'WAITING_DELAY', updatedAt: new Date() })
           .where(eq(sweepQueue.id, item.id));
       }
-      return; // Wait for delay to expire
+      return;
     }
 
-    // Handle Manual mode
     if (mode === 'MANUAL') {
       if (item.status !== 'PENDING') {
         await db
@@ -172,52 +168,58 @@ export class SweepQueueProcessor {
           })
           .where(eq(sweepQueue.id, item.id));
       }
-      return; // Do nothing automatically in MANUAL mode; gas balance checked on demand in Admin dashboard
+      return;
     }
 
-    // Check Native Gas Balance for AUTOMATIC and HYBRID modes
     const nativeBalStr = await this.provider.getNativeBalance(item.network, item.depositAddress);
-    const nativeBal = parseFloat(nativeBalStr);
-    const minGas = parseFloat(MIN_GAS_REQUIRED[item.network] || '0');
+    const gasCheck = await gasCalculator.calculateTopUpNeeded(item.network, nativeBalStr);
 
-    const hasSufficientGas = nativeBal >= minGas;
-
-    // State machine logic for AUTOMATIC and HYBRID modes
     switch (item.status) {
       case 'PENDING':
       case 'WAITING_DELAY':
-        // Move to gas check state
-        if (hasSufficientGas) {
+      case 'RETRY_PENDING':
+        if (gasCheck.isSufficient) {
           await this.transitionItem(item.id, 'READY_TO_SWEEP', 'OK');
         } else {
-          await this.transitionItem(item.id, 'WAITING_GAS', 'LOW');
+          await this.transitionItem(item.id, 'WAITING_FOR_GAS', 'LOW');
         }
         break;
 
+      case 'WAITING_FOR_GAS':
       case 'WAITING_GAS':
-        if (hasSufficientGas) {
+        if (gasCheck.isSufficient) {
           await this.transitionItem(item.id, 'READY_TO_SWEEP', 'OK');
         } else {
-          // Trigger automated gas funding
           await this.fundGasForQueueItem(item.id, 'SYSTEM');
         }
         break;
 
       case 'GAS_FUNDING':
-        if (hasSufficientGas) {
+      case 'WAITING_GAS_CONFIRMATION':
+        if (gasCheck.isSufficient) {
           await this.transitionItem(item.id, 'READY_TO_SWEEP', 'OK');
         } else {
-          // If gas funding was sent but is not yet reflected, we wait
-          logger.debug(`[SweepQueueProcessor] Waiting for gas funding to reflect for ${item.depositAddress}. Current: ${nativeBalStr}`);
+          if (item.status !== 'WAITING_GAS_CONFIRMATION') {
+            await this.transitionItem(item.id, 'WAITING_GAS_CONFIRMATION', 'FUNDING_SENT');
+          }
+          logger.debug(`[SweepQueueProcessor] Waiting for gas funding confirmation for ${item.depositAddress}. Current: ${nativeBalStr}`);
         }
         break;
 
       case 'READY_TO_SWEEP':
-        if (!hasSufficientGas) {
-          await this.transitionItem(item.id, 'WAITING_GAS', 'LOW');
+        if (!gasCheck.isSufficient) {
+          logger.warn(`[SweepQueueProcessor] Queue item ${item.id} was READY_TO_SWEEP but gas re-check failed. Current: ${nativeBalStr}, Required: ${gasCheck.requiredMinGas}`);
+          await this.transitionItem(item.id, 'WAITING_FOR_GAS', 'LOW');
         } else {
-          // Trigger automated sweep
+          logger.info(`[SweepQueueProcessor] Verified gas sufficiency (${nativeBalStr} >= ${gasCheck.requiredMinGas}). Dispatching sweep for item ${item.id}...`);
           await this.sweepQueueItem(item.id, 'SYSTEM');
+        }
+        break;
+
+      case 'SWEEPING':
+      case 'WAITING_SWEEP_CONFIRMATION':
+        if (item.sweepTxHash) {
+          logger.debug(`[SweepQueueProcessor] Sweep in confirmation stage for item ${item.id}. Tx: ${item.sweepTxHash}`);
         }
         break;
 
@@ -235,7 +237,7 @@ export class SweepQueueProcessor {
       .set({
         status,
         gasStatus,
-        errorMessage: errorMessage || null,
+        errorMessage: errorMessage !== undefined ? errorMessage : null,
         updatedAt: new Date()
       })
       .where(eq(sweepQueue.id, itemId));
@@ -261,14 +263,18 @@ export class SweepQueueProcessor {
       throw new Error(`Cannot fund gas for item in status: ${item.status}`);
     }
 
-    const fundAmount = GAS_FUND_AMOUNT[item.network];
-    if (!fundAmount) {
-      throw new Error(`Unsupported network for gas funding: ${item.network}`);
+    const nativeBalStr = await this.provider.getNativeBalance(item.network, item.depositAddress);
+    const gasCheck = await gasCalculator.calculateTopUpNeeded(item.network, nativeBalStr);
+
+    if (gasCheck.isSufficient) {
+      logger.info(`[SweepQueueProcessor] Address ${item.depositAddress} already has sufficient gas (${gasCheck.currentBalance} >= ${gasCheck.requiredMinGas} ${gasCheck.gasSymbol}). No top-up needed.`);
+      await this.transitionItem(itemId, 'READY_TO_SWEEP', 'OK');
+      return 'ALREADY_SUFFICIENT';
     }
 
-    logger.info(`[SweepQueueProcessor] Initiating gas funding of ${fundAmount} for ${item.depositAddress} (${item.network})`);
+    const fundAmount = gasCheck.topUpNeeded;
+    logger.info(`[SweepQueueProcessor] Initiating MINIMUM gas top-up of ${fundAmount} ${gasCheck.gasSymbol} for ${item.depositAddress} on ${item.network}`);
 
-    // Prevent concurrent duplicate funding
     await db
       .update(sweepQueue)
       .set({
@@ -284,6 +290,7 @@ export class SweepQueueProcessor {
       await db
         .update(sweepQueue)
         .set({
+          status: 'WAITING_GAS_CONFIRMATION',
           gasTxHash,
           updatedAt: new Date()
         })
@@ -295,10 +302,10 @@ export class SweepQueueProcessor {
         action: 'TREASURY_GAS_FUNDING_SENT',
         resource: `sweepQueue/${itemId}`,
         oldValue: '0.00000000',
-        newValue: JSON.stringify({ amount: fundAmount, txHash: gasTxHash }),
+        newValue: JSON.stringify({ amount: fundAmount, symbol: gasCheck.gasSymbol, txHash: gasTxHash }),
       });
 
-      logger.info(`[SweepQueueProcessor] Gas funding tx broadcasted: ${gasTxHash}`);
+      logger.info(`[SweepQueueProcessor] Minimum gas funding tx broadcasted: ${gasTxHash}`);
       return gasTxHash;
     } catch (err: any) {
       logger.error(`[SweepQueueProcessor] Gas funding FAILED for ${item.depositAddress}:`, err.message);
@@ -306,9 +313,10 @@ export class SweepQueueProcessor {
       await db
         .update(sweepQueue)
         .set({
-          status: 'WAITING_GAS',
+          status: 'FAILED',
           gasStatus: 'FAILED',
           errorMessage: `Gas funding failed: ${err.message}`,
+          attempts: item.attempts + 1,
           updatedAt: new Date()
         })
         .where(eq(sweepQueue.id, itemId));
@@ -336,9 +344,8 @@ export class SweepQueueProcessor {
       throw new Error(`Cannot sweep item in status: ${item.status}`);
     }
 
-    logger.info(`[SweepQueueProcessor] Initiating sweep for queue item ${itemId} (${item.amount} USDT)`);
+    logger.info(`[SweepQueueProcessor] [STEP 1/4] Initiating sweep for queue item ${itemId} (${item.amount} USDT on ${item.network})`);
 
-    // Lock the status to SWEEPING to prevent double sweeps
     await db
       .update(sweepQueue)
       .set({
@@ -348,7 +355,7 @@ export class SweepQueueProcessor {
       .where(eq(sweepQueue.id, itemId));
 
     try {
-      // Look up depositAddress record in db to get its ID
+      logger.info(`[SweepQueueProcessor] [STEP 2/4] Resolving deposit address record for ${item.depositAddress}`);
       const addrRec = await db
         .select()
         .from(depositAddresses)
@@ -364,11 +371,10 @@ export class SweepQueueProcessor {
         throw new Error(`Deposit address record not found for address: ${item.depositAddress}`);
       }
 
-      // Execute sweep user-to-hot
+      logger.info(`[SweepQueueProcessor] [STEP 3/4] Calling TreasuryService.sweepUserDepositAddress(id: ${addrRec[0].id})`);
       const sweepResult = await treasuryService.sweepUserDepositAddress(addrRec[0].id, adminUid);
 
       if (sweepResult.success && sweepResult.txHash) {
-        // Complete the sweep queue record
         await db
           .update(sweepQueue)
           .set({
@@ -378,28 +384,13 @@ export class SweepQueueProcessor {
           })
           .where(eq(sweepQueue.id, itemId));
 
-        // Subtract the spent gas fee on simulation
-        try {
-          const spentGas = MIN_GAS_REQUIRED[item.network];
-          const newNative = Math.max(0, parseFloat(addrRec[0].nativeBalance || '0') - parseFloat(spentGas)).toFixed(8);
-          await db
-            .update(depositAddresses)
-            .set({
-              nativeBalance: newNative,
-              updatedAt: new Date(),
-            })
-            .where(eq(depositAddresses.id, addrRec[0].id));
-        } catch (gasErr) {
-          // ignore
-        }
-
-        logger.info(`[SweepQueueProcessor] Sweep queue item ${itemId} COMPLETED. Tx: ${sweepResult.txHash}`);
+        logger.info(`[SweepQueueProcessor] [STEP 4/4] Sweep queue item ${itemId} COMPLETED successfully. TxHash: ${sweepResult.txHash}`);
         return sweepResult.txHash;
       } else {
-        throw new Error(sweepResult.error || 'Unknown sweep error');
+        throw new Error(sweepResult.error || 'Unknown sweep error returned by TreasuryService');
       }
     } catch (err: any) {
-      logger.error(`[SweepQueueProcessor] Sweep queue item ${itemId} FAILED:`, err.message);
+      logger.error(`[SweepQueueProcessor] [SWEEP ERROR] Sweep queue item ${itemId} FAILED at execution step:`, err.message);
 
       await db
         .update(sweepQueue)
@@ -442,7 +433,6 @@ export class SweepQueueProcessor {
         date.setMinutes(date.getMinutes() + customMinutes);
         return date;
       case 'MANUAL_ONLY':
-        // Extremely far in the future so auto-sweep never processes it
         date.setFullYear(date.getFullYear() + 100);
         return date;
       default:
@@ -463,7 +453,6 @@ export class SweepQueueProcessor {
     if (depRecord.length === 0) return null;
     const deposit = depRecord[0];
 
-    // Check if already registered
     const existing = await db
       .select()
       .from(sweepQueue)
@@ -480,7 +469,7 @@ export class SweepQueueProcessor {
     let eligibleAt = new Date();
 
     if (amountFloat < thresholdFloat) {
-      status = 'PENDING'; // Below threshold
+      status = 'PENDING';
     } else {
       const mode = treasury.sweepMode || 'AUTOMATIC';
       if (mode === 'MANUAL') {
@@ -490,11 +479,9 @@ export class SweepQueueProcessor {
         if (eligibleAt > new Date()) {
           status = 'WAITING_DELAY';
         } else {
-          // Calculate status based on gas check
           const nativeBalStr = await this.provider.getNativeBalance(deposit.network, deposit.depositAddress);
-          const nativeBal = parseFloat(nativeBalStr);
-          const minGas = parseFloat(MIN_GAS_REQUIRED[deposit.network] || '0');
-          status = nativeBal >= minGas ? 'READY_TO_SWEEP' : 'WAITING_GAS';
+          const gasCheck = await gasCalculator.calculateTopUpNeeded(deposit.network, nativeBalStr);
+          status = gasCheck.isSufficient ? 'READY_TO_SWEEP' : 'WAITING_FOR_GAS';
         }
       }
     }
@@ -508,15 +495,14 @@ export class SweepQueueProcessor {
         network: deposit.network,
         amount: deposit.amount,
         status,
-        gasStatus: 'LOW', // will be evaluated on first loop pass
+        gasStatus: 'LOW',
         eligibleAt,
       })
       .returning();
 
     logger.info(`[SweepQueueProcessor] Registered deposit ${deposit.id} into Sweep Queue in status ${status}`);
     
-    // Auto trigger the loop to process immediately if IMMEDIATE
-    if (status === 'READY_TO_SWEEP' || status === 'WAITING_GAS') {
+    if (status === 'READY_TO_SWEEP' || status === 'WAITING_FOR_GAS') {
       setTimeout(() => this.processQueue(), 100);
     }
 
@@ -524,9 +510,44 @@ export class SweepQueueProcessor {
   }
 
   /**
+   * Retry a failed queue item
+   */
+  public async retryQueueItem(itemId: string, adminUid: string = 'SYSTEM') {
+    const itemRecord = await db.select().from(sweepQueue).where(eq(sweepQueue.id, itemId)).limit(1);
+    if (itemRecord.length === 0) throw new Error('Queue item not found');
+
+    await db
+      .update(sweepQueue)
+      .set({
+        status: 'RETRY_PENDING',
+        errorMessage: null,
+        updatedAt: new Date()
+      })
+      .where(eq(sweepQueue.id, itemId));
+
+    await auditRepository.createAuditLog({
+      actorUid: adminUid,
+      userId: itemRecord[0].userId,
+      action: 'TREASURY_SWEEP_RETRY',
+      resource: `sweepQueue/${itemId}`,
+      oldValue: itemRecord[0].status,
+      newValue: 'RETRY_PENDING',
+    });
+
+    setTimeout(() => this.processQueue(), 100);
+  }
+
+  /**
    * Cancel or remove an item from the sweep queue
    */
   public async cancelQueueItem(itemId: string, adminUid: string = 'SYSTEM') {
+    const itemRecord = await db.select().from(sweepQueue).where(eq(sweepQueue.id, itemId)).limit(1);
+    if (itemRecord.length === 0) throw new Error('Queue item not found');
+
+    if (itemRecord[0].status === 'COMPLETED') {
+      throw new Error('Cannot cancel a completed sweep queue item.');
+    }
+
     await db
       .update(sweepQueue)
       .set({
@@ -537,10 +558,10 @@ export class SweepQueueProcessor {
 
     await auditRepository.createAuditLog({
       actorUid: adminUid,
-      userId: null as any,
+      userId: itemRecord[0].userId,
       action: 'TREASURY_SWEEP_CANCELLED',
       resource: `sweepQueue/${itemId}`,
-      oldValue: 'ACTIVE',
+      oldValue: itemRecord[0].status,
       newValue: 'CANCELLED',
     });
   }
@@ -582,10 +603,8 @@ export class SweepQueueProcessor {
         try {
           txHashGas = await this.fundGasForQueueItem(id, adminUid);
         } catch (gasErr) {
-          // If already has gas or gas funding is in progress, continue to sweep
+          // Continue if gas is already sufficient
         }
-        
-        // Wait a small bit and then sweep (in simulation this succeeds instantly)
         const txHashSweep = await this.sweepQueueItem(id, adminUid);
         results.push({ id, success: true, gasTxHash: txHashGas, sweepTxHash: txHashSweep });
       } catch (err: any) {

@@ -653,25 +653,27 @@ export class UserController {
         throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
       }
       
-      const { code } = req.body;
+      const { code, secret } = req.body;
       if (!code) {
         throw new ApiError(400, 'Verification code is required.', 'BAD_REQUEST');
       }
 
       const user = await userService.getUserProfile(req.user.uid);
       const settings = await settingsRepository.findUserSettingsByUserId(user.id);
+      const mfaSecret = settings?.mfaSecret || secret;
       
-      if (!settings || !settings.mfaSecret) {
+      if (!mfaSecret) {
         throw new ApiError(400, 'MFA setup has not been initiated. Please fetch configuration first.', 'BAD_REQUEST');
       }
 
-      const isValid = totp.verifyToken(settings.mfaSecret, code);
+      const isValid = totp.verifyToken(mfaSecret, code);
       if (!isValid) {
         throw new ApiError(400, 'Invalid Google Authenticator code. Verification failed.', 'BAD_REQUEST');
       }
 
       await settingsRepository.updateUserSettings(user.id, {
-        mfaEnabled: true
+        mfaEnabled: true,
+        mfaSecret: mfaSecret
       });
 
       return sendSuccess(res, {
