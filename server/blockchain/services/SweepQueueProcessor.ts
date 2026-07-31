@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, not } from 'drizzle-orm';
 import { db } from '../../../src/db/index.ts';
 import { sweepQueue, treasuryWallets, depositAddresses, deposits } from '../../../src/db/schema.ts';
 import { activeBlockchainProvider } from '../providers/index.ts';
@@ -190,7 +190,11 @@ export class SweepQueueProcessor {
         if (gasCheck.isSufficient) {
           await this.transitionItem(item.id, 'READY_TO_SWEEP', 'OK');
         } else {
-          await this.fundGasForQueueItem(item.id, 'SYSTEM');
+          try {
+            await this.fundGasForQueueItem(item.id, 'SYSTEM');
+          } catch (fundErr: any) {
+            logger.warn(`[SweepQueueProcessor] Auto gas funding deferred for ${item.id}: ${fundErr.message}`);
+          }
         }
         break;
 
@@ -202,7 +206,14 @@ export class SweepQueueProcessor {
           if (item.status !== 'WAITING_GAS_CONFIRMATION') {
             await this.transitionItem(item.id, 'WAITING_GAS_CONFIRMATION', 'FUNDING_SENT');
           }
-          logger.debug(`[SweepQueueProcessor] Waiting for gas funding confirmation for ${item.depositAddress}. Current: ${nativeBalStr}`);
+          // Stuck check: if waiting for gas for >10 mins, reset to WAITING_FOR_GAS so it can retry
+          const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
+          if (item.updatedAt && new Date(item.updatedAt) < tenMinsAgo) {
+            logger.warn(`[SweepQueueProcessor] Queue item ${item.id} stuck waiting for gas confirmation >10m. Resetting to WAITING_FOR_GAS.`);
+            await this.transitionItem(item.id, 'WAITING_FOR_GAS', 'LOW', 'Gas confirmation timeout reset');
+          } else {
+            logger.debug(`[SweepQueueProcessor] Waiting for gas funding confirmation for ${item.depositAddress}. Current: ${nativeBalStr}`);
+          }
         }
         break;
 
@@ -212,7 +223,11 @@ export class SweepQueueProcessor {
           await this.transitionItem(item.id, 'WAITING_FOR_GAS', 'LOW');
         } else {
           logger.info(`[SweepQueueProcessor] Verified gas sufficiency (${nativeBalStr} >= ${gasCheck.requiredMinGas}). Dispatching sweep for item ${item.id}...`);
-          await this.sweepQueueItem(item.id, 'SYSTEM');
+          try {
+            await this.sweepQueueItem(item.id, 'SYSTEM');
+          } catch (sweepErr: any) {
+            logger.warn(`[SweepQueueProcessor] Sweep execution deferred for ${item.id}: ${sweepErr.message}`);
+          }
         }
         break;
 
@@ -220,6 +235,22 @@ export class SweepQueueProcessor {
       case 'WAITING_SWEEP_CONFIRMATION':
         if (item.sweepTxHash) {
           logger.debug(`[SweepQueueProcessor] Sweep in confirmation stage for item ${item.id}. Tx: ${item.sweepTxHash}`);
+          try {
+            const txInfo = await this.provider.getTransaction(item.network, item.sweepTxHash);
+            if (txInfo && (txInfo.confirmations || 0) > 0) {
+              await this.transitionItem(item.id, 'COMPLETED', 'OK');
+              logger.info(`[SweepQueueProcessor] On-chain confirmed tx ${item.sweepTxHash} for item ${item.id}. Status updated to COMPLETED.`);
+            }
+          } catch (txErr: any) {
+            logger.warn(`[SweepQueueProcessor] Could not verify tx ${item.sweepTxHash}: ${txErr.message}`);
+          }
+        } else {
+          // Stuck check: if SWEEPING for >5 mins without sweepTxHash, reset to READY_TO_SWEEP for retry
+          const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+          if (item.updatedAt && new Date(item.updatedAt) < fiveMinsAgo) {
+            logger.warn(`[SweepQueueProcessor] Item ${item.id} stuck in SWEEPING for >5 mins without txHash. Resetting to READY_TO_SWEEP.`);
+            await this.transitionItem(item.id, 'READY_TO_SWEEP', item.gasStatus || 'OK', 'Stuck SWEEPING reset');
+          }
         }
         break;
 
@@ -262,6 +293,9 @@ export class SweepQueueProcessor {
     if (item.status === 'COMPLETED' || item.status === 'CANCELLED') {
       throw new Error(`Cannot fund gas for item in status: ${item.status}`);
     }
+    if (item.status === 'SWEEPING' || item.status === 'GAS_FUNDING') {
+      throw new Error(`Queue item ${itemId} is already being processed (status: ${item.status}).`);
+    }
 
     const nativeBalStr = await this.provider.getNativeBalance(item.network, item.depositAddress);
     const gasCheck = await gasCalculator.calculateTopUpNeeded(item.network, nativeBalStr);
@@ -275,14 +309,28 @@ export class SweepQueueProcessor {
     const fundAmount = gasCheck.topUpNeeded;
     logger.info(`[SweepQueueProcessor] Initiating MINIMUM gas top-up of ${fundAmount} ${gasCheck.gasSymbol} for ${item.depositAddress} on ${item.network}`);
 
-    await db
+    // Atomic conditional status lock to prevent concurrent gas funding
+    const lockResult = await db
       .update(sweepQueue)
       .set({
         status: 'GAS_FUNDING',
         gasStatus: 'FUNDING_SENT',
         updatedAt: new Date()
       })
-      .where(eq(sweepQueue.id, itemId));
+      .where(
+        and(
+          eq(sweepQueue.id, itemId),
+          not(eq(sweepQueue.status, 'GAS_FUNDING')),
+          not(eq(sweepQueue.status, 'SWEEPING')),
+          not(eq(sweepQueue.status, 'COMPLETED')),
+          not(eq(sweepQueue.status, 'CANCELLED'))
+        )
+      )
+      .returning();
+
+    if (lockResult.length === 0) {
+      throw new Error(`Queue item ${itemId} is already locked in state: ${item.status}`);
+    }
 
     try {
       const gasTxHash = await this.provider.fundGas(item.network, item.depositAddress, fundAmount);
@@ -308,15 +356,19 @@ export class SweepQueueProcessor {
       logger.info(`[SweepQueueProcessor] Minimum gas funding tx broadcasted: ${gasTxHash}`);
       return gasTxHash;
     } catch (err: any) {
-      logger.error(`[SweepQueueProcessor] Gas funding FAILED for ${item.depositAddress}:`, err.message);
+      const attempts = (item.attempts || 0) + 1;
+      const isMaxRetries = attempts >= 5;
+      const finalStatus = isMaxRetries ? 'FAILED' : 'WAITING_FOR_GAS';
+
+      logger.error(`[SweepQueueProcessor] Gas funding FAILED for ${item.depositAddress}: ${err.message}. Status set to ${finalStatus}`);
       
       await db
         .update(sweepQueue)
         .set({
-          status: 'FAILED',
+          status: finalStatus,
           gasStatus: 'FAILED',
           errorMessage: `Gas funding failed: ${err.message}`,
-          attempts: item.attempts + 1,
+          attempts,
           updatedAt: new Date()
         })
         .where(eq(sweepQueue.id, itemId));
@@ -343,19 +395,41 @@ export class SweepQueueProcessor {
     if (item.status === 'COMPLETED' || item.status === 'CANCELLED') {
       throw new Error(`Cannot sweep item in status: ${item.status}`);
     }
+    if (item.status === 'SWEEPING') {
+      throw new Error(`Queue item ${itemId} is already being swept.`);
+    }
 
-    logger.info(`[SweepQueueProcessor] [STEP 1/4] Initiating sweep for queue item ${itemId} (${item.amount} USDT on ${item.network})`);
+    const startTime = Date.now();
+    logger.info(`[SweepQueueProcessor] Initiating sweep execution: ${JSON.stringify({
+      queueId: itemId,
+      depositAddress: item.depositAddress,
+      network: item.network,
+      amount: item.amount,
+      status: item.status
+    })}`);
 
-    await db
+    // Atomic conditional lock to SWEEPING status
+    const lockResult = await db
       .update(sweepQueue)
       .set({
         status: 'SWEEPING',
         updatedAt: new Date()
       })
-      .where(eq(sweepQueue.id, itemId));
+      .where(
+        and(
+          eq(sweepQueue.id, itemId),
+          not(eq(sweepQueue.status, 'SWEEPING')),
+          not(eq(sweepQueue.status, 'COMPLETED')),
+          not(eq(sweepQueue.status, 'CANCELLED'))
+        )
+      )
+      .returning();
+
+    if (lockResult.length === 0) {
+      throw new Error(`Queue item ${itemId} is already locked/being swept by another process.`);
+    }
 
     try {
-      logger.info(`[SweepQueueProcessor] [STEP 2/4] Resolving deposit address record for ${item.depositAddress}`);
       const addrRec = await db
         .select()
         .from(depositAddresses)
@@ -371,33 +445,53 @@ export class SweepQueueProcessor {
         throw new Error(`Deposit address record not found for address: ${item.depositAddress}`);
       }
 
-      logger.info(`[SweepQueueProcessor] [STEP 3/4] Calling TreasuryService.sweepUserDepositAddress(id: ${addrRec[0].id})`);
       const sweepResult = await treasuryService.sweepUserDepositAddress(addrRec[0].id, adminUid);
 
       if (sweepResult.success && sweepResult.txHash) {
+        const executionTimeMs = Date.now() - startTime;
         await db
           .update(sweepQueue)
           .set({
             status: 'COMPLETED',
             sweepTxHash: sweepResult.txHash,
+            errorMessage: null,
             updatedAt: new Date()
           })
           .where(eq(sweepQueue.id, itemId));
 
-        logger.info(`[SweepQueueProcessor] [STEP 4/4] Sweep queue item ${itemId} COMPLETED successfully. TxHash: ${sweepResult.txHash}`);
+        logger.info(`[SweepQueueProcessor] Sweep COMPLETED: ${JSON.stringify({
+          queueId: itemId,
+          depositAddress: item.depositAddress,
+          network: item.network,
+          sweepTxHash: sweepResult.txHash,
+          executionTimeMs
+        })}`);
         return sweepResult.txHash;
       } else {
         throw new Error(sweepResult.error || 'Unknown sweep error returned by TreasuryService');
       }
     } catch (err: any) {
-      logger.error(`[SweepQueueProcessor] [SWEEP ERROR] Sweep queue item ${itemId} FAILED at execution step:`, err.message);
+      const executionTimeMs = Date.now() - startTime;
+      const attempts = (item.attempts || 0) + 1;
+      const isMaxRetries = attempts >= 5;
+      const finalStatus = isMaxRetries ? 'FAILED' : 'RETRY_PENDING';
+
+      logger.error(`[SweepQueueProcessor] Sweep FAILED: ${JSON.stringify({
+        queueId: itemId,
+        depositAddress: item.depositAddress,
+        network: item.network,
+        attempts,
+        finalStatus,
+        failedReason: err.message,
+        executionTimeMs
+      })}`);
 
       await db
         .update(sweepQueue)
         .set({
-          status: 'FAILED',
+          status: finalStatus,
           errorMessage: err.message,
-          attempts: item.attempts + 1,
+          attempts,
           updatedAt: new Date()
         })
         .where(eq(sweepQueue.id, itemId));
