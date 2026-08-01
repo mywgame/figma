@@ -30,11 +30,10 @@ export interface DepositAddress {
 export interface SweepQueueItem {
   id: string;
   depositId: string;
-  userId: string;
   depositAddress: string;
   network: string;
   amount: string;
-  status: 'PENDING' | 'WAITING_DELAY' | 'WAITING_GAS' | 'GAS_FUNDING' | 'READY_TO_SWEEP' | 'SWEEPING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  status: 'PENDING' | 'WAITING_DELAY' | 'WAITING_FOR_GAS' | 'WAITING_GAS' | 'GAS_FUNDING' | 'WAITING_GAS_CONFIRMATION' | 'READY_TO_SWEEP' | 'SWEEPING' | 'WAITING_SWEEP_CONFIRMATION' | 'COMPLETED' | 'FAILED' | 'RETRY_PENDING' | 'CANCELLED';
   gasStatus: 'LOW' | 'FUNDING_SENT' | 'OK' | 'FAILED';
   gasTxHash: string | null;
   sweepTxHash: string | null;
@@ -44,7 +43,12 @@ export interface SweepQueueItem {
   createdAt: string;
   updatedAt: string;
   userEmail: string;
+  userName: string | null;
+  dsUserId: string;
   nativeGasBalance: string;
+  requiredGas: string;
+  confirmations: number;
+  requiredConfirmations: number;
 }
 
 export interface TreasuryWalletRecord {

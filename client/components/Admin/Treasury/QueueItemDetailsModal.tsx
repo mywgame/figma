@@ -44,11 +44,15 @@ export const QueueItemDetailsModal: React.FC<QueueItemDetailsModalProps> = ({
             </div>
             <div>
               <span className="text-slate-500 block text-[9px] uppercase">User Email</span>
-              <span className="font-bold text-slate-200">{selectedItemDetails.userEmail}</span>
+              <span className="font-bold text-slate-200 break-all">{selectedItemDetails.userEmail}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[9px] uppercase">User Name</span>
+              <span className="font-bold text-slate-200">{selectedItemDetails.userName || '—'}</span>
             </div>
             <div>
               <span className="text-slate-500 block text-[9px] uppercase">User ID</span>
-              <span className="font-bold text-slate-200 break-all">{selectedItemDetails.userId}</span>
+              <span className="font-bold text-blue-400">{selectedItemDetails.dsUserId}</span>
             </div>
           </div>
 
@@ -82,9 +86,18 @@ export const QueueItemDetailsModal: React.FC<QueueItemDetailsModalProps> = ({
             </div>
             <div>
               <span className="text-slate-500 block text-[9px] uppercase">Retry Attempts</span>
-              <span className="font-bold text-amber-400">{selectedItemDetails.attempts || 0}</span>
+              <span className="font-bold text-amber-400">{selectedItemDetails.attempts || 0} / 5</span>
             </div>
           </div>
+
+          {(selectedItemDetails.status === 'WAITING_SWEEP_CONFIRMATION' || selectedItemDetails.status === 'WAITING_GAS_CONFIRMATION') && (
+            <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-[11px]">
+              <span className="text-slate-500 block text-[9px] uppercase">On-Chain Confirmations</span>
+              <span className="font-bold text-cyan-400">
+                {selectedItemDetails.confirmations ?? 0} / {selectedItemDetails.requiredConfirmations ?? '—'}
+              </span>
+            </div>
+          )}
 
           {selectedItemDetails.gasTxHash && (
             <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-[11px]">

@@ -18,6 +18,7 @@ import { sweepQueue, treasuryWallets, users } from '../../src/db/schema.ts';
 import { sweepQueueProcessor } from '../blockchain/services/SweepQueueProcessor.ts';
 import { gasCalculator } from '../blockchain/services/GasCalculator.ts';
 import { activeBlockchainProvider } from '../blockchain/providers/index.ts';
+import { blockchainConfig } from '../blockchain/config/blockchainConfig.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
 export class AdminController {
@@ -599,7 +600,6 @@ export class AdminController {
         .select({
           id: sweepQueue.id,
           depositId: sweepQueue.depositId,
-          userId: sweepQueue.userId,
           depositAddress: sweepQueue.depositAddress,
           network: sweepQueue.network,
           amount: sweepQueue.amount,
@@ -612,7 +612,12 @@ export class AdminController {
           eligibleAt: sweepQueue.eligibleAt,
           createdAt: sweepQueue.createdAt,
           updatedAt: sweepQueue.updatedAt,
+          // Real user identity fields for the admin UI — the internal user UUID
+          // (sweepQueue.userId) is intentionally NOT selected here so it can never be
+          // displayed. dsUserId is the user-facing formatted ID (e.g. "DS322256").
           userEmail: users.email,
+          userName: users.name,
+          dsUserId: users.userId,
         })
         .from(sweepQueue)
         .innerJoin(users, eq(sweepQueue.userId, users.id));
@@ -631,12 +636,15 @@ export class AdminController {
 
       const items = await q.orderBy(desc(sweepQueue.createdAt));
 
-      // Inject live native balance and required gas for each item
+      // Inject live native balance, required gas, and real on-chain confirmation
+      // progress for each item — never fabricated.
       const itemsWithGas = await Promise.all(
         items.map(async (item) => {
           let nativeGasBalance = '0.00000000';
           let requiredGas = '0.00000000';
           let confirmations = 0;
+          const requiredConfirmations =
+            blockchainConfig.networks[item.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
           try {
             nativeGasBalance = await activeBlockchainProvider.getNativeBalance(item.network, item.depositAddress);
             const req = await gasCalculator.getMinGasRequirement(item.network);
@@ -644,10 +652,10 @@ export class AdminController {
 
             if (item.sweepTxHash) {
               const tx = await activeBlockchainProvider.getTransaction(item.network, item.sweepTxHash);
-              if (tx) confirmations = tx.confirmations || 12;
+              if (tx) confirmations = tx.confirmations || 0;
             } else if (item.gasTxHash) {
               const tx = await activeBlockchainProvider.getTransaction(item.network, item.gasTxHash);
-              if (tx) confirmations = tx.confirmations || 12;
+              if (tx) confirmations = tx.confirmations || 0;
             }
           } catch (e) {
             // fallback gracefully
@@ -657,6 +665,7 @@ export class AdminController {
             nativeGasBalance,
             requiredGas,
             confirmations,
+            requiredConfirmations,
           };
         })
       );

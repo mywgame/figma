@@ -418,6 +418,9 @@ export class SweepQueueProcessor {
       const attempts = (item.attempts || 0) + 1;
       const isMaxRetries = attempts >= 5;
       const finalStatus = isMaxRetries ? 'FAILED' : 'WAITING_FOR_GAS';
+      const finalErrorMessage = isMaxRetries
+        ? `Retry limit exceeded (${attempts}/5 attempts). Last error: ${err.message}`
+        : `Gas funding failed: ${err.message}`;
 
       logger.error(`[SweepQueueProcessor] Gas funding FAILED for ${item.depositAddress}: ${err.message}. Status set to ${finalStatus}`);
       
@@ -426,7 +429,7 @@ export class SweepQueueProcessor {
         .set({
           status: finalStatus,
           gasStatus: 'FAILED',
-          errorMessage: `Gas funding failed: ${err.message}`,
+          errorMessage: finalErrorMessage,
           attempts,
           updatedAt: new Date()
         })
@@ -538,6 +541,9 @@ export class SweepQueueProcessor {
       const attempts = (item.attempts || 0) + 1;
       const isMaxRetries = attempts >= 5;
       const finalStatus = isMaxRetries ? 'FAILED' : 'RETRY_PENDING';
+      const finalErrorMessage = isMaxRetries
+        ? `Retry limit exceeded (${attempts}/5 attempts). Last error: ${err.message}`
+        : err.message;
 
       logger.error(`[SweepQueueProcessor] Sweep FAILED: ${JSON.stringify({
         queueId: itemId,
@@ -553,7 +559,7 @@ export class SweepQueueProcessor {
         .update(sweepQueue)
         .set({
           status: finalStatus,
-          errorMessage: err.message,
+          errorMessage: finalErrorMessage,
           attempts,
           updatedAt: new Date()
         })

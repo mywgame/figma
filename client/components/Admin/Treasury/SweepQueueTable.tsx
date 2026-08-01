@@ -8,6 +8,13 @@ import { Coins, RefreshCw, Copy } from 'lucide-react';
 import { Card } from '../../ui/index.ts';
 import { SweepQueueItem, TreasuryComponentProps } from './TreasuryTypes.ts';
 
+// Presentation-only formatter for the queue table's Amount column (Part 3.5).
+// Never rounds/truncates the underlying stored value — only changes how it's displayed.
+const formatQueueAmount = (rawAmount: string | number | undefined): string => {
+  const value = parseFloat(String(rawAmount ?? '0'));
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 interface SweepQueueTableProps extends TreasuryComponentProps {
   sweepQueueItems: SweepQueueItem[];
   queueLoading: boolean;
@@ -122,7 +129,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                   className="rounded border-slate-800"
                 />
               </th>
-              <th className="py-2.5 px-3">Queue ID / User</th>
+              <th className="py-2.5 px-3">User</th>
               <th className="py-2.5 px-3">Deposit Address</th>
               <th className="py-2.5 px-3 text-right">Amount</th>
               <th className="py-2.5 px-3">Native / Required Gas</th>
@@ -156,10 +163,15 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                     </td>
                     <td className="py-2.5 px-3">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-200">{item.id.slice(0, 8)}...</span>
-                        <span className="text-[9px] text-gray-500 truncate max-w-[120px]" title={item.userEmail}>
-                          {item.userEmail || item.userId?.slice(0, 8)}
+                        <span className="text-[10px] font-bold text-slate-200" title={item.userEmail}>
+                          {item.userEmail}
                         </span>
+                        <span className="text-[9px] text-blue-400 font-semibold">{item.dsUserId}</span>
+                        {item.userName && (
+                          <span className="text-[9px] text-gray-500 truncate max-w-[130px]" title={item.userName}>
+                            {item.userName}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-2.5 px-3 text-gray-400">
@@ -175,8 +187,8 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                         </button>
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-bold text-emerald-400">
-                      {parseFloat(item.amount || '0').toFixed(4)} USDT
+                    <td className="py-2.5 px-3 text-right font-bold text-emerald-400" title={`${item.amount} USDT`}>
+                      {formatQueueAmount(item.amount)}
                     </td>
                     <td className="py-2.5 px-3">
                       <div className="flex flex-col">
