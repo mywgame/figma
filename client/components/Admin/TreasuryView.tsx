@@ -258,7 +258,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
 
       if (!res.success) throw new Error(res.error?.message || 'Address sweep failed.');
 
-      showFeedback(`Address sweep successfully executed! TxHash: ${res.data?.txHash || 'Submitted'}`, null);
+      showFeedback(`Sweep broadcasted to blockchain — awaiting on-chain confirmation. TxHash: ${res.data?.txHash || 'Submitted'}`, null);
       refreshAll();
     } catch (err: any) {
       showFeedback(null, err.message);
@@ -279,7 +279,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
       if (!res.success) throw new Error(res.error?.message || 'Bulk sweep failed.');
 
       const runCount = res.data?.results?.length || 0;
-      showFeedback(`Bulk sweep run completed. Triggered ${runCount} sweep transaction(s).`, null);
+      showFeedback(`Bulk sweep run triggered ${runCount} broadcast(s) — items are now awaiting on-chain confirmation.`, null);
       refreshAll();
     } catch (err: any) {
       showFeedback(null, err.message);
@@ -301,7 +301,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
 
       if (!res.success) throw new Error(res.error?.message || 'Transfer to Cold Wallet failed.');
 
-      showFeedback(`Successfully transferred ${sweepToColdAmount} USDT to Cold Storage! TxHash: ${res.data?.txHash || 'Submitted'}`, null);
+      showFeedback(`Transfer of ${sweepToColdAmount} USDT to Cold Storage broadcasted — awaiting on-chain confirmation. TxHash: ${res.data?.txHash || 'Submitted'}`, null);
       setSweepToColdAmount('');
       refreshAll();
     } catch (err: any) {

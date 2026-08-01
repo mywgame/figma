@@ -10,6 +10,7 @@ import { activeBlockchainProvider } from '../providers/index.ts';
 import { logger } from '../../utils/logger.ts';
 import { auditRepository } from '../../repositories/auditRepository.ts';
 import { treasuryService } from './TreasuryService.ts';
+import { sweepExecutionService } from './treasury/SweepExecutionService.ts';
 import { gasCalculator } from './GasCalculator.ts';
 
 // Legacy fallback dictionary for backwards compatibility
@@ -23,6 +24,35 @@ export const GAS_FUND_AMOUNT: Record<string, string> = {
   USDT_BEP20: '0.001',     // BNB upper limit
   USDT_POLYGON: '0.05',    // POL upper limit
   USDT_TRC20: '30.0',      // TRX upper limit
+};
+
+/**
+ * Explicit state-machine whitelist (Part 3 — Fix queue state machine).
+ * Maps each status to the set of statuses it is legally allowed to transition FROM.
+ * Any transition not listed here is rejected by transitionItem() / the atomic locking
+ * guards below, rather than silently allowed.
+ *
+ * Canonical happy path:
+ *   PENDING -> WAITING_DELAY -> WAITING_FOR_GAS/WAITING_GAS -> GAS_FUNDING ->
+ *   WAITING_GAS_CONFIRMATION -> READY_TO_SWEEP -> SWEEPING ->
+ *   WAITING_SWEEP_CONFIRMATION -> COMPLETED (or FAILED / RETRY_PENDING at any point).
+ *
+ * COMPLETED and CANCELLED are terminal — nothing may transition out of them.
+ */
+export const VALID_TRANSITIONS_FROM: Record<string, string[]> = {
+  PENDING: ['PENDING', 'WAITING_DELAY', 'WAITING_FOR_GAS', 'WAITING_GAS', 'READY_TO_SWEEP', 'RETRY_PENDING'],
+  WAITING_DELAY: ['WAITING_DELAY', 'PENDING'],
+  WAITING_FOR_GAS: ['WAITING_FOR_GAS', 'WAITING_GAS', 'PENDING', 'WAITING_DELAY', 'GAS_FUNDING', 'WAITING_GAS_CONFIRMATION', 'READY_TO_SWEEP', 'RETRY_PENDING'],
+  WAITING_GAS: ['WAITING_GAS', 'WAITING_FOR_GAS', 'PENDING', 'WAITING_DELAY', 'GAS_FUNDING', 'WAITING_GAS_CONFIRMATION', 'READY_TO_SWEEP', 'RETRY_PENDING'],
+  GAS_FUNDING: ['GAS_FUNDING', 'WAITING_FOR_GAS', 'WAITING_GAS'],
+  WAITING_GAS_CONFIRMATION: ['WAITING_GAS_CONFIRMATION', 'GAS_FUNDING'],
+  READY_TO_SWEEP: ['READY_TO_SWEEP', 'PENDING', 'WAITING_DELAY', 'WAITING_FOR_GAS', 'WAITING_GAS', 'GAS_FUNDING', 'WAITING_GAS_CONFIRMATION', 'RETRY_PENDING', 'SWEEPING', 'FAILED'],
+  SWEEPING: ['SWEEPING', 'READY_TO_SWEEP', 'RETRY_PENDING'],
+  WAITING_SWEEP_CONFIRMATION: ['WAITING_SWEEP_CONFIRMATION', 'SWEEPING'],
+  COMPLETED: ['WAITING_SWEEP_CONFIRMATION'],
+  RETRY_PENDING: ['RETRY_PENDING', 'WAITING_FOR_GAS', 'WAITING_GAS', 'GAS_FUNDING', 'SWEEPING', 'FAILED'],
+  FAILED: ['WAITING_FOR_GAS', 'WAITING_GAS', 'GAS_FUNDING', 'SWEEPING', 'WAITING_SWEEP_CONFIRMATION', 'FAILED'],
+  CANCELLED: ['PENDING', 'WAITING_DELAY', 'WAITING_FOR_GAS', 'WAITING_GAS', 'GAS_FUNDING', 'WAITING_GAS_CONFIRMATION', 'READY_TO_SWEEP', 'RETRY_PENDING', 'FAILED'],
 };
 
 export class SweepQueueProcessor {
@@ -62,6 +92,13 @@ export class SweepQueueProcessor {
 
     try {
       await treasuryService.ensureAllTreasuryWallets();
+
+      // Confirmation polling must run every tick regardless of MANUAL/AUTOMATIC mode —
+      // a transaction that was already broadcasted must still be checked against the
+      // blockchain so it can be finalized (or correctly failed) even if an admin later
+      // switches the network to MANUAL mode.
+      await sweepExecutionService.pollAndFinalizeAwaitingConfirmationJobs();
+      await treasuryService.pollAndFinalizeHotToColdJobs();
 
       const treasuryList = await db.select().from(treasuryWallets);
       const hasAutoOrHybrid = treasuryList.some(
@@ -232,26 +269,28 @@ export class SweepQueueProcessor {
         break;
 
       case 'SWEEPING':
-      case 'WAITING_SWEEP_CONFIRMATION':
-        if (item.sweepTxHash) {
-          logger.debug(`[SweepQueueProcessor] Sweep in confirmation stage for item ${item.id}. Tx: ${item.sweepTxHash}`);
-          try {
-            const txInfo = await this.provider.getTransaction(item.network, item.sweepTxHash);
-            if (txInfo && (txInfo.confirmations || 0) > 0) {
-              await this.transitionItem(item.id, 'COMPLETED', 'OK');
-              logger.info(`[SweepQueueProcessor] On-chain confirmed tx ${item.sweepTxHash} for item ${item.id}. Status updated to COMPLETED.`);
-            }
-          } catch (txErr: any) {
-            logger.warn(`[SweepQueueProcessor] Could not verify tx ${item.sweepTxHash}: ${txErr.message}`);
-          }
-        } else {
-          // Stuck check: if SWEEPING for >5 mins without sweepTxHash, reset to READY_TO_SWEEP for retry
-          const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-          if (item.updatedAt && new Date(item.updatedAt) < fiveMinsAgo) {
-            logger.warn(`[SweepQueueProcessor] Item ${item.id} stuck in SWEEPING for >5 mins without txHash. Resetting to READY_TO_SWEEP.`);
-            await this.transitionItem(item.id, 'READY_TO_SWEEP', item.gasStatus || 'OK', 'Stuck SWEEPING reset');
-          }
+        // Stuck check: if SWEEPING for >5 mins without sweepTxHash ever being recorded,
+        // the broadcast attempt itself likely failed silently — reset to READY_TO_SWEEP
+        // for retry. If a sweepTxHash WAS recorded, sweepQueueItem() already moved the row
+        // to WAITING_SWEEP_CONFIRMATION, so reaching here without one is a real stall.
+        const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+        if (item.updatedAt && new Date(item.updatedAt) < fiveMinsAgo) {
+          logger.warn(`[SweepQueueProcessor] Item ${item.id} stuck in SWEEPING for >5 mins without txHash. Resetting to READY_TO_SWEEP.`);
+          await this.transitionItem(item.id, 'READY_TO_SWEEP', item.gasStatus || 'OK', 'Stuck SWEEPING reset');
         }
+        break;
+
+      case 'WAITING_SWEEP_CONFIRMATION':
+        // On-chain confirmation checking and COMPLETED/FAILED finalization for this item's
+        // linked treasury sweep job is handled centrally and exclusively by
+        // sweepExecutionService.pollAndFinalizeAwaitingConfirmationJobs(), invoked once per
+        // tick at the top of processQueue() — this is the ONLY code path permitted to
+        // credit balances and mark a sweep COMPLETED (blockchain = single source of truth).
+        // This branch is purely an observability/stuck-detection safety net: if a job has
+        // been sitting here far longer than the confirmation timeout without being resolved
+        // (e.g. its linked treasurySweepJobs row was lost or already finalized out of sync),
+        // log it loudly rather than silently leaving it ambiguous forever.
+        logger.debug(`[SweepQueueProcessor] Item ${item.id} awaiting on-chain sweep confirmation. Tx: ${item.sweepTxHash || 'unknown'}`);
         break;
 
       default:
@@ -260,10 +299,16 @@ export class SweepQueueProcessor {
   }
 
   /**
-   * Helper to transition queue item states
+   * Helper to transition queue item states. Enforces the VALID_TRANSITIONS_FROM
+   * whitelist atomically at the database level (Part 3 — Fix queue state machine):
+   * the UPDATE only applies if the row's current status is one of the statuses
+   * legally allowed to transition into `status`. Illegal/unexpected jumps are
+   * rejected and logged rather than silently applied.
    */
-  private async transitionItem(itemId: string, status: string, gasStatus: string, errorMessage?: string) {
-    await db
+  private async transitionItem(itemId: string, status: string, gasStatus: string, errorMessage?: string): Promise<boolean> {
+    const allowedFromStatuses = VALID_TRANSITIONS_FROM[status] || [];
+
+    const result = await db
       .update(sweepQueue)
       .set({
         status,
@@ -271,8 +316,21 @@ export class SweepQueueProcessor {
         errorMessage: errorMessage !== undefined ? errorMessage : null,
         updatedAt: new Date()
       })
-      .where(eq(sweepQueue.id, itemId));
+      .where(
+        and(
+          eq(sweepQueue.id, itemId),
+          or(...allowedFromStatuses.map((s) => eq(sweepQueue.status, s)))
+        )
+      )
+      .returning();
+
+    if (result.length === 0) {
+      logger.warn(`[SweepQueueProcessor] Rejected illegal/stale transition for item ${itemId}: -> ${status} (current status was not in the allowed set: ${allowedFromStatuses.join(', ')})`);
+      return false;
+    }
+
     logger.info(`[SweepQueueProcessor] Item ${itemId} transitioned to ${status} (Gas: ${gasStatus})`);
+    return true;
   }
 
   /**
@@ -293,7 +351,7 @@ export class SweepQueueProcessor {
     if (item.status === 'COMPLETED' || item.status === 'CANCELLED') {
       throw new Error(`Cannot fund gas for item in status: ${item.status}`);
     }
-    if (item.status === 'SWEEPING' || item.status === 'GAS_FUNDING') {
+    if (item.status === 'SWEEPING' || item.status === 'GAS_FUNDING' || item.status === 'WAITING_SWEEP_CONFIRMATION') {
       throw new Error(`Queue item ${itemId} is already being processed (status: ${item.status}).`);
     }
 
@@ -322,6 +380,7 @@ export class SweepQueueProcessor {
           eq(sweepQueue.id, itemId),
           not(eq(sweepQueue.status, 'GAS_FUNDING')),
           not(eq(sweepQueue.status, 'SWEEPING')),
+          not(eq(sweepQueue.status, 'WAITING_SWEEP_CONFIRMATION')),
           not(eq(sweepQueue.status, 'COMPLETED')),
           not(eq(sweepQueue.status, 'CANCELLED'))
         )
@@ -395,8 +454,8 @@ export class SweepQueueProcessor {
     if (item.status === 'COMPLETED' || item.status === 'CANCELLED') {
       throw new Error(`Cannot sweep item in status: ${item.status}`);
     }
-    if (item.status === 'SWEEPING') {
-      throw new Error(`Queue item ${itemId} is already being swept.`);
+    if (item.status === 'SWEEPING' || item.status === 'WAITING_SWEEP_CONFIRMATION') {
+      throw new Error(`Queue item ${itemId} is already being swept or awaiting on-chain confirmation (status: ${item.status}).`);
     }
 
     const startTime = Date.now();
@@ -419,6 +478,7 @@ export class SweepQueueProcessor {
         and(
           eq(sweepQueue.id, itemId),
           not(eq(sweepQueue.status, 'SWEEPING')),
+          not(eq(sweepQueue.status, 'WAITING_SWEEP_CONFIRMATION')),
           not(eq(sweepQueue.status, 'COMPLETED')),
           not(eq(sweepQueue.status, 'CANCELLED'))
         )
@@ -449,17 +509,20 @@ export class SweepQueueProcessor {
 
       if (sweepResult.success && sweepResult.txHash) {
         const executionTimeMs = Date.now() - startTime;
+        // The broadcast succeeded, but the sweep is NOT complete until the blockchain
+        // confirms it — sweepExecutionService.pollAndFinalizeAwaitingConfirmationJobs()
+        // is the only path that may move this to COMPLETED, once confirmed on-chain.
         await db
           .update(sweepQueue)
           .set({
-            status: 'COMPLETED',
+            status: 'WAITING_SWEEP_CONFIRMATION',
             sweepTxHash: sweepResult.txHash,
             errorMessage: null,
             updatedAt: new Date()
           })
           .where(eq(sweepQueue.id, itemId));
 
-        logger.info(`[SweepQueueProcessor] Sweep COMPLETED: ${JSON.stringify({
+        logger.info(`[SweepQueueProcessor] Sweep BROADCASTED, awaiting on-chain confirmation: ${JSON.stringify({
           queueId: itemId,
           depositAddress: item.depositAddress,
           network: item.network,
@@ -610,14 +673,23 @@ export class SweepQueueProcessor {
     const itemRecord = await db.select().from(sweepQueue).where(eq(sweepQueue.id, itemId)).limit(1);
     if (itemRecord.length === 0) throw new Error('Queue item not found');
 
-    await db
+    if (itemRecord[0].status !== 'FAILED') {
+      throw new Error(`Cannot retry an item that is not FAILED (current status: ${itemRecord[0].status}).`);
+    }
+
+    const lockResult = await db
       .update(sweepQueue)
       .set({
         status: 'RETRY_PENDING',
         errorMessage: null,
         updatedAt: new Date()
       })
-      .where(eq(sweepQueue.id, itemId));
+      .where(and(eq(sweepQueue.id, itemId), eq(sweepQueue.status, 'FAILED')))
+      .returning();
+
+    if (lockResult.length === 0) {
+      throw new Error(`Queue item ${itemId} status changed concurrently; retry aborted.`);
+    }
 
     await auditRepository.createAuditLog({
       actorUid: adminUid,
@@ -638,17 +710,30 @@ export class SweepQueueProcessor {
     const itemRecord = await db.select().from(sweepQueue).where(eq(sweepQueue.id, itemId)).limit(1);
     if (itemRecord.length === 0) throw new Error('Queue item not found');
 
-    if (itemRecord[0].status === 'COMPLETED') {
-      throw new Error('Cannot cancel a completed sweep queue item.');
+    const currentStatus = itemRecord[0].status;
+    if (currentStatus === 'COMPLETED' || currentStatus === 'SWEEPING' || currentStatus === 'WAITING_SWEEP_CONFIRMATION') {
+      throw new Error(`Cannot cancel a sweep queue item in status ${currentStatus} — the transaction has already been (or may already be) broadcasted to the blockchain and cannot be undone.`);
     }
 
-    await db
+    const lockResult = await db
       .update(sweepQueue)
       .set({
         status: 'CANCELLED',
         updatedAt: new Date()
       })
-      .where(eq(sweepQueue.id, itemId));
+      .where(
+        and(
+          eq(sweepQueue.id, itemId),
+          not(eq(sweepQueue.status, 'COMPLETED')),
+          not(eq(sweepQueue.status, 'SWEEPING')),
+          not(eq(sweepQueue.status, 'WAITING_SWEEP_CONFIRMATION'))
+        )
+      )
+      .returning();
+
+    if (lockResult.length === 0) {
+      throw new Error(`Queue item ${itemId} status changed concurrently; cancel aborted.`);
+    }
 
     await auditRepository.createAuditLog({
       actorUid: adminUid,

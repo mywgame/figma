@@ -767,6 +767,7 @@ export class TreasuryService {
       .returning();
 
     const jobId = job[0].id;
+    let txHash: string | null = null;
 
     try {
       await db
@@ -774,46 +775,50 @@ export class TreasuryService {
         .set({ status: 'IN_PROGRESS', updatedAt: new Date() })
         .where(eq(treasurySweepJobs.id, jobId));
 
-      const txHash = await this.provider.broadcastTransaction(cleanNetwork, coldWallet.address, amount);
+      txHash = await this.provider.broadcastTransaction(cleanNetwork, coldWallet.address, amount);
 
-      await db.transaction(async (tx) => {
-        await tx
-          .update(treasurySweepJobs)
-          .set({
-            status: 'COMPLETED',
-            txHash,
-            updatedAt: new Date(),
-          })
-          .where(eq(treasurySweepJobs.id, jobId));
+      // Broadcast succeeded — the transaction is submitted, but NOT yet confirmed on-chain.
+      // Do not move any balance and do not mark COMPLETED yet.
+      await db
+        .update(treasurySweepJobs)
+        .set({
+          status: 'AWAITING_CONFIRMATION',
+          txHash,
+          errorMessage: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(treasurySweepJobs.id, jobId));
 
-        const newHotStr = (currentHotFloat - amountFloat).toFixed(8);
-        const currentColdFloat = parseFloat(treasury.coldBalance);
-        const newColdStr = (currentColdFloat + amountFloat).toFixed(8);
-
-        await tx
-          .update(treasuryWallets)
-          .set({
-            hotBalance: newHotStr,
-            coldBalance: newColdStr,
-            updatedAt: new Date(),
-          })
-          .where(eq(treasuryWallets.network, cleanNetwork));
-      });
-
-      logger.info(`[TreasuryService] Hot to Cold Sweep COMPLETED. TxHash: ${txHash}`);
+      logger.info(`[TreasuryService] Hot to Cold Sweep BROADCASTED. TxHash: ${txHash}. Awaiting on-chain confirmation.`);
 
       await auditRepository.createAuditLog({
         actorUid: adminUid,
         userId: null as any,
-        action: 'TREASURY_SWEEP_HOT_TO_COLD',
+        action: 'TREASURY_SWEEP_HOT_TO_COLD_BROADCASTED',
         resource: `treasury/jobs/${jobId}`,
         oldValue: amount,
         newValue: txHash,
       });
 
-      return { success: true, jobId, txHash };
+      return { success: true, jobId, txHash, awaitingConfirmation: true };
     } catch (err: any) {
       logger.error(`[TreasuryService] Hot to Cold Sweep FAILED:`, err.message);
+
+      if (txHash) {
+        // Broadcast itself succeeded but something after it threw. Stay in
+        // AWAITING_CONFIRMATION — the poller resolves this against real chain state.
+        await db
+          .update(treasurySweepJobs)
+          .set({
+            status: 'AWAITING_CONFIRMATION',
+            txHash,
+            errorMessage: err.message,
+            updatedAt: new Date(),
+          })
+          .where(eq(treasurySweepJobs.id, jobId));
+
+        return { success: true, jobId, txHash, awaitingConfirmation: true };
+      }
 
       await db
         .update(treasurySweepJobs)
@@ -825,6 +830,96 @@ export class TreasuryService {
         .where(eq(treasurySweepJobs.id, jobId));
 
       return { success: false, jobId, error: err.message };
+    }
+  }
+
+  /**
+   * Poll every AWAITING_CONFIRMATION HOT_TO_COLD sweep job and finalize it against real
+   * on-chain state. This is the ONLY place a HOT_TO_COLD job is ever moved to COMPLETED.
+   */
+  async pollAndFinalizeHotToColdJobs(): Promise<void> {
+    const CONFIRMATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+    const pendingJobs = await db
+      .select()
+      .from(treasurySweepJobs)
+      .where(and(eq(treasurySweepJobs.status, 'AWAITING_CONFIRMATION'), eq(treasurySweepJobs.sweepType, 'HOT_TO_COLD')));
+
+    for (const job of pendingJobs) {
+      if (!job.txHash) continue;
+
+      try {
+        const txInfo = await this.provider.getTransaction(job.network, job.txHash);
+
+        if (!txInfo) {
+          const isStuck = new Date(job.updatedAt).getTime() < Date.now() - CONFIRMATION_TIMEOUT_MS;
+          if (isStuck) {
+            await db
+              .update(treasurySweepJobs)
+              .set({ status: 'FAILED', errorMessage: 'On-chain confirmation timeout: transaction hash was never indexed.', updatedAt: new Date() })
+              .where(and(eq(treasurySweepJobs.id, job.id), eq(treasurySweepJobs.status, 'AWAITING_CONFIRMATION')));
+            logger.error(`[TreasuryService] Hot to Cold sweep job ${job.id} timed out awaiting on-chain confirmation.`);
+          }
+          continue;
+        }
+
+        if (!txInfo.isSuccessful) {
+          await db
+            .update(treasurySweepJobs)
+            .set({ status: 'FAILED', errorMessage: 'Transaction was reverted/failed on-chain.', updatedAt: new Date() })
+            .where(and(eq(treasurySweepJobs.id, job.id), eq(treasurySweepJobs.status, 'AWAITING_CONFIRMATION')));
+          logger.error(`[TreasuryService] Hot to Cold sweep job ${job.id} FAILED on-chain.`);
+          continue;
+        }
+
+        const requiredConfirmations =
+          blockchainConfig.networks[job.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
+
+        if ((txInfo.confirmations || 0) < requiredConfirmations) {
+          logger.info(
+            `[TreasuryService] Hot to Cold sweep job ${job.id} has ${txInfo.confirmations}/${requiredConfirmations} confirmations. Awaiting additional blocks...`
+          );
+          continue;
+        }
+
+        const amountFloat = parseFloat(job.amount);
+        await db.transaction(async (tx) => {
+          await tx
+            .update(treasurySweepJobs)
+            .set({ status: 'COMPLETED', errorMessage: null, updatedAt: new Date() })
+            .where(and(eq(treasurySweepJobs.id, job.id), eq(treasurySweepJobs.status, 'AWAITING_CONFIRMATION')));
+
+          const twRecord = await tx
+            .select()
+            .from(treasuryWallets)
+            .where(eq(treasuryWallets.network, job.network))
+            .limit(1);
+
+          if (twRecord.length > 0) {
+            const currentHotFloat = parseFloat(twRecord[0].hotBalance || '0');
+            const currentColdFloat = parseFloat(twRecord[0].coldBalance || '0');
+            const newHotStr = (currentHotFloat - amountFloat).toFixed(8);
+            const newColdStr = (currentColdFloat + amountFloat).toFixed(8);
+            await tx
+              .update(treasuryWallets)
+              .set({ hotBalance: newHotStr, coldBalance: newColdStr, updatedAt: new Date() })
+              .where(eq(treasuryWallets.network, job.network));
+          }
+        });
+
+        logger.info(`[TreasuryService] Hot to Cold sweep job ${job.id} CONFIRMED on-chain and COMPLETED. TxHash: ${job.txHash}`);
+
+        await auditRepository.createAuditLog({
+          actorUid: 'SYSTEM',
+          userId: null as any,
+          action: 'TREASURY_SWEEP_HOT_TO_COLD_CONFIRMED',
+          resource: `treasury/jobs/${job.id}`,
+          oldValue: job.amount,
+          newValue: job.txHash,
+        });
+      } catch (err: any) {
+        logger.error(`[TreasuryService] Error polling confirmation for Hot to Cold sweep job ${job.id}:`, err.message);
+      }
     }
   }
 
@@ -861,76 +956,33 @@ export class TreasuryService {
     try {
       const txHash = await this.provider.broadcastTransaction(job.network, job.destinationAddress, job.amount);
 
-      await db.transaction(async (tx) => {
-        await tx
-          .update(treasurySweepJobs)
-          .set({
-            status: 'COMPLETED',
-            txHash,
-            updatedAt: new Date(),
-          })
-          .where(eq(treasurySweepJobs.id, jobId));
+      // Broadcast succeeded — do NOT credit any balance and do NOT mark COMPLETED yet.
+      // This job now sits in AWAITING_CONFIRMATION and is picked up by the appropriate
+      // poller (SweepExecutionService.pollAndFinalizeAwaitingConfirmationJobs() for
+      // USER_TO_HOT, or this.pollAndFinalizeHotToColdJobs() for HOT_TO_COLD) once the
+      // blockchain actually confirms it.
+      await db
+        .update(treasurySweepJobs)
+        .set({
+          status: 'AWAITING_CONFIRMATION',
+          txHash,
+          errorMessage: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(treasurySweepJobs.id, jobId));
 
-        const amountFloat = parseFloat(job.amount);
-        const treasury = await this.getOrCreateTreasuryWallet(job.network);
-
-        if (job.sweepType === 'USER_TO_HOT') {
-          const addrRecord = await tx
-            .select()
-            .from(depositAddresses)
-            .where(
-              and(
-                eq(depositAddresses.address, job.sourceAddress),
-                eq(depositAddresses.network, job.network)
-              )
-            )
-            .limit(1);
-
-          if (addrRecord.length > 0) {
-            await tx
-              .update(depositAddresses)
-              .set({
-                onChainBalance: '0.00000000',
-                updatedAt: new Date(),
-              })
-              .where(eq(depositAddresses.id, addrRecord[0].id));
-          }
-
-          const newHotStr = (parseFloat(treasury.hotBalance) + amountFloat).toFixed(8);
-          await tx
-            .update(treasuryWallets)
-            .set({
-              hotBalance: newHotStr,
-              updatedAt: new Date(),
-            })
-            .where(eq(treasuryWallets.network, job.network));
-        } else if (job.sweepType === 'HOT_TO_COLD') {
-          const newHotStr = (parseFloat(treasury.hotBalance) - amountFloat).toFixed(8);
-          const newColdStr = (parseFloat(treasury.coldBalance) + amountFloat).toFixed(8);
-
-          await tx
-            .update(treasuryWallets)
-            .set({
-              hotBalance: newHotStr,
-              coldBalance: newColdStr,
-              updatedAt: new Date(),
-            })
-            .where(eq(treasuryWallets.network, job.network));
-        }
-      });
-
-      logger.info(`[TreasuryService] Retry for job ${jobId} completed successfully! TxHash: ${txHash}`);
+      logger.info(`[TreasuryService] Retry for job ${jobId} broadcasted successfully. TxHash: ${txHash}. Awaiting on-chain confirmation.`);
 
       await auditRepository.createAuditLog({
         actorUid: adminUid,
         userId: null as any,
-        action: 'TREASURY_SWEEP_RETRY_SUCCESS',
+        action: 'TREASURY_SWEEP_RETRY_BROADCASTED',
         resource: `treasury/jobs/${jobId}`,
         oldValue: job.attempts.toString(),
         newValue: txHash,
       });
 
-      return { success: true, txHash };
+      return { success: true, txHash, awaitingConfirmation: true };
     } catch (err: any) {
       logger.error(`[TreasuryService] Retry for job ${jobId} failed:`, err.message);
 
