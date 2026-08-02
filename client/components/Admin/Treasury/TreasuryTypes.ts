@@ -11,12 +11,15 @@ export interface SweepJob {
   sourceAddress: string;
   destinationAddress: string;
   sweepType: 'USER_TO_HOT' | 'HOT_TO_COLD';
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'AWAITING_CONFIRMATION';
   amount: string;
   txHash: string | null;
   errorMessage: string | null;
   attempts: number;
   createdAt: string;
+  dsUserId?: string | null;
+  userName?: string | null;
+  userEmail?: string | null;
 }
 
 export interface DepositAddress {
@@ -25,6 +28,9 @@ export interface DepositAddress {
   network: string;
   address: string;
   onChainBalance: string;
+  dsUserId?: string | null;
+  userName?: string | null;
+  userEmail?: string | null;
 }
 
 export interface SweepQueueItem {

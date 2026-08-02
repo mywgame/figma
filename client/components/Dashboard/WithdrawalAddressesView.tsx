@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth.ts';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { Wallet, Plus, Pencil, Trash2, BadgeCheck, CheckCircle, AlertTriangle, Key, RotateCw } from 'lucide-react';
 import { SecurityVerification } from '../Auth/SecurityVerification/SecurityVerification.tsx';
+import { getApiUrl } from '../../services/apiConfig.ts';
 
 type WithdrawalNetwork = 'USDT_BEP20' | 'USDT_POLYGON' | 'USDT_TRC20';
 
@@ -61,7 +62,7 @@ export const WithdrawalAddressesView: React.FC = () => {
   const fetchWithdrawalAddresses = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/users/security/withdrawal-addresses', {
+      const res = await fetch(getApiUrl('/users/security/withdrawal-addresses'), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -81,7 +82,7 @@ export const WithdrawalAddressesView: React.FC = () => {
     setFeedbackSuccess('');
     setFeedbackError('');
     try {
-      const res = await fetch('/api/v1/users/security/withdrawal-addresses', {
+      const res = await fetch(getApiUrl('/users/security/withdrawal-addresses'), {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

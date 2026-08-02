@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth.ts';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { Fingerprint, ShieldCheck, Key, AlertTriangle, CheckCircle, Smartphone } from 'lucide-react';
 import { Mfa } from '../Auth/Mfa/Mfa.tsx';
+import { getApiUrl } from '../../services/apiConfig.ts';
 
 export const TwoFactorView: React.FC = () => {
   const { user, token, syncProfile } = useAuth();
@@ -23,7 +24,7 @@ export const TwoFactorView: React.FC = () => {
 
   const fetchSecuritySummary = async () => {
     try {
-      const res = await fetch('/api/v1/users/security/summary', {
+      const res = await fetch(getApiUrl('/users/security/summary'), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {

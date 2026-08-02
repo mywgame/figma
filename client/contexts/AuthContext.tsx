@@ -5,6 +5,7 @@
 
 import React, { createContext, useState, useEffect } from 'react';
 import { User, ApiResponse } from '../../shared/types/index.ts';
+import { getApiUrl } from '../services/apiConfig.ts';
 
 export interface AuthContextType {
   user: User | null;
@@ -58,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const syncProfile = async () => {
     if (!token) return;
     try {
-      const response = await fetch('/api/v1/users/profile', {
+      const response = await fetch(getApiUrl('/users/profile'), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -104,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (isRegister) {
         // Step A: Register the user with referral code and additional fields
-        const registerResponse = await fetch('/api/v1/auth/register', {
+        const registerResponse = await fetch(getApiUrl('/auth/register'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -127,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Step B: Authenticate the user to retrieve real JWT
-      let loginResponse = await fetch('/api/v1/auth/login', {
+      let loginResponse = await fetch(getApiUrl('/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -141,7 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // If login failed, and we did not explicitly request registration, AND password was omitted (i.e. developer sync/simulation)
       if (!loginResponse.ok && !isRegister && !password) {
         console.log('Sync login failed. Attempting automatic user registration (upsert)...');
-        const registerResponse = await fetch('/api/v1/auth/register', {
+        const registerResponse = await fetch(getApiUrl('/auth/register'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -158,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (registerResponse.ok) {
           // Retry login
-          loginResponse = await fetch('/api/v1/auth/login', {
+          loginResponse = await fetch(getApiUrl('/auth/login'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -226,7 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/auth/verify-otp', {
+      const response = await fetch(getApiUrl('/auth/verify-otp'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

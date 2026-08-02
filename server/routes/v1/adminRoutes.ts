@@ -56,29 +56,6 @@ router.patch(
 );
 
 /**
- * @route GET /api/v1/admin/users/:targetUid/deposit-address-history
- * @desc Get the full (active + archived) deposit address history for a user on a network
- */
-router.get(
-  '/users/:targetUid/deposit-address-history',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.getUserDepositAddressHistory
-);
-
-/**
- * @route POST /api/v1/admin/users/:targetUid/rotate-deposit-address
- * @desc Rotate a user's deposit address on a given network (generates a fresh HD wallet
- *       address and archives the previous one — never deleted).
- */
-router.post(
-  '/users/:targetUid/rotate-deposit-address',
-  requireAuth,
-  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
-  adminController.rotateUserDepositAddress
-);
-
-/**
  * @route POST /api/v1/admin/users/:targetUid/wallet-adjustment
  * @desc Adjust user wallet balances atomically
  */

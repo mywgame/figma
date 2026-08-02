@@ -108,7 +108,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth, onNavigateToSection }) =
             custom={0.55}
             className="mt-6 max-w-2xl text-base sm:text-lg text-ink-300 font-sans leading-relaxed text-left"
           >
-            MetaFirm deploys growth capital into virtual GPU farms and solar energy platforms — two currents feeding the same grid — turning founder-built infrastructure into compounding returns for our partners. Securely deposit capital, audit real-time reserve balances, and access passive reward structures.
+            MetaFirm deploys growth capital into virtual GPU farms, solar energy platforms, and funded prop trading firms — three currents feeding the same ecosystem — turning founder-built infrastructure and quantitative desks into compounding returns for our partners. Securely deposit capital, audit real-time reserve balances, and access passive reward structures.
           </motion.p>
 
           {/* Action Button CTAs */}

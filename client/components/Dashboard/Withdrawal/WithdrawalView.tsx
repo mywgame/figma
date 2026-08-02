@@ -11,6 +11,7 @@ import { DashboardLayout } from '../Layout/DashboardLayout.tsx';
 import { Input } from '../../ui/Inputs/index.tsx';
 import { Button } from '../../ui/Buttons/index.tsx';
 import { WithdrawalSuccessModal } from './WithdrawalSuccessModal.tsx';
+import { getApiUrl } from '../../../services/apiConfig.ts';
 
 interface WithdrawalViewProps {
   showToast: (msg: string) => void;
@@ -44,7 +45,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
     if (!token) return;
     setLoadingAddresses(true);
     try {
-      const res = await fetch('/api/v1/users/security/withdrawal-addresses', {
+      const res = await fetch(getApiUrl('/users/security/withdrawal-addresses'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -64,7 +65,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
     if (!token) return;
     setLoadingHistory(true);
     try {
-      const res = await fetch('/api/v1/users/withdrawals', {
+      const res = await fetch(getApiUrl('/users/withdrawals'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -95,7 +96,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
     setIsSendingOtp(true);
     setDebugOtp(null);
     try {
-      const res = await fetch('/api/v1/users/withdrawals/send-otp', {
+      const res = await fetch(getApiUrl('/users/withdrawals/send-otp'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +143,7 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
     }
 
     try {
-      const res = await fetch('/api/v1/users/withdrawals/request', {
+      const res = await fetch(getApiUrl('/users/withdrawals/request'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

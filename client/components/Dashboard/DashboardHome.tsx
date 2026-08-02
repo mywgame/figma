@@ -18,6 +18,7 @@ import { IncomeStatCard } from './IncomeStatCard.tsx';
 import { MonthlyEarningsChart } from './MonthlyEarningsChart.tsx';
 import { NetworkLevels } from './NetworkLevels.tsx';
 import { RecentActivity } from './RecentActivity.tsx';
+import { DownloadAppsSection } from './DownloadAppsSection.tsx';
 
 const VIP_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   VIP1: { label: 'VIP1', color: '#94a3b8', bg: 'from-slate-400/30 to-slate-500/30', icon: '🥈' },
@@ -238,6 +239,11 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
         {/* 6. Announcements (preserved from earlier phase; no figma equivalent) */}
         <div className="w-full" id="announcements-container">
           <Announcements />
+        </div>
+
+        {/* 7. Download Apps Placeholders (Android APK, iOS, Chrome WebApp) */}
+        <div className="w-full" id="download-apps-container">
+          <DownloadAppsSection />
         </div>
 
       </div>

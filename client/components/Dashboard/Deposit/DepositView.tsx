@@ -12,6 +12,7 @@ import { DashboardData } from '../../../types/index.ts';
 import QRCode from 'qrcode';
 
 import { api } from '../../../services/api.ts';
+import { getApiUrl } from '../../../services/apiConfig.ts';
 
 interface DepositViewProps {
   dashboardData: DashboardData | null;
@@ -97,7 +98,7 @@ export const DepositView: React.FC<DepositViewProps> = ({
     setGeneratingAddress(true);
     setAddressGenError('');
     try {
-      const res = await fetch('/api/v1/users/deposits/address', {
+      const res = await fetch(getApiUrl('/users/deposits/address'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -146,7 +147,7 @@ export const DepositView: React.FC<DepositViewProps> = ({
     setVerifySuccess('');
 
     try {
-      const res = await fetch('/api/v1/users/deposits/verify', {
+      const res = await fetch(getApiUrl('/users/deposits/verify'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

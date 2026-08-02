@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 import { Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { Input, Button } from '../../ui/index.ts';
 import { COUNTRIES, COUNTRY_DATA } from '../Shared/countries.ts';
+import { getApiUrl } from '../../../services/apiConfig.ts';
 
 export function getPendingReferralCode(): string {
   try {
@@ -153,7 +154,7 @@ export const Register: React.FC<RegisterProps> = ({
     setBusy(true);
     try {
       const fullPhone = `${countryCode} ${mobileNumber.trim()}`;
-      const response = await fetch('/api/v1/auth/register', {
+      const response = await fetch(getApiUrl('/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

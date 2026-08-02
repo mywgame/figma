@@ -5,7 +5,7 @@
 
 import { eq, sql, and, desc } from 'drizzle-orm';
 import { db } from '../../../src/db/index.ts';
-import { treasuryWallets, treasurySweepJobs, depositAddresses } from '../../../src/db/schema.ts';
+import { treasuryWallets, treasurySweepJobs, depositAddresses, users } from '../../../src/db/schema.ts';
 import { activeBlockchainProvider } from '../providers/index.ts';
 import { logger } from '../../utils/logger.ts';
 import { auditRepository } from '../../repositories/auditRepository.ts';
@@ -609,8 +609,20 @@ export class TreasuryService {
 
     // Fetch user deposit addresses with on-chain balances
     const addresses = await db
-      .select()
+      .select({
+        id: depositAddresses.id,
+        userId: depositAddresses.userId,
+        network: depositAddresses.network,
+        address: depositAddresses.address,
+        onChainBalance: depositAddresses.onChainBalance,
+        isActive: (depositAddresses as any).isActive,
+        createdAt: depositAddresses.createdAt,
+        dsUserId: users.userId,
+        userName: users.name,
+        userEmail: users.email,
+      })
       .from(depositAddresses)
+      .leftJoin(users, eq(depositAddresses.userId, users.id))
       .where(eq(depositAddresses.network, cleanNetwork))
       .orderBy(desc(depositAddresses.createdAt));
 
@@ -1069,17 +1081,37 @@ export class TreasuryService {
   }
 
   /**
-   * Get list of all sweep jobs
+   * Get list of all sweep jobs with user details
    */
   async getSweepJobs(network?: string) {
-    const query = db.select().from(treasurySweepJobs);
+    let q = db
+      .select({
+        id: treasurySweepJobs.id,
+        network: treasurySweepJobs.network,
+        sourceAddress: treasurySweepJobs.sourceAddress,
+        destinationAddress: treasurySweepJobs.destinationAddress,
+        sweepType: treasurySweepJobs.sweepType,
+        amount: treasurySweepJobs.amount,
+        txHash: treasurySweepJobs.txHash,
+        status: treasurySweepJobs.status,
+        errorMessage: treasurySweepJobs.errorMessage,
+        attempts: treasurySweepJobs.attempts,
+        createdAt: treasurySweepJobs.createdAt,
+        updatedAt: treasurySweepJobs.updatedAt,
+        dsUserId: users.userId,
+        userName: users.name,
+        userEmail: users.email,
+      })
+      .from(treasurySweepJobs)
+      .leftJoin(depositAddresses, eq(treasurySweepJobs.sourceAddress, depositAddresses.address))
+      .leftJoin(users, eq(depositAddresses.userId, users.id));
 
     if (network) {
       const cleanNetwork = network.toUpperCase();
-      return query.where(eq(treasurySweepJobs.network, cleanNetwork)).orderBy(desc(treasurySweepJobs.createdAt));
+      return q.where(eq(treasurySweepJobs.network, cleanNetwork)).orderBy(desc(treasurySweepJobs.createdAt));
     }
 
-    return query.orderBy(desc(treasurySweepJobs.createdAt));
+    return q.orderBy(desc(treasurySweepJobs.createdAt));
   }
 }
 

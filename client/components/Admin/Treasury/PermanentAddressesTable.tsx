@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { UserCheck, Copy } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { Card, Badge } from '../../ui/index.ts';
 import { DepositAddress, TreasuryComponentProps } from './TreasuryTypes.ts';
 
@@ -13,6 +13,11 @@ interface PermanentAddressesTableProps extends TreasuryComponentProps {
   handleSweepAddress: (id: string) => void;
   sweepingAddressId: string | null;
 }
+
+const formatBalance = (rawAmount: string | number | undefined): string => {
+  const value = parseFloat(String(rawAmount ?? '0'));
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 export const PermanentAddressesTable: React.FC<PermanentAddressesTableProps> = ({
   depositAddresses,
@@ -47,7 +52,7 @@ export const PermanentAddressesTable: React.FC<PermanentAddressesTableProps> = (
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-900/20 text-[10px] font-mono tracking-wider uppercase text-gray-400 border-b border-gray-200/10">
-              <th className="py-2.5 px-4">User Ref</th>
+              <th className="py-2.5 px-4">User</th>
               <th className="py-2.5 px-4">Deposit Address</th>
               <th className="py-2.5 px-4 text-right">Balance Rest (On-Chain)</th>
               <th className="py-2.5 px-4 text-center">Actions</th>
@@ -62,14 +67,21 @@ export const PermanentAddressesTable: React.FC<PermanentAddressesTableProps> = (
               </tr>
             ) : (
               depositAddresses.map((addr) => {
-                const balFloat = parseFloat(addr.onChainBalance);
+                const balFloat = parseFloat(addr.onChainBalance || '0');
                 return (
                   <tr key={addr.id} className="hover:bg-slate-900/10">
-                    <td className="py-2.5 px-4 text-gray-300 font-medium">
-                      <span className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="text-[11px]">{addr.userId.slice(0, 8)}...</span>
-                      </span>
+                    <td className="py-2.5 px-4">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] text-blue-400 font-semibold font-mono">
+                          {addr.dsUserId || 'N/A'}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-200" title={addr.userName || ''}>
+                          {addr.userName || 'N/A'}
+                        </span>
+                        <span className="text-[9px] text-gray-400 truncate max-w-[140px]" title={addr.userEmail || ''}>
+                          {addr.userEmail || 'N/A'}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-2.5 px-4 text-gray-400">
                       <div className="flex items-center gap-1.5">
@@ -83,7 +95,7 @@ export const PermanentAddressesTable: React.FC<PermanentAddressesTableProps> = (
                       </div>
                     </td>
                     <td className="py-2.5 px-4 text-right font-bold text-slate-100">
-                      {balFloat.toFixed(4)} USDT
+                      {formatBalance(addr.onChainBalance)}
                     </td>
                     <td className="py-2.5 px-4 text-center">
                       <button

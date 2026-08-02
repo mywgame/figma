@@ -4,10 +4,9 @@
  */
 
 import { ApiResponse } from '../../shared/types/index.ts';
+import { getApiUrl } from './apiConfig.ts';
 
 class ApiService {
-  private baseUrl = '/api/v1';
-
   /**
    * Helper to retrieve auth token on demand
    */
@@ -34,7 +33,7 @@ class ApiService {
     };
 
     try {
-      const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+      const url = getApiUrl(endpoint);
       const response = await fetch(url, {
         ...options,
         headers,

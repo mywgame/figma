@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { Input } from '../../ui/index.ts';
+import { getApiUrl } from '../../../services/apiConfig.ts';
 
 interface SecurityVerificationProps {
   token: string;
@@ -56,7 +57,7 @@ export const SecurityVerification: React.FC<SecurityVerificationProps> = ({
     setOtpError('');
     setOtpSuccess('');
     try {
-      const res = await fetch('/api/v1/users/security/withdrawal-addresses/send-otp', {
+      const res = await fetch(getApiUrl('/users/security/withdrawal-addresses/send-otp'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -85,7 +86,7 @@ export const SecurityVerification: React.FC<SecurityVerificationProps> = ({
     setOtpError('');
     setOtpSuccess('');
     try {
-      const res = await fetch('/api/v1/users/security/withdrawal-addresses', {
+      const res = await fetch(getApiUrl('/users/security/withdrawal-addresses'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../../hooks/useAuth.ts';
 import { Input } from '../../ui/index.ts';
+import { getApiUrl } from '../../../services/apiConfig.ts';
 
 interface MfaProps {
   token?: string;
@@ -43,7 +44,7 @@ export const Mfa: React.FC<MfaProps> = ({
     setMfaMsgSuccess('');
     setMfaMsgError('');
     try {
-      const res = await fetch('/api/v1/users/security/mfa/setup', {
+      const res = await fetch(getApiUrl('/users/security/mfa/setup'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       const body = await res.json();
@@ -68,7 +69,7 @@ export const Mfa: React.FC<MfaProps> = ({
     setMfaMsgSuccess('');
     setMfaMsgError('');
     try {
-      const res = await fetch('/api/v1/users/security/mfa/enable', {
+      const res = await fetch(getApiUrl('/users/security/mfa/enable'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,7 +104,7 @@ export const Mfa: React.FC<MfaProps> = ({
     setMfaMsgSuccess('');
     setMfaMsgError('');
     try {
-      const res = await fetch('/api/v1/users/security/mfa/disable', {
+      const res = await fetch(getApiUrl('/users/security/mfa/disable'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

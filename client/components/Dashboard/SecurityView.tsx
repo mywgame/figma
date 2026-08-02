@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Mfa } from '../Auth/Mfa/Mfa.tsx';
 import { SecurityVerification } from '../Auth/SecurityVerification/SecurityVerification.tsx';
+import { getApiUrl } from '../../services/apiConfig.ts';
 
 interface UserSession {
   id: string;
@@ -120,7 +121,7 @@ export const SecurityView: React.FC = () => {
 
   const fetchWithdrawalAddresses = async () => {
     try {
-      const res = await fetch('/api/v1/users/security/withdrawal-addresses', {
+      const res = await fetch(getApiUrl('/users/security/withdrawal-addresses'), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -147,7 +148,7 @@ export const SecurityView: React.FC = () => {
 
   const fetchSecuritySummary = async () => {
     try {
-      const res = await fetch('/api/v1/users/security/summary', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(getApiUrl('/users/security/summary'), { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const body = await res.json();
         if (body.success) {
@@ -163,7 +164,7 @@ export const SecurityView: React.FC = () => {
   const fetchSessionsList = async () => {
     setSessionsLoading(true);
     try {
-      const res = await fetch('/api/v1/users/security/sessions', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(getApiUrl('/users/security/sessions'), { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const body = await res.json();
         if (body.success) setSessions(body.data || []);
@@ -188,7 +189,7 @@ export const SecurityView: React.FC = () => {
     }
 
     try {
-      const res = await fetch('/api/v1/users/security/change-password', {
+      const res = await fetch(getApiUrl('/users/security/change-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
@@ -217,7 +218,7 @@ export const SecurityView: React.FC = () => {
     setEmailError('');
 
     try {
-      const res = await fetch('/api/v1/users/security/change-email', {
+      const res = await fetch(getApiUrl('/users/security/change-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ currentPassword: emailPassword, newEmail }),
@@ -243,7 +244,7 @@ export const SecurityView: React.FC = () => {
     setSessionsError('');
 
     try {
-      const res = await fetch('/api/v1/users/security/sessions/logout-all-others', {
+      const res = await fetch(getApiUrl('/users/security/sessions/logout-all-others'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ refreshToken: localStorage.getItem('metafirm_token') }),

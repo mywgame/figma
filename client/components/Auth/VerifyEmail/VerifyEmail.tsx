@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 import { RefreshCw, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth.ts';
 import { Button } from '../../ui/index.ts';
+import { getApiUrl } from '../../../services/apiConfig.ts';
 
 interface VerifyEmailProps {
   email: string;
@@ -66,7 +67,7 @@ export const VerifyEmail: React.FC<VerifyEmailProps> = ({
     onSuccessMsg(null);
 
     try {
-      const response = await fetch('/api/v1/auth/resend-otp', {
+      const response = await fetch(getApiUrl('/auth/resend-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

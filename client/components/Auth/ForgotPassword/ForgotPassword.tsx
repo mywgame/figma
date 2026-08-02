@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Input, Button } from '../../ui/index.ts';
 import { ArrowRight } from 'lucide-react';
+import { getApiUrl } from '../../../services/apiConfig.ts';
 
 interface ForgotPasswordProps {
   initialEmail?: string;
@@ -44,7 +45,7 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
 
     setBusy(true);
     try {
-      const response = await fetch('/api/v1/auth/forgot-password', {
+      const response = await fetch(getApiUrl('/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail.trim() }),

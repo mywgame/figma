@@ -45,10 +45,10 @@ export const Contact: React.FC = () => {
                 Establish Connection
               </span>
               <h2 className="text-3xl sm:text-4xl font-display font-extrabold text-white tracking-tight leading-tight">
-                Building a GPU farm or a solar platform?
+                Building a GPU farm, solar platform, or crypto prop firm?
               </h2>
               <p className="text-sm sm:text-base text-ink-300 leading-relaxed font-sans">
-                Tell us about your utilization numbers, your interconnection queue position, or your PPA pipeline — not your pitch deck. Our operators are standing by 24/7.
+                Tell us about your utilization numbers, interconnection queue, PPA pipeline, or algorithmic trading track record — not your pitch deck. Our operators are standing by 24/7.
               </p>
             </div>
 

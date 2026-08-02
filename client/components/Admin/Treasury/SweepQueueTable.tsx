@@ -163,15 +163,13 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                     </td>
                     <td className="py-2.5 px-3">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-slate-200" title={item.userEmail}>
-                          {item.userEmail}
+                        <span className="text-[9px] text-blue-400 font-semibold font-mono">{item.dsUserId || 'N/A'}</span>
+                        <span className="text-[10px] font-bold text-slate-200" title={item.userName || ''}>
+                          {item.userName || 'N/A'}
                         </span>
-                        <span className="text-[9px] text-blue-400 font-semibold">{item.dsUserId}</span>
-                        {item.userName && (
-                          <span className="text-[9px] text-gray-500 truncate max-w-[130px]" title={item.userName}>
-                            {item.userName}
-                          </span>
-                        )}
+                        <span className="text-[9px] text-gray-400 truncate max-w-[130px]" title={item.userEmail || ''}>
+                          {item.userEmail || 'N/A'}
+                        </span>
                       </div>
                     </td>
                     <td className="py-2.5 px-3 text-gray-400">
