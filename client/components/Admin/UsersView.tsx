@@ -30,7 +30,9 @@ import {
   FileDown,
   ChevronDown,
   ShieldAlert,
-  Inbox
+  Inbox,
+  Copy,
+  RefreshCw
 } from 'lucide-react';
 import { Card, Button, Input, Select, Badge, Avatar, Toast, Textarea } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
@@ -62,6 +64,13 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
   const [modalWithdrawals, setModalWithdrawals] = useState<any[]>([]);
   const [modalAudits, setModalAudits] = useState<any[]>([]);
   const [modalTeam, setModalTeam] = useState<any[]>([]);
+
+  // Deposit Address Rotation / History States
+  const [rotateConfirmNetwork, setRotateConfirmNetwork] = useState<string | null>(null);
+  const [rotatingNetwork, setRotatingNetwork] = useState<string | null>(null);
+  const [historyNetwork, setHistoryNetwork] = useState<string | null>(null);
+  const [addressHistory, setAddressHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
 
   // Interactive Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -269,6 +278,52 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
       triggerToast(err.message || 'Error occurred while loading member resources.', 'error');
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  // Copy a deposit/withdrawal address to clipboard
+  const handleCopyAddress = (address: string) => {
+    navigator.clipboard.writeText(address);
+    triggerToast('Address copied to clipboard.', 'success');
+  };
+
+  // Execute the actual rotation after the admin confirms in the dialog
+  const handleConfirmRotate = async (network: string) => {
+    if (!activeActionUser) return;
+    setRotatingNetwork(network);
+    try {
+      const res = await api.rotateUserDepositAddress(activeActionUser.id, network);
+      if (res.success) {
+        triggerToast('✓ Deposit address rotated successfully.', 'success');
+        setRotateConfirmNetwork(null);
+        // Refresh the modal automatically with the new active address
+        await openActionModal(activeActionUser, 'view_profile');
+      } else {
+        triggerToast(res.error?.message || 'Failed to rotate deposit address.', 'error');
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Error occurred while rotating deposit address.', 'error');
+    } finally {
+      setRotatingNetwork(null);
+    }
+  };
+
+  // Fetch and open the full address history modal for a network
+  const handleViewHistory = async (network: string) => {
+    if (!activeActionUser) return;
+    setHistoryNetwork(network);
+    setLoadingHistory(true);
+    try {
+      const res = await api.getUserDepositAddressHistory(activeActionUser.id, network);
+      if (res.success && res.data) {
+        setAddressHistory(res.data);
+      } else {
+        triggerToast(res.error?.message || 'Failed to fetch address history.', 'error');
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Error occurred while loading address history.', 'error');
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -862,7 +917,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
                   <div>
                     <h4 className="text-base font-extrabold">{profileDetail.name}</h4>
                     <p className={`text-xs ${t.textMuted}`}>{profileDetail.email}</p>
-                    <p className={`text-xs font-mono font-medium ${t.textMuted} mt-0.5`}>UID: {profileDetail.id}</p>
+                    <p className={`text-xs font-mono font-medium ${t.textMuted} mt-0.5`}>User ID: {profileDetail.userId}</p>
                   </div>
                 </div>
 
@@ -940,6 +995,73 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
                     </div>
                   </div>
                 )}
+
+                {/* Blockchain Deposit Wallets */}
+                <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 space-y-3">
+                  <p className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest">
+                    Blockchain Deposit Wallets
+                  </p>
+                  {['USDT_BEP20', 'USDT_POLYGON', 'USDT_TRC20'].map((network) => {
+                    const addr = profileDetail.depositAddresses?.find((a: any) => a.network === network);
+                    return (
+                      <div key={network} className="p-2.5 rounded-xl bg-white dark:bg-white/5 border border-gray-100 dark:border-white/10 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-blue-500">{network}</span>
+                          <button
+                            onClick={() => handleViewHistory(network)}
+                            className="text-[9px] font-semibold text-gray-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
+                          >
+                            <History className="w-3 h-3" /> View Address History
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-gray-400 uppercase">Deposit Address</p>
+                        {addr ? (
+                          <>
+                            <p className="text-[11px] font-mono font-semibold break-all text-gray-900 dark:text-white">{addr.address}</p>
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                onClick={() => handleCopyAddress(addr.address)}
+                                className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 cursor-pointer"
+                              >
+                                <Copy className="w-3 h-3" /> Copy
+                              </button>
+                              <button
+                                onClick={() => setRotateConfirmNetwork(network)}
+                                disabled={rotatingNetwork === network}
+                                className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 disabled:opacity-50 cursor-pointer"
+                              >
+                                <RefreshCw className={`w-3 h-3 ${rotatingNetwork === network ? 'animate-spin' : ''}`} />
+                                {rotatingNetwork === network ? 'Rotating...' : 'Rotate'}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-[10px] text-gray-400 italic">No deposit address generated yet.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Withdrawal Destination */}
+                <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 space-y-2.5">
+                  <p className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest">
+                    Withdrawal Destination
+                  </p>
+                  <div className="space-y-1">
+                    {['USDT_BEP20', 'USDT_POLYGON', 'USDT_TRC20'].map((network) => {
+                      const addrs: string[] = profileDetail.withdrawalAddresses?.[network] || [];
+                      return (
+                        <div key={network} className="flex items-start justify-between text-[11px] py-1 border-b border-gray-100 dark:border-white/5">
+                          <span className="text-gray-400 font-bold">{network}</span>
+                          <span className="font-mono font-semibold text-right text-gray-900 dark:text-white break-all max-w-[60%]">
+                            {addrs.length > 0 ? addrs.join(', ') : 'Not configured'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             ) : null}
 
@@ -951,6 +1073,119 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
                 Dismiss Card
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ROTATE DEPOSIT ADDRESS — CONFIRMATION DIALOG */}
+      {rotateConfirmNetwork && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-[60] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0"
+            onClick={() => { if (rotatingNetwork !== rotateConfirmNetwork) setRotateConfirmNetwork(null); }}
+          />
+          <div className="rounded-2xl border p-6 shadow-2xl max-w-sm w-full relative z-10 text-left space-y-4 bg-white dark:bg-[#0f112e] border-gray-200 dark:border-white/10">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-amber-500" />
+              Rotate Deposit Address
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+              Generate a brand-new deposit address for this user?
+              <br /><br />
+              The previous deposit address will become inactive.
+              Future deposits must be sent only to the new address.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                onClick={() => setRotateConfirmNetwork(null)}
+                disabled={rotatingNetwork === rotateConfirmNetwork}
+                variant="secondary"
+                className="flex-1 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleConfirmRotate(rotateConfirmNetwork)}
+                disabled={rotatingNetwork === rotateConfirmNetwork}
+                variant="primary"
+                className="flex-1 text-xs"
+              >
+                {rotatingNetwork === rotateConfirmNetwork ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Generating...
+                  </span>
+                ) : (
+                  'Generate New Address'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW ADDRESS HISTORY MODAL */}
+      {historyNetwork && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0" onClick={() => { setHistoryNetwork(null); setAddressHistory([]); }} />
+          <div className="rounded-2xl border p-6 shadow-2xl max-w-lg w-full relative z-10 text-left space-y-4 bg-white dark:bg-[#0f112e] border-gray-200 dark:border-white/10 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <History className="w-4 h-4 text-blue-500" />
+                Address History — {historyNetwork}
+              </h3>
+              <button
+                onClick={() => { setHistoryNetwork(null); setAddressHistory([]); }}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div className="py-10 text-center flex flex-col items-center justify-center space-y-2">
+                <span className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-gray-400">Loading address history...</p>
+              </div>
+            ) : addressHistory.length === 0 ? (
+              <p className="text-xs text-gray-400 italic py-6 text-center">No address history found.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {addressHistory.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={`p-3 rounded-xl border space-y-1.5 ${
+                      entry.isActive
+                        ? 'bg-emerald-500/5 border-emerald-500/30'
+                        : 'bg-gray-50 dark:bg-white/5 border-gray-100 dark:border-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                        entry.isActive ? 'bg-emerald-500/15 text-emerald-500' : 'bg-gray-400/15 text-gray-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${entry.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                        {entry.isActive ? 'Active' : 'Archived'}
+                      </span>
+                      <button
+                        onClick={() => handleCopyAddress(entry.address)}
+                        className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-lg bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 cursor-pointer"
+                      >
+                        <Copy className="w-2.5 h-2.5" /> Copy
+                      </button>
+                    </div>
+                    <p className="text-[11px] font-mono font-semibold break-all text-gray-900 dark:text-white">{entry.address}</p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px] text-gray-400 pt-1">
+                      <span>Derivation Index: <span className="text-gray-600 dark:text-gray-300 font-semibold">{entry.derivationIndex ?? '—'}</span></span>
+                      <span>Created At: <span className="text-gray-600 dark:text-gray-300 font-semibold">{new Date(entry.createdAt).toLocaleString()}</span></span>
+                      {entry.rotatedAt && (
+                        <span className="col-span-2">Rotated At: <span className="text-gray-600 dark:text-gray-300 font-semibold">{new Date(entry.rotatedAt).toLocaleString()}</span></span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -90,6 +90,63 @@ export class AdminController {
   }
 
   /**
+   * GET Full deposit address history (active + archived) for a user on a network
+   */
+  async getUserDepositAddressHistory(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { targetUid } = req.params;
+      const { network } = req.query;
+
+      if (!targetUid) {
+        throw new ApiError(400, 'Target user UID is required', 'BAD_REQUEST');
+      }
+      if (!network || typeof network !== 'string') {
+        throw new ApiError(400, 'network query parameter is required', 'BAD_REQUEST');
+      }
+
+      const result = await adminService.getUserDepositAddressHistory(targetUid, network);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Rotate a user's deposit address on a given network
+   */
+  async rotateUserDepositAddress(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { targetUid } = req.params;
+      const { network } = req.body;
+
+      if (!targetUid) {
+        throw new ApiError(400, 'Target user UID is required', 'BAD_REQUEST');
+      }
+      if (!network || typeof network !== 'string') {
+        throw new ApiError(400, 'network is required', 'BAD_REQUEST');
+      }
+
+      const result = await adminService.rotateUserDepositAddress(
+        req.user.uid,
+        req.user.email,
+        targetUid,
+        network
+      );
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH Update user's profile info
    */
   async updateUserProfile(req: AuthRequest, res: Response, next: NextFunction) {

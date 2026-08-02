@@ -1,6 +1,6 @@
 {
-  "id": "9150ab86-1a68-4368-9d8b-b655c1f97820",
-  "prevId": "38a7f076-923e-4093-9128-219f94dd55c7",
+  "id": "f4b4581d-a8d5-476e-94b9-6134015e8903",
+  "prevId": "9150ab86-1a68-4368-9d8b-b655c1f97820",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -332,6 +332,12 @@
           "notNull": true,
           "default": "'0.00000000'"
         },
+        "trial_expires_at": {
+          "name": "trial_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "referral_income": {
           "name": "referral_income",
           "type": "numeric(20, 8)",
@@ -534,6 +540,37 @@
           "notNull": true,
           "default": "'0.00000000'"
         },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "rotated_at": {
+          "name": "rotated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rotated_by": {
+          "name": "rotated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rotation_reason": {
+          "name": "rotation_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replaced_by_address_id": {
+          "name": "replaced_by_address_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -550,8 +587,8 @@
         }
       },
       "indexes": {
-        "deposit_addresses_user_network_idx": {
-          "name": "deposit_addresses_user_network_idx",
+        "deposit_addresses_active_user_network_idx": {
+          "name": "deposit_addresses_active_user_network_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -567,6 +604,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"deposit_addresses\".\"is_active\" = true",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -614,6 +652,32 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "deposit_addresses_rotated_by_users_id_fk": {
+          "name": "deposit_addresses_rotated_by_users_id_fk",
+          "tableFrom": "deposit_addresses",
+          "tableTo": "users",
+          "columnsFrom": [
+            "rotated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposit_addresses_replaced_by_address_id_deposit_addresses_id_fk": {
+          "name": "deposit_addresses_replaced_by_address_id_deposit_addresses_id_fk",
+          "tableFrom": "deposit_addresses",
+          "tableTo": "deposit_addresses",
+          "columnsFrom": [
+            "replaced_by_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -3858,30 +3922,79 @@
           "primaryKey": false,
           "notNull": true
         },
+        "wallet_type": {
+          "name": "wallet_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'HOT'"
+        },
+        "wallet_number": {
+          "name": "wallet_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Treasury Wallet'"
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "priority": {
+          "name": "priority",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "balance": {
+          "name": "balance",
+          "type": "numeric(20, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0.00000000'"
+        },
         "hot_address": {
           "name": "hot_address",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "cold_address": {
           "name": "cold_address",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "hot_balance": {
           "name": "hot_balance",
           "type": "numeric(20, 8)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": "'0.00000000'"
         },
         "cold_balance": {
           "name": "cold_balance",
           "type": "numeric(20, 8)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": "'0.00000000'"
         },
         "auto_sweep_enabled": {
@@ -3941,18 +4054,38 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "treasury_wallets_network_unique": {
-          "name": "treasury_wallets_network_unique",
-          "nullsNotDistinct": false,
+      "indexes": {
+        "treasury_wallets_net_type_idx": {
+          "name": "treasury_wallets_net_type_idx",
           "columns": [
-            "network"
-          ]
+            {
+              "expression": "network",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "wallet_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "wallet_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

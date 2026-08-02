@@ -135,6 +135,20 @@ class ApiService {
   }
 
   /**
+   * Admin: Get full (active + archived) deposit address history for a user on a network
+   */
+  async getUserDepositAddressHistory(targetUid: string, network: string): Promise<ApiResponse<any>> {
+    return this.get<any>(`/admin/users/${targetUid}/deposit-address-history?network=${encodeURIComponent(network)}`);
+  }
+
+  /**
+   * Admin: Rotate a user's deposit address on a given network
+   */
+  async rotateUserDepositAddress(targetUid: string, network: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/users/${targetUid}/rotate-deposit-address`, { network });
+  }
+
+  /**
    * Admin: Update user profile info
    */
   async updateAdminUserProfile(
