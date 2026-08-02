@@ -68,8 +68,15 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1785633989063,
-      "tag": "0009_equal_gauntlet",
+      "when": 1785652691238,
+      "tag": "0009_sweep_queue_and_treasury_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785652710011,
+      "tag": "0010_deposit_address_rotation_history",
       "breakpoints": true
     }
   ]

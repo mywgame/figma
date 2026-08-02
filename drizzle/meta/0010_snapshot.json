@@ -1,6 +1,6 @@
 {
-  "id": "a48ca6e0-fb3a-4d16-be80-615ea393e393",
-  "prevId": "38a7f076-923e-4093-9128-219f94dd55c7",
+  "id": "ce76324a-8ad0-4ea3-a92c-24c8ead2b08d",
+  "prevId": "a48ca6e0-fb3a-4d16-be80-615ea393e393",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -534,6 +534,37 @@
           "notNull": true,
           "default": "'0.00000000'"
         },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "rotated_at": {
+          "name": "rotated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rotated_by": {
+          "name": "rotated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rotation_reason": {
+          "name": "rotation_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replaced_by_address_id": {
+          "name": "replaced_by_address_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -550,8 +581,8 @@
         }
       },
       "indexes": {
-        "deposit_addresses_user_network_idx": {
-          "name": "deposit_addresses_user_network_idx",
+        "deposit_addresses_active_user_network_idx": {
+          "name": "deposit_addresses_active_user_network_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -567,6 +598,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"deposit_addresses\".\"is_active\" = true",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -614,6 +646,32 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "deposit_addresses_rotated_by_users_id_fk": {
+          "name": "deposit_addresses_rotated_by_users_id_fk",
+          "tableFrom": "deposit_addresses",
+          "tableTo": "users",
+          "columnsFrom": [
+            "rotated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deposit_addresses_replaced_by_address_id_deposit_addresses_id_fk": {
+          "name": "deposit_addresses_replaced_by_address_id_deposit_addresses_id_fk",
+          "tableFrom": "deposit_addresses",
+          "tableTo": "deposit_addresses",
+          "columnsFrom": [
+            "replaced_by_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
