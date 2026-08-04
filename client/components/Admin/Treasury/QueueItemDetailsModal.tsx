@@ -63,7 +63,14 @@ export const QueueItemDetailsModal: React.FC<QueueItemDetailsModalProps> = ({
             </div>
             <div>
               <span className="text-slate-500 block text-[9px] uppercase">Amount</span>
-              <span className="font-bold text-emerald-400">{selectedItemDetails.amount} USDT</span>
+              <span className="font-bold text-emerald-400">
+                {selectedItemDetails.amount} USDT
+                {selectedItemDetails.depositCount && selectedItemDetails.depositCount > 1 && (
+                  <span className="text-[9px] text-amber-400 ml-1 font-normal">
+                    ({selectedItemDetails.depositCount} deposits aggregated)
+                  </span>
+                )}
+              </span>
             </div>
             <div>
               <span className="text-slate-500 block text-[9px] uppercase">Native Gas Balance</span>
@@ -74,6 +81,24 @@ export const QueueItemDetailsModal: React.FC<QueueItemDetailsModalProps> = ({
               <span className="font-bold text-slate-200">{selectedItemDetails.requiredGas || '0.00000000'}</span>
             </div>
           </div>
+
+          {selectedItemDetails.depositBreakdown && selectedItemDetails.depositBreakdown.length > 1 && (
+            <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-[11px]">
+              <span className="text-slate-500 block text-[9px] uppercase font-bold mb-1.5 text-amber-400">
+                Aggregated Un-swept Deposits Breakdown ({selectedItemDetails.depositBreakdown.length})
+              </span>
+              <div className="space-y-1 max-h-32 overflow-y-auto font-mono text-[10px] pr-1">
+                {selectedItemDetails.depositBreakdown.map((dep: any, idx: number) => (
+                  <div key={dep.id || idx} className="flex justify-between items-center border-b border-slate-800/60 pb-1">
+                    <span className="text-slate-400">
+                      Deposit #{idx + 1} (Queue ID: <span className="text-slate-300">{dep.id.slice(0, 8)}...</span>)
+                    </span>
+                    <span className="text-emerald-400 font-bold">${parseFloat(dep.amount || '0').toFixed(2)} USDT</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2 text-[11px] bg-slate-950/60 p-3 rounded-lg border border-slate-800">
             <div>

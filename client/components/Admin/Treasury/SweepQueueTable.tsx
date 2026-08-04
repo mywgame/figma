@@ -57,6 +57,56 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
   const symbol =
     selectedNetwork === 'USDT_BEP20' ? 'BNB' : selectedNetwork === 'USDT_POLYGON' ? 'POL' : 'TRX';
 
+  // Group active/pending queue items by deposit address so multiple deposits from the same user are aggregated into one comprehensive total row.
+  const displayQueueItems = React.useMemo(() => {
+    const activeGroups = new Map<string, any>();
+    const completedOrCancelled: any[] = [];
+
+    for (const item of sweepQueueItems) {
+      const isFinished = item.status === 'COMPLETED' || item.status === 'CANCELLED';
+      if (isFinished) {
+        completedOrCancelled.push(item);
+        continue;
+      }
+
+      const key = `${item.depositAddress}_${item.network}`;
+      if (!activeGroups.has(key)) {
+        activeGroups.set(key, {
+          ...item,
+          allIds: [item.id],
+          depositCount: 1,
+          totalAmountNum: parseFloat(item.amount || '0'),
+          depositBreakdown: [item],
+        });
+      } else {
+        const group = activeGroups.get(key)!;
+        group.allIds.push(item.id);
+        group.depositCount += 1;
+        group.totalAmountNum += parseFloat(item.amount || '0');
+        group.depositBreakdown.push(item);
+
+        // Keep status of the most urgent or recent item
+        if (
+          item.status === 'FAILED' ||
+          item.status === 'READY_TO_SWEEP' ||
+          new Date(item.createdAt).getTime() > new Date(group.createdAt).getTime()
+        ) {
+          group.status = item.status;
+          group.gasStatus = item.gasStatus;
+          group.errorMessage = item.errorMessage || group.errorMessage;
+          group.attempts = Math.max(group.attempts || 0, item.attempts || 0);
+        }
+      }
+    }
+
+    const aggregatedActiveList = Array.from(activeGroups.values()).map((group) => ({
+      ...group,
+      amount: group.totalAmountNum.toString(),
+    }));
+
+    return [...aggregatedActiveList, ...completedOrCancelled];
+  }, [sweepQueueItems]);
+
   const pendingEligibleItems = sweepQueueItems.filter(
     (i) => i.status !== 'COMPLETED' && i.status !== 'CANCELLED'
   );
@@ -80,7 +130,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
             </button>
           </div>
           <p className="text-[10px] text-gray-400 mt-0.5">
-            Active state machine tracking for deposit sweeps, dynamic gas calculations, and transaction dispatch pipelines.
+            Active state machine tracking for deposit sweeps, dynamic gas calculations, and transaction dispatch pipelines. (Aggregated per user address)
           </p>
         </div>
 
@@ -140,30 +190,66 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200/10 text-xs font-mono">
-            {sweepQueueItems.length === 0 ? (
+            {displayQueueItems.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-8 text-center text-gray-500 text-xs">
                   No active sweep queue items found for this network.
                 </td>
               </tr>
             ) : (
-              sweepQueueItems.map((item: any) => {
+              displayQueueItems.map((item: any) => {
                 const isFinished = item.status === 'COMPLETED' || item.status === 'CANCELLED';
+                const isAggregated = item.depositCount && item.depositCount > 1;
+                const isRowProcessing =
+                  processingQueueId === item.id ||
+                  (item.allIds && item.allIds.includes(processingQueueId));
+
                 return (
                   <tr key={item.id} className="hover:bg-slate-900/10">
                     <td className="py-2.5 px-3">
                       {!isFinished && (
                         <input
                           type="checkbox"
-                          checked={selectedQueueIds.includes(item.id)}
-                          onChange={() => handleToggleSelectQueue(item.id)}
+                          checked={
+                            item.allIds
+                              ? item.allIds.every((id: string) => selectedQueueIds.includes(id))
+                              : selectedQueueIds.includes(item.id)
+                          }
+                          onChange={() => {
+                            if (item.allIds && item.allIds.length > 1) {
+                              const allSelected = item.allIds.every((id: string) =>
+                                selectedQueueIds.includes(id)
+                              );
+                              item.allIds.forEach((id: string) => {
+                                if (allSelected && selectedQueueIds.includes(id)) {
+                                  handleToggleSelectQueue(id);
+                                } else if (!allSelected && !selectedQueueIds.includes(id)) {
+                                  handleToggleSelectQueue(id);
+                                }
+                              });
+                            } else {
+                              handleToggleSelectQueue(item.id);
+                            }
+                          }}
                           className="rounded border-slate-800"
                         />
                       )}
                     </td>
                     <td className="py-2.5 px-3">
                       <div className="flex flex-col">
-                        <span className="text-[9px] text-blue-400 font-semibold font-mono">{item.dsUserId || 'N/A'}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-blue-400 font-semibold font-mono">
+                            {item.dsUserId || 'N/A'}
+                          </span>
+                          {isAggregated && (
+                            <span
+                              className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30"
+                              title={`${item.depositCount} unswept deposits combined`}
+                            >
+                              {item.depositCount} Deposits
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] font-bold text-slate-200" title={item.userName || ''}>
                           {item.userName || 'N/A'}
                         </span>
@@ -185,8 +271,15 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                         </button>
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-bold text-emerald-400" title={`${item.amount} USDT`}>
-                      {formatQueueAmount(item.amount)}
+                    <td className="py-2.5 px-3 text-right font-bold text-emerald-400" title={`${item.amount} USDT total`}>
+                      <div className="flex flex-col items-end">
+                        <span>{formatQueueAmount(item.amount)}</span>
+                        {isAggregated && (
+                          <span className="text-[8px] text-amber-400/80 font-normal">
+                            (Sum of {item.depositCount})
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2.5 px-3">
                       <div className="flex flex-col">
@@ -255,7 +348,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                             <button
                               onClick={() => handleQueueFundGas(item.id)}
                               disabled={
-                                processingQueueId === item.id ||
+                                isRowProcessing ||
                                 item.status === 'READY_TO_SWEEP' ||
                                 item.status === 'SWEEPING'
                               }
@@ -266,7 +359,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                             </button>
                             <button
                               onClick={() => handleQueueSweep(item.id)}
-                              disabled={processingQueueId === item.id || item.status === 'SWEEPING'}
+                              disabled={isRowProcessing || item.status === 'SWEEPING'}
                               className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-600/10 border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/20 transition-colors disabled:opacity-30"
                               title="Sweep"
                             >
@@ -277,8 +370,14 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
 
                         {item.status === 'FAILED' && (
                           <button
-                            onClick={() => handleQueueRetry(item.id)}
-                            disabled={processingQueueId === item.id}
+                            onClick={() => {
+                              if (item.allIds && item.allIds.length > 1) {
+                                item.allIds.forEach((id: string) => handleQueueRetry(id));
+                              } else {
+                                handleQueueRetry(item.id);
+                              }
+                            }}
+                            disabled={isRowProcessing}
                             className="text-[9px] px-1.5 py-0.5 rounded bg-amber-600/10 border border-amber-600/30 text-amber-400 hover:bg-amber-600/20 transition-colors disabled:opacity-30"
                             title="Retry Failed Job"
                           >
@@ -288,8 +387,14 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
 
                         {!isFinished && (
                           <button
-                            onClick={() => handleQueueCancel(item.id)}
-                            disabled={processingQueueId === item.id}
+                            onClick={() => {
+                              if (item.allIds && item.allIds.length > 1) {
+                                item.allIds.forEach((id: string) => handleQueueCancel(id));
+                              } else {
+                                handleQueueCancel(item.id);
+                              }
+                            }}
+                            disabled={isRowProcessing}
                             className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 transition-colors disabled:opacity-30"
                             title="Cancel Job"
                           >
