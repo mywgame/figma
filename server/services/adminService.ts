@@ -12,6 +12,8 @@ import { supportRepository } from '../repositories/supportRepository.ts';
 import { depositRepository } from '../repositories/depositRepository.ts';
 import { withdrawalRepository } from '../repositories/withdrawalRepository.ts';
 import { vipRepository } from '../repositories/vipRepository.ts';
+import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
+import { settingsRepository } from '../repositories/settingsRepository.ts';
 import { withdrawalService } from './withdrawalService.ts';
 import { depositService } from './depositService.ts';
 import { notificationService } from './notificationService.ts';
@@ -19,6 +21,7 @@ import { vipService } from './vipService.ts';
 import { referralService } from './referralService.ts';
 import { settingsService } from './settingsService.ts';
 import { salaryService } from './salaryService.ts';
+import { addressService } from '../blockchain/services/AddressService.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
 import { db } from '../../src/db/index.ts';
 import { users, wallets, deposits, withdrawals, supportTickets, activityLogs, vipStatus, sessions } from '../../src/db/schema.ts';
@@ -171,6 +174,23 @@ export class AdminService {
     const vip = await db.select().from(vipStatus).where(eq(vipStatus.userId, user.id));
     const descendants = await referralService.getDownlineDescendants(user.id);
 
+    // Blockchain deposit wallets — only the currently ACTIVE address per network is
+    // returned here (matches Member Profile Card display requirements). Full history
+    // is available via getUserDepositAddressHistory().
+    const activeDepositAddresses = await depositAddressRepository.findByUserId(user.id);
+
+    // Withdrawal destination addresses — read-only, already stored per-network in
+    // user_settings (JSON). No new table needed; this is purely a read.
+    const userSettings = await settingsRepository.findUserSettingsByUserId(user.id);
+    let withdrawalAddresses: Record<string, string[]> = {};
+    if (userSettings?.withdrawalAddresses) {
+      try {
+        withdrawalAddresses = JSON.parse(userSettings.withdrawalAddresses);
+      } catch {
+        withdrawalAddresses = {};
+      }
+    }
+
     return {
       id: user.uid,
       userId: user.userId,
@@ -198,6 +218,100 @@ export class AdminService {
         levelD: descendants.filter(d => d.referralLevel === 4).length,
         total: descendants.length,
       },
+      depositAddresses: activeDepositAddresses.map(a => ({
+        network: a.network,
+        address: a.address,
+      })),
+      withdrawalAddresses,
+    };
+  }
+
+  /**
+   * Get the full, permanent deposit-address history (active + archived) for a user on a
+   * given network — powers the "View Address History" modal. Archived addresses are
+   * never deleted, so this always reflects every address ever issued.
+   */
+  async getUserDepositAddressHistory(targetUid: string, network: string) {
+    const user = await userRepository.findByUid(targetUid);
+    if (!user) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const history = await depositAddressRepository.findHistoryByUserAndNetwork(user.id, network);
+    return history.map(a => ({
+      id: a.id,
+      network: a.network,
+      address: a.address,
+      derivationIndex: a.derivationIndex,
+      isActive: a.isActive,
+      createdAt: a.createdAt,
+      rotatedAt: a.rotatedAt,
+      rotationReason: a.rotationReason,
+    }));
+  }
+
+  /**
+   * Rotate a user's deposit address on a given network (admin action). Generates a new
+   * HD wallet address the exact same way as new-user registration (AddressService is the
+   * single owning service for this — no duplicate blockchain logic here), archives the
+   * previous address (never deleted), and writes the audit log entry atomically in the
+   * SAME database transaction as the address swap — if the audit write fails, the
+   * rotation itself rolls back too, so there is never a partial update.
+   */
+  async rotateUserDepositAddress(
+    adminUid: string,
+    adminEmail: string,
+    targetUid: string,
+    network: string
+  ) {
+    const targetUser = await userRepository.findByUid(targetUid);
+    if (!targetUser) {
+      throw new Error(`User not found with UID: ${targetUid}`);
+    }
+    const admin = await userRepository.findByUid(adminUid);
+    if (!admin) {
+      throw new Error(`Admin not found with UID: ${adminUid}`);
+    }
+
+    const reason = 'Manual Admin Rotation';
+
+    const { previousAddress, newAddress } = await addressService.rotateDepositAddress(
+      targetUser.id,
+      network,
+      admin.id,
+      reason,
+      async (tx) => {
+        // Runs INSIDE the same transaction as the address insert + archive above —
+        // a failure here rolls back the entire rotation, per the "no partial updates"
+        // requirement.
+        await auditRepository.createAuditLog(
+          {
+            actorUid: adminUid,
+            userId: targetUser.id,
+            action: 'ADMIN_ROTATED_DEPOSIT_ADDRESS',
+            resource: `deposit_addresses/${targetUser.id}/${network}`,
+            oldValue: JSON.stringify({
+              adminId: adminUid,
+              adminEmail,
+              userId: targetUser.id,
+              dsUserId: targetUser.userId,
+              network,
+              oldAddress: previousAddress.address,
+              reason,
+            }),
+            newValue: JSON.stringify({
+              newAddress: newAddress.address,
+              timestamp: new Date().toISOString(),
+            }),
+          },
+          tx
+        );
+      }
+    );
+
+    return {
+      network,
+      oldAddress: previousAddress.address,
+      newAddress: newAddress.address,
     };
   }
 

@@ -128,12 +128,12 @@ export class AddressService {
     // atomically — if ANY step fails (including the caller's audit-log write), the whole
     // transaction rolls back and the previous address remains the active one.
     const newAddress = await db.transaction(async (tx) => {
-      const created = await (depositAddressRepository as any).createDepositAddress(
+      const created = await depositAddressRepository.createDepositAddress(
         { userId, network, address, derivationIndex, qrPath },
         tx
       );
 
-      await (depositAddressRepository as any).archiveDepositAddress(
+      await depositAddressRepository.archiveDepositAddress(
         previous.id,
         { rotatedBy: rotatedByUserId, rotationReason: reason, replacedByAddressId: created.id },
         tx

@@ -18,6 +18,7 @@ import { sweepQueue, treasuryWallets, users } from '../../src/db/schema.ts';
 import { sweepQueueProcessor } from '../blockchain/services/SweepQueueProcessor.ts';
 import { gasCalculator } from '../blockchain/services/GasCalculator.ts';
 import { activeBlockchainProvider } from '../blockchain/providers/index.ts';
+import { blockchainConfig } from '../blockchain/config/blockchainConfig.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
 export class AdminController {
@@ -82,6 +83,63 @@ export class AdminController {
       }
 
       const result = await adminService.getUserProfileDetail(targetUid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Full deposit address history (active + archived) for a user on a network
+   */
+  async getUserDepositAddressHistory(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { targetUid } = req.params;
+      const { network } = req.query;
+
+      if (!targetUid) {
+        throw new ApiError(400, 'Target user UID is required', 'BAD_REQUEST');
+      }
+      if (!network || typeof network !== 'string') {
+        throw new ApiError(400, 'network query parameter is required', 'BAD_REQUEST');
+      }
+
+      const result = await adminService.getUserDepositAddressHistory(targetUid, network);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Rotate a user's deposit address on a given network
+   */
+  async rotateUserDepositAddress(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { targetUid } = req.params;
+      const { network } = req.body;
+
+      if (!targetUid) {
+        throw new ApiError(400, 'Target user UID is required', 'BAD_REQUEST');
+      }
+      if (!network || typeof network !== 'string') {
+        throw new ApiError(400, 'network is required', 'BAD_REQUEST');
+      }
+
+      const result = await adminService.rotateUserDepositAddress(
+        req.user.uid,
+        req.user.email,
+        targetUid,
+        network
+      );
       return sendSuccess(res, result, 200);
     } catch (error) {
       next(error);
@@ -599,7 +657,6 @@ export class AdminController {
         .select({
           id: sweepQueue.id,
           depositId: sweepQueue.depositId,
-          userId: sweepQueue.userId,
           depositAddress: sweepQueue.depositAddress,
           network: sweepQueue.network,
           amount: sweepQueue.amount,
@@ -612,7 +669,12 @@ export class AdminController {
           eligibleAt: sweepQueue.eligibleAt,
           createdAt: sweepQueue.createdAt,
           updatedAt: sweepQueue.updatedAt,
+          // Real user identity fields for the admin UI — the internal user UUID
+          // (sweepQueue.userId) is intentionally NOT selected here so it can never be
+          // displayed. dsUserId is the user-facing formatted ID (e.g. "DS322256").
           userEmail: users.email,
+          userName: users.name,
+          dsUserId: users.userId,
         })
         .from(sweepQueue)
         .innerJoin(users, eq(sweepQueue.userId, users.id));
@@ -631,12 +693,15 @@ export class AdminController {
 
       const items = await q.orderBy(desc(sweepQueue.createdAt));
 
-      // Inject live native balance and required gas for each item
+      // Inject live native balance, required gas, and real on-chain confirmation
+      // progress for each item — never fabricated.
       const itemsWithGas = await Promise.all(
         items.map(async (item) => {
           let nativeGasBalance = '0.00000000';
           let requiredGas = '0.00000000';
           let confirmations = 0;
+          const requiredConfirmations =
+            blockchainConfig.networks[item.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
           try {
             nativeGasBalance = await activeBlockchainProvider.getNativeBalance(item.network, item.depositAddress);
             const req = await gasCalculator.getMinGasRequirement(item.network);
@@ -644,10 +709,10 @@ export class AdminController {
 
             if (item.sweepTxHash) {
               const tx = await activeBlockchainProvider.getTransaction(item.network, item.sweepTxHash);
-              if (tx) confirmations = tx.confirmations || 12;
+              if (tx) confirmations = tx.confirmations || 0;
             } else if (item.gasTxHash) {
               const tx = await activeBlockchainProvider.getTransaction(item.network, item.gasTxHash);
-              if (tx) confirmations = tx.confirmations || 12;
+              if (tx) confirmations = tx.confirmations || 0;
             }
           } catch (e) {
             // fallback gracefully
@@ -657,6 +722,7 @@ export class AdminController {
             nativeGasBalance,
             requiredGas,
             confirmations,
+            requiredConfirmations,
           };
         })
       );

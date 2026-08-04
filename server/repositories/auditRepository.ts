@@ -114,18 +114,21 @@ export class AuditRepository {
   /**
    * Record a new audit log entry (immutable security journal)
    */
-  async createAuditLog(data: {
-    actorUid: string;
-    userId?: string | null;
-    action: string;
-    resource: string;
-    ipAddress?: string | null;
-    device?: string | null;
-    oldValue?: string | null;
-    newValue?: string | null;
-  }) {
+  async createAuditLog(
+    data: {
+      actorUid: string;
+      userId?: string | null;
+      action: string;
+      resource: string;
+      ipAddress?: string | null;
+      device?: string | null;
+      oldValue?: string | null;
+      newValue?: string | null;
+    },
+    executor: any = db
+  ) {
     try {
-      const result = await db
+      const result = await executor
         .insert(auditLogs)
         .values({
           actorUid: data.actorUid,

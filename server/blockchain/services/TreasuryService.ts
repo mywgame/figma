@@ -615,7 +615,7 @@ export class TreasuryService {
         network: depositAddresses.network,
         address: depositAddresses.address,
         onChainBalance: depositAddresses.onChainBalance,
-        isActive: (depositAddresses as any).isActive,
+        isActive: depositAddresses.isActive,
         createdAt: depositAddresses.createdAt,
         dsUserId: users.userId,
         userName: users.name,
