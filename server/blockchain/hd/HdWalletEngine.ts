@@ -6,7 +6,14 @@
 import crypto from 'crypto';
 import { ethers, HDNodeWallet } from 'ethers';
 import * as bip39 from 'bip39';
-import bs58 from 'bs58';
+import bs58Raw from 'bs58';
+
+function getBs58(): { encode: (data: Uint8Array | number[]) => string; decode: (str: string) => Uint8Array } {
+  const b = (bs58Raw as any)?.default || bs58Raw;
+  if (typeof b?.encode === 'function') return b;
+  if (typeof b?.default?.encode === 'function') return b.default;
+  return bs58Raw as any;
+}
 
 export function encodeTronBase58Check(hexString: string): string {
   const bytes = Buffer.from(hexString.replace(/^0x/, ''), 'hex');
@@ -14,12 +21,12 @@ export function encodeTronBase58Check(hexString: string): string {
   const hash2 = crypto.createHash('sha256').update(hash1).digest();
   const checksum = hash2.subarray(0, 4);
   const fullBytes = Buffer.concat([bytes, checksum]);
-  return bs58.encode(fullBytes);
+  return getBs58().encode(fullBytes);
 }
 
 export function decodeTronBase58Check(address: string): string | null {
   try {
-    const bytes = bs58.decode(address);
+    const bytes = getBs58().decode(address);
     if (bytes.length !== 25) return null;
     const payload = Buffer.from(bytes.subarray(0, 21));
     const checksum = Buffer.from(bytes.subarray(21, 25));
