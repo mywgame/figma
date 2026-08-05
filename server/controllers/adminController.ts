@@ -6,6 +6,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/auth.ts';
 import { adminService } from '../services/adminService.ts';
+import { productionCleanupService } from '../services/productionCleanupService.ts';
 import { supportService } from '../services/supportService.ts';
 import { userRepository } from '../repositories/userRepository.ts';
 import { notificationRepository } from '../repositories/notificationRepository.ts';
@@ -22,6 +23,43 @@ import { blockchainConfig } from '../blockchain/config/blockchainConfig.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
 export class AdminController {
+  /**
+   * GET Preview counts for the pre-launch production cleanup.
+   */
+  async getProductionCleanupPreview(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const preview = await productionCleanupService.getPreview();
+      return sendSuccess(res, preview, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Delete every non-SUPERADMIN user and all test operational data.
+   */
+  async deleteAllTestUsers(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { confirmation } = req.body;
+      if (confirmation !== 'DELETE TEST USERS') {
+        throw new ApiError(400, 'Confirmation text is invalid.', 'INVALID_CONFIRMATION');
+      }
+
+      const summary = await productionCleanupService.deleteAllTestUsers(confirmation);
+      return sendSuccess(res, summary, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * Fetch compiled admin dashboard overview aggregation and statistics
    */

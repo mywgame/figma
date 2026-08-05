@@ -11,6 +11,30 @@ import { UserRole } from '../../../shared/types/index.ts';
 const router = Router();
 
 /**
+ * @route GET /api/v1/admin/reset/production-cleanup/preview
+ * @desc Preview the pre-launch cleanup counts before deleting test users
+ * @access Private (Superadmin only)
+ */
+router.get(
+  '/reset/production-cleanup/preview',
+  requireAuth,
+  requireRole([UserRole.SUPERADMIN]),
+  adminController.getProductionCleanupPreview
+);
+
+/**
+ * @route POST /api/v1/admin/reset/production-cleanup
+ * @desc Delete every non-SUPERADMIN user and related testing data
+ * @access Private (Superadmin only)
+ */
+router.post(
+  '/reset/production-cleanup',
+  requireAuth,
+  requireRole([UserRole.SUPERADMIN]),
+  adminController.deleteAllTestUsers
+);
+
+/**
  * @route GET /api/v1/admin/dashboard/overview
  * @desc Retrieve platform-wide operational statistics and charts for Super Admin & Admin
  * @access Private (Admin and Superadmin only)

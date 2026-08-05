@@ -67,6 +67,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
       case 'audit': return 'Audit Logs';
       case 'security': return 'Security';
       case 'settings': return 'Settings';
+      case 'reset': return 'Reset';
       default: return 'Admin Panel';
     }
   };

@@ -480,6 +480,20 @@ class ApiService {
   }
 
   /**
+   * Admin: Preview production cleanup counts before deleting test users
+   */
+  async getProductionCleanupPreview(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/reset/production-cleanup/preview');
+  }
+
+  /**
+   * Admin: Execute pre-launch cleanup for all non-SUPERADMIN users
+   */
+  async deleteAllTestUsers(confirmation: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/reset/production-cleanup', { confirmation });
+  }
+
+  /**
    * Admin: Create new user account
    */
   async createAdminUser(userData: any): Promise<ApiResponse<any>> {

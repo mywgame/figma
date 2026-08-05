@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Shield,
   Sparkles,
+  RotateCcw,
   Vault,
   Share2
 } from 'lucide-react';
@@ -44,6 +45,7 @@ export type AdminTab =
   | 'security'
   | 'settings'
   | 'trial_fund'
+  | 'reset'
   | 'treasury';
 
 interface AdminSidebarProps {
@@ -67,7 +69,7 @@ const ROLE_PERMISSIONS: Record<string, AdminTab[]> = {
   superadmin: [
     'dashboard', 'users', 'referral', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
-    'audit', 'security', 'settings', 'trial_fund', 'treasury'
+    'audit', 'security', 'settings', 'trial_fund', 'treasury', 'reset'
   ],
   operator: [
     'dashboard', 'users', 'deposits', 'withdrawals', 'announcements', 'audit', 'security'
@@ -120,6 +122,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { id: 'audit', label: 'Audit Logs', icon: FileText },
     { id: 'security', label: 'System Security', icon: ShieldAlert },
     { id: 'settings', label: 'Console Settings', icon: Settings },
+    { id: 'reset', label: 'Reset', icon: RotateCcw, color: 'text-red-500' },
   ];
 
   // Resolve permitted tabs dynamically from the permissions registry
