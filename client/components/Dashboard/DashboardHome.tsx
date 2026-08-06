@@ -144,10 +144,16 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ dashboardData, onR
     ];
 
     const realRecentTransactions = (dashboardData.recentTransactions || []).map((tx: any) => {
-      const typeLower = (tx.type || 'deposit').toLowerCase();
+      const rawType = (tx.type || 'deposit').toString();
+      const displayType = rawType
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
       return {
         id: tx.id,
-        type: typeLower,
+        type: rawType.toLowerCase(),
+        displayType,
         hash: tx.referenceId || `TX-${tx.id.slice(0, 8)}`,
         amount: Math.abs(parseFloat(tx.amount || '0')),
         token: 'USDT',

@@ -6,17 +6,33 @@
 /**
  * Format raw high-precision string values into local currency formats
  */
-export function formatCurrency(value: string, currency = 'USD'): string {
-  const num = parseFloat(value);
-  if (isNaN(num)) return '0.00';
-  
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8
-  }).format(num);
+/**
+ * Clean helper to format amounts in notification strings to 2 decimal places.
+ * e.g., "500.00000000 USDT" -> "500.00 USDT", "0.60000000 USDT" -> "0.60 USDT"
+ */
+export function formatNotificationText(text: string): string {
+  if (!text) return '';
+
+  return text.replace(/(\$)?(\d+(?:\.\d+)?)\s*(USDT|usdt|USD|usd)?/g, (match, prefix, numStr, suffix) => {
+    const hasDecimal = numStr.includes('.');
+    if (!prefix && !suffix && (!hasDecimal || numStr.split('.')[1].length < 3)) {
+      return match;
+    }
+    const num = parseFloat(numStr);
+    if (isNaN(num)) return match;
+
+    const formatted = num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useGrouping: false,
+    });
+
+    const p = prefix || '';
+    const s = suffix ? ` ${suffix.toUpperCase()}` : '';
+    return `${p}${formatted}${s}`;
+  });
 }
+
 
 /**
  * Clean helper to truncate transaction hashes or wallet keys

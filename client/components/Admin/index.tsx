@@ -34,6 +34,7 @@ import { AdminTopbar } from './AdminTopbar.tsx';
 // View Modules
 import { DashboardHome } from './DashboardHome.tsx';
 import { UsersView } from './UsersView.tsx';
+import { AdminProfileView } from './AdminProfileView.tsx';
 import { DepositsView } from './DepositsView.tsx';
 import { WithdrawalsView } from './WithdrawalsView.tsx';
 import { VipView } from './VipView.tsx';
@@ -74,6 +75,8 @@ export const EnterpriseAdminDashboard: React.FC<EnterpriseAdminDashboardProps> =
         return <DashboardHome t={t} isDark={isDark} onNavigate={(path) => setActiveTab(path as AdminTab)} />;
       case 'users':
         return <UsersView t={t} isDark={isDark} />;
+      case 'profile':
+        return <AdminProfileView t={t} isDark={isDark} />;
       case 'referral':
         return <ReferralSystemView t={t} isDark={isDark} />;
       case 'deposits':

@@ -47,6 +47,66 @@ router.get(
 );
 
 /**
+ * @route GET /api/v1/admin/profile
+ * @desc Get Admin Profile & Security status
+ * @access Private (Admin and Superadmin)
+ */
+router.get(
+  '/profile',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getAdminProfile
+);
+
+/**
+ * @route GET /api/v1/admin/security/setup
+ * @desc Setup Google Authenticator 2FA (Secret & QR Code)
+ * @access Private (Admin and Superadmin)
+ */
+router.get(
+  '/security/setup',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getMfaSetup
+);
+
+/**
+ * @route POST /api/v1/admin/security/enable
+ * @desc Enable Google Authenticator 2FA & Generate Recovery Codes
+ * @access Private (Admin and Superadmin)
+ */
+router.post(
+  '/security/enable',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.enableMfa
+);
+
+/**
+ * @route POST /api/v1/admin/security/disable
+ * @desc Disable Google Authenticator 2FA
+ * @access Private (Admin and Superadmin)
+ */
+router.post(
+  '/security/disable',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.disableMfa
+);
+
+/**
+ * @route POST /api/v1/admin/security/regenerate-recovery
+ * @desc Regenerate Recovery Codes for Google Authenticator 2FA
+ * @access Private (Admin and Superadmin)
+ */
+router.post(
+  '/security/regenerate-recovery',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.regenerateRecoveryCodes
+);
+
+/**
  * @route GET /api/v1/admin/users
  * @desc Retrieve paginated list of users with search, sort, and filters
  */

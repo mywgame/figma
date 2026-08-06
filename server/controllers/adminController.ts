@@ -21,6 +21,13 @@ import { gasCalculator } from '../blockchain/services/GasCalculator.ts';
 import { activeBlockchainProvider } from '../blockchain/providers/index.ts';
 import { blockchainConfig } from '../blockchain/config/blockchainConfig.ts';
 import { eq, and, desc } from 'drizzle-orm';
+import QRCode from 'qrcode';
+import crypto from 'crypto';
+import { totp } from '../utils/totp.ts';
+import { encryptText, decryptText, hashCode } from '../utils/encryption.ts';
+import { adminSecurityRepository } from '../repositories/adminSecurityRepository.ts';
+import { settingsRepository } from '../repositories/settingsRepository.ts';
+import { SecurityLogger } from '../utils/securityLogger.ts';
 
 export class AdminController {
   /**
@@ -1357,6 +1364,267 @@ export class AdminController {
       const { id } = req.params;
       const result = await adminService.deleteAnnouncement(id, req.user.uid);
       return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Admin Profile details & 2FA status
+   */
+  async getAdminProfile(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const user = await userRepository.findByUid(req.user.uid);
+      if (!user) {
+        throw new ApiError(404, 'Admin profile not found', 'NOT_FOUND');
+      }
+
+      const sec = await adminSecurityRepository.findByUserId(user.id);
+      const userSettings = await settingsRepository.findUserSettingsByUserId(user.id);
+
+      const isTotpEnabled = !!(
+        (sec && (sec.totpEnabled === true || String(sec.totpEnabled) === 'true') && sec.totpSecret) ||
+        (userSettings && (userSettings.mfaEnabled === true || String(userSettings.mfaEnabled) === 'true') && userSettings.mfaSecret)
+      );
+
+      return sendSuccess(res, {
+        id: user.id,
+        uid: user.uid,
+        name: user.name || user.username || 'Admin Operator',
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        status: user.status,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        totpEnabled: isTotpEnabled,
+        hasRecoveryCodes: !!sec?.recoveryCodes,
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Setup details for Google Authenticator (TOTP secret & QR Code Data URL)
+   */
+  async getMfaSetup(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const user = await userRepository.findByUid(req.user.uid);
+      if (!user) {
+        throw new ApiError(404, 'Admin profile not found', 'NOT_FOUND');
+      }
+
+      const secret = totp.generateSecret();
+      const encryptedSecret = encryptText(secret);
+
+      await adminSecurityRepository.upsertAdminSecurity(user.id, {
+        totpSecret: encryptedSecret,
+      });
+
+      const otpauthUrl = totp.getOtpauthUrl(user.email, secret, 'MetaFirm Admin');
+      const qrCodeUrl = await QRCode.toDataURL(otpauthUrl);
+
+      return sendSuccess(res, {
+        secret,
+        otpauthUrl,
+        qrCodeUrl,
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Enable Google Authenticator & Generate 10 Recovery Codes
+   */
+  async enableMfa(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { code, secret } = req.body;
+      if (!code || !code.trim()) {
+        throw new ApiError(400, '6-digit verification code from Google Authenticator is required.', 'BAD_REQUEST');
+      }
+
+      const user = await userRepository.findByUid(req.user.uid);
+      if (!user) {
+        throw new ApiError(404, 'Admin profile not found', 'NOT_FOUND');
+      }
+
+      const sec = await adminSecurityRepository.findByUserId(user.id);
+      let mfaSecret = secret;
+      if (!mfaSecret && sec?.totpSecret) {
+        mfaSecret = decryptText(sec.totpSecret);
+      }
+
+      if (!mfaSecret) {
+        throw new ApiError(400, 'MFA setup has not been initiated. Please fetch QR Code configuration first.', 'BAD_REQUEST');
+      }
+
+      const isValid = totp.verifyToken(mfaSecret, code.trim());
+      if (!isValid) {
+        throw new ApiError(400, 'Invalid Google Authenticator code. Verification failed.', 'BAD_REQUEST');
+      }
+
+      // Generate 10 random recovery codes (8 chars uppercase)
+      const rawRecoveryCodes: string[] = [];
+      const hashedRecoveryCodes: string[] = [];
+
+      for (let i = 0; i < 10; i++) {
+        const raw = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 characters
+        rawRecoveryCodes.push(raw);
+        hashedRecoveryCodes.push(hashCode(raw));
+      }
+
+      await adminSecurityRepository.upsertAdminSecurity(user.id, {
+        totpEnabled: true,
+        totpSecret: encryptText(mfaSecret),
+        recoveryCodes: JSON.stringify(hashedRecoveryCodes),
+      });
+
+      await settingsRepository.updateUserSettings(user.id, {
+        mfaEnabled: true,
+        mfaSecret: encryptText(mfaSecret),
+      });
+
+      await SecurityLogger.logActivity({
+        userId: user.id,
+        event: 'SECURITY_EVENT',
+        status: 'SUCCESS',
+        details: 'Admin enabled Google Authenticator 2FA and generated recovery codes.',
+      });
+
+      return sendSuccess(res, {
+        message: 'Google Authenticator 2FA enabled successfully!',
+        recoveryCodes: rawRecoveryCodes,
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Disable Google Authenticator
+   */
+  async disableMfa(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { code } = req.body;
+      if (!code || !code.trim()) {
+        throw new ApiError(400, 'Google Authenticator verification code is required.', 'BAD_REQUEST');
+      }
+
+      const user = await userRepository.findByUid(req.user.uid);
+      if (!user) {
+        throw new ApiError(404, 'Admin profile not found', 'NOT_FOUND');
+      }
+
+      const sec = await adminSecurityRepository.findByUserId(user.id);
+      if (!sec || !sec.totpEnabled || !sec.totpSecret) {
+        throw new ApiError(400, 'Google Authenticator is not currently enabled for this account.', 'BAD_REQUEST');
+      }
+
+      const decryptedSecret = decryptText(sec.totpSecret);
+      const isValid = totp.verifyToken(decryptedSecret, code.trim());
+
+      if (!isValid) {
+        throw new ApiError(400, 'Invalid verification code. Could not disable 2FA.', 'BAD_REQUEST');
+      }
+
+      await adminSecurityRepository.upsertAdminSecurity(user.id, {
+        totpEnabled: false,
+        totpSecret: null,
+        recoveryCodes: null,
+      });
+
+      await settingsRepository.updateUserSettings(user.id, {
+        mfaEnabled: false,
+        mfaSecret: null,
+      });
+
+      await SecurityLogger.logActivity({
+        userId: user.id,
+        event: 'SECURITY_EVENT',
+        status: 'SUCCESS',
+        details: 'Admin disabled Google Authenticator 2FA.',
+      });
+
+      return sendSuccess(res, {
+        message: 'Google Authenticator 2FA disabled successfully!',
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Regenerate Recovery Codes
+   */
+  async regenerateRecoveryCodes(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { code } = req.body;
+      if (!code || !code.trim()) {
+        throw new ApiError(400, 'Google Authenticator code is required to regenerate recovery codes.', 'BAD_REQUEST');
+      }
+
+      const user = await userRepository.findByUid(req.user.uid);
+      if (!user) {
+        throw new ApiError(404, 'Admin profile not found', 'NOT_FOUND');
+      }
+
+      const sec = await adminSecurityRepository.findByUserId(user.id);
+      if (!sec || !sec.totpEnabled || !sec.totpSecret) {
+        throw new ApiError(400, 'Google Authenticator 2FA must be enabled before generating recovery codes.', 'BAD_REQUEST');
+      }
+
+      const decryptedSecret = decryptText(sec.totpSecret);
+      const isValid = totp.verifyToken(decryptedSecret, code.trim());
+      if (!isValid) {
+        throw new ApiError(400, 'Invalid Google Authenticator code.', 'BAD_REQUEST');
+      }
+
+      const rawRecoveryCodes: string[] = [];
+      const hashedRecoveryCodes: string[] = [];
+
+      for (let i = 0; i < 10; i++) {
+        const raw = crypto.randomBytes(4).toString('hex').toUpperCase();
+        rawRecoveryCodes.push(raw);
+        hashedRecoveryCodes.push(hashCode(raw));
+      }
+
+      await adminSecurityRepository.upsertAdminSecurity(user.id, {
+        recoveryCodes: JSON.stringify(hashedRecoveryCodes),
+      });
+
+      await SecurityLogger.logActivity({
+        userId: user.id,
+        event: 'SECURITY_EVENT',
+        status: 'SUCCESS',
+        details: 'Admin regenerated 2FA recovery codes.',
+      });
+
+      return sendSuccess(res, {
+        message: 'New recovery codes generated successfully!',
+        recoveryCodes: rawRecoveryCodes,
+      }, 200);
     } catch (error) {
       next(error);
     }

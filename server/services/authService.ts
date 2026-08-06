@@ -4,6 +4,11 @@
  */
 
 import crypto from 'crypto';
+import { redisClient } from '../cache/redisClient.ts';
+import { adminSecurityRepository } from '../repositories/adminSecurityRepository.ts';
+import { settingsRepository } from '../repositories/settingsRepository.ts';
+import { encryptText, decryptText, hashCode } from '../utils/encryption.ts';
+import { totp } from '../utils/totp.ts';
 import { authRepository } from '../repositories/authRepository.ts';
 import { userRepository } from '../repositories/userRepository.ts';
 import { sessionRepository } from '../repositories/sessionRepository.ts';
@@ -382,12 +387,58 @@ export class AuthService {
       throw new Error('Invalid email address or password.');
     }
 
-    // Reset attempts on successful login
+    // Reset attempts on successful password match
     if (user.failedLoginAttempts > 0) {
       await authRepository.resetFailedLoginAttempts(user.id);
     }
 
-    // 5. Generate Access and Refresh tokens
+    // Check if role is ADMIN or SUPERADMIN -> Require Multi-Factor Authentication
+    const userRoleNormalized = (user.role || '').toUpperCase();
+    if (userRoleNormalized === 'ADMIN' || userRoleNormalized === 'SUPERADMIN' || userRoleNormalized === 'OPERATOR') {
+      // Check if TOTP 2FA is configured and enabled in Admin Security settings or User Settings
+      const sec = await adminSecurityRepository.findByUserId(user.id);
+      const userSettings = await settingsRepository.findUserSettingsByUserId(user.id);
+
+      const isTotpInAdminSec = !!(sec && (sec.totpEnabled === true || String(sec.totpEnabled) === 'true') && sec.totpSecret);
+      const isTotpInUserSettings = !!(userSettings && (userSettings.mfaEnabled === true || String(userSettings.mfaEnabled) === 'true') && userSettings.mfaSecret);
+      const hasSecSecret = !!(sec && sec.totpSecret && sec.totpSecret.trim().length > 0);
+      const hasUserSettingsSecret = !!(userSettings && userSettings.mfaSecret && userSettings.mfaSecret.trim().length > 0);
+
+      const totpRequired = isTotpInAdminSec || isTotpInUserSettings || hasSecSecret || hasUserSettingsSecret;
+
+      // Generate temporary MFA token (valid 5 mins)
+      const mfaToken = crypto.randomBytes(32).toString('hex');
+      const mfaKey = `admin:mfa:${mfaToken}`;
+      const sessionData = {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        totpRequired,
+        ipAddress: data.ipAddress,
+        device: data.device,
+        browser: data.browser,
+      };
+
+      // Store in Redis with 5 min (300s) TTL
+      await redisClient.set(mfaKey, JSON.stringify(sessionData), 'EX', 300);
+
+      // Generate & Send Email OTP
+      const { otp } = await otpService.generateAndStoreOtp(user.email, 'admin-mfa');
+      await emailService.sendOtpEmail(user.email, otp, 'admin multi-factor authentication');
+
+      // Return response indicating MFA step required — DO NOT generate JWT yet
+      return {
+        requiresMfa: true,
+        mfaToken,
+        email: user.email,
+        totpRequired,
+        message: totpRequired
+          ? 'Password verified. Multi-factor verification required (Email OTP + Google Authenticator).'
+          : 'Password verified. Email verification OTP required.',
+      };
+    }
+
+    // Standard User Login Flow (USER role) — completely unchanged
     const payload: TokenPayload = {
       uid: user.uid,
       email: user.email,
@@ -397,9 +448,8 @@ export class AuthService {
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
-    // 6. Persist session with refresh token hash in Postgres
     const tokenHash = hashToken(refreshToken);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await sessionRepository.createSession({
       userId: user.id,
@@ -410,7 +460,6 @@ export class AuthService {
       expiresAt,
     });
 
-    // 7. Log successful login
     await SecurityLogger.logActivity({
       userId: user.id,
       event: 'LOGIN',
@@ -418,6 +467,206 @@ export class AuthService {
       ipAddress: data.ipAddress,
       device: data.device ? `${data.browser || ''} on ${data.device}` : null,
       details: 'Successful credentials authentication.',
+    });
+
+    const { passwordHash: _, ...safeUser } = user;
+    return {
+      user: safeUser,
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
+    };
+  }
+
+  /**
+   * Resends Email OTP for Admin MFA step
+   */
+  async resendAdminMfaOtp(mfaToken: string) {
+    if (!mfaToken) {
+      throw new Error('MFA token is required.');
+    }
+    const mfaKey = `admin:mfa:${mfaToken}`;
+    const rawData = await redisClient.get(mfaKey);
+    if (!rawData) {
+      throw new Error('MFA session expired or invalid. Please log in again.');
+    }
+    const sessionData = JSON.parse(rawData);
+    const { otp } = await otpService.generateAndStoreOtp(sessionData.email, 'admin-mfa');
+    await emailService.sendOtpEmail(sessionData.email, otp, 'admin multi-factor authentication');
+    return { success: true, message: 'Verification OTP sent to your admin email address.' };
+  }
+
+  /**
+   * Verifies Admin MFA (Email OTP always required; Google Authenticator TOTP required if enabled in admin settings)
+   */
+  async verifyAdminMfa(data: {
+    mfaToken: string;
+    emailOtp: string;
+    totpCode?: string;
+    ipAddress?: string | null;
+    device?: string | null;
+    browser?: string | null;
+  }) {
+    if (!data.mfaToken) {
+      throw new Error('MFA token is required.');
+    }
+    if (!data.emailOtp || !data.emailOtp.trim()) {
+      throw new Error('Email verification OTP code is required.');
+    }
+
+    const mfaKey = `admin:mfa:${data.mfaToken}`;
+    const rawData = await redisClient.get(mfaKey);
+    if (!rawData) {
+      throw new Error('MFA session expired or invalid. Please start login again.');
+    }
+
+    const sessionData = JSON.parse(rawData);
+    const user = await userRepository.findById(sessionData.userId);
+    if (!user || user.status !== 'ACTIVE') {
+      throw new Error('User account is invalid or suspended.');
+    }
+
+    // Check admin security lock
+    const sec = await adminSecurityRepository.findByUserId(user.id);
+    if (sec?.lockedUntil && new Date(sec.lockedUntil) > new Date()) {
+      const mins = Math.ceil((new Date(sec.lockedUntil).getTime() - Date.now()) / 60000);
+      throw new Error(`Account security temporarily locked due to multiple failed 2FA attempts. Try again in ${mins} minutes.`);
+    }
+
+    // 1. Verify Email OTP
+    try {
+      await otpService.verifyOtp(user.email, data.emailOtp, 'admin-mfa');
+    } catch (err: any) {
+      await adminSecurityRepository.incrementFailedAttempts(user.id);
+      await SecurityLogger.logActivity({
+        userId: user.id,
+        event: 'LOGIN',
+        status: 'FAILED',
+        ipAddress: data.ipAddress || sessionData.ipAddress,
+        device: data.device ? `${data.browser || ''} on ${data.device}` : null,
+        details: `Admin MFA Email OTP verification failed: ${err.message}`,
+      });
+      throw err;
+    }
+
+    // 2. Verify Google Authenticator TOTP or Recovery Code ONLY IF enabled or required
+    const userSettings = await settingsRepository.findUserSettingsByUserId(user.id);
+    const isTotpInAdminSec = !!(sec && (sec.totpEnabled === true || String(sec.totpEnabled) === 'true') && sec.totpSecret);
+    const isTotpInUserSettings = !!(userSettings && (userSettings.mfaEnabled === true || String(userSettings.mfaEnabled) === 'true') && userSettings.mfaSecret);
+    const hasSecSecret = !!(sec && sec.totpSecret && sec.totpSecret.trim().length > 0);
+    const hasUserSettingsSecret = !!(userSettings && userSettings.mfaSecret && userSettings.mfaSecret.trim().length > 0);
+
+    const isTotpEnabled = sessionData.totpRequired || isTotpInAdminSec || isTotpInUserSettings || hasSecSecret || hasUserSettingsSecret;
+
+    if (isTotpEnabled) {
+      const totpCandidate = (data.totpCode || '').trim();
+      if (!totpCandidate) {
+        throw new Error('Google Authenticator 2FA is active on your account. Please enter your 6-digit code or recovery code.');
+      }
+
+      let totpVerified = false;
+
+      // 2a. Check admin_security table secret
+      if (sec && sec.totpSecret) {
+        try {
+          const decryptedSecret = decryptText(sec.totpSecret);
+          totpVerified = totp.verifyToken(decryptedSecret, totpCandidate);
+        } catch (e) {
+          totpVerified = totp.verifyToken(sec.totpSecret, totpCandidate);
+        }
+
+        if (!totpVerified && sec.recoveryCodes) {
+          // Check recovery codes
+          let hashedCodes: string[] = [];
+          try {
+            hashedCodes = JSON.parse(sec.recoveryCodes);
+          } catch (e) {
+            hashedCodes = [];
+          }
+
+          const inputHash = hashCode(totpCandidate);
+          const codeIndex = hashedCodes.indexOf(inputHash);
+          if (codeIndex !== -1) {
+            totpVerified = true;
+            hashedCodes.splice(codeIndex, 1);
+            await adminSecurityRepository.upsertAdminSecurity(user.id, {
+              recoveryCodes: JSON.stringify(hashedCodes),
+            });
+            await SecurityLogger.logActivity({
+              userId: user.id,
+              event: 'SECURITY_EVENT',
+              status: 'SUCCESS',
+              ipAddress: data.ipAddress || sessionData.ipAddress,
+              device: data.device ? `${data.browser || ''} on ${data.device}` : null,
+              details: 'Admin logged in using a one-time recovery code.',
+            });
+          }
+        }
+      }
+
+      // 2b. Check user_settings fallback if not verified yet
+      if (!totpVerified && userSettings && userSettings.mfaSecret) {
+        try {
+          const decrypted = decryptText(userSettings.mfaSecret);
+          totpVerified = totp.verifyToken(decrypted, totpCandidate);
+        } catch (e) {
+          totpVerified = totp.verifyToken(userSettings.mfaSecret, totpCandidate);
+        }
+      }
+
+      if (!totpVerified) {
+        const { lockedUntil } = await adminSecurityRepository.incrementFailedAttempts(user.id);
+        await SecurityLogger.logActivity({
+          userId: user.id,
+          event: 'LOGIN',
+          status: 'FAILED',
+          ipAddress: data.ipAddress || sessionData.ipAddress,
+          device: data.device ? `${data.browser || ''} on ${data.device}` : null,
+          details: 'Admin MFA TOTP/Recovery code verification failed.',
+        });
+
+        if (lockedUntil) {
+          throw new Error('Too many failed 2FA attempts. Account locked for 15 minutes.');
+        }
+        throw new Error('Invalid Google Authenticator code or recovery code.');
+      }
+    }
+
+    // Both Email OTP + TOTP/Recovery Code verified successfully!
+    await redisClient.del(mfaKey);
+
+    await adminSecurityRepository.resetFailedAttempts(user.id);
+    await authRepository.resetFailedLoginAttempts(user.id);
+
+    const payload: TokenPayload = {
+      uid: user.uid,
+      email: user.email,
+      role: user.role as UserRole,
+    };
+
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
+
+    const tokenHash = hashToken(refreshToken);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await sessionRepository.createSession({
+      userId: user.id,
+      tokenHash,
+      device: data.device || sessionData.device,
+      browser: data.browser || sessionData.browser,
+      ipAddress: data.ipAddress || sessionData.ipAddress,
+      expiresAt,
+    });
+
+    await SecurityLogger.logActivity({
+      userId: user.id,
+      event: 'LOGIN',
+      status: 'SUCCESS',
+      ipAddress: data.ipAddress || sessionData.ipAddress,
+      device: data.device ? `${data.browser || ''} on ${data.device}` : null,
+      details: 'Admin Multi-Factor Authentication successfully completed.',
     });
 
     const { passwordHash: _, ...safeUser } = user;

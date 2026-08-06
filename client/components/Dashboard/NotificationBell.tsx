@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { api } from '../../services/api.ts';
+import { formatNotificationText } from '../../utils/index.ts';
 
 interface NotificationData {
   id: string;
@@ -53,8 +54,8 @@ export const NotificationBell: React.FC = () => {
         const parsed = JSON.parse(n.message);
         return {
           id: n.id,
-          title: parsed.title || 'Notification',
-          description: parsed.description || '',
+          title: formatNotificationText(parsed.title || 'Notification'),
+          description: formatNotificationText(parsed.description || ''),
           icon: parsed.icon || 'Bell',
           type: parsed.type || 'system',
           read: n.read,
@@ -68,7 +69,7 @@ export const NotificationBell: React.FC = () => {
     return {
       id: n.id,
       title: 'System Update',
-      description: n.message,
+      description: formatNotificationText(n.message),
       icon: 'Bell',
       type: 'system',
       read: n.read,

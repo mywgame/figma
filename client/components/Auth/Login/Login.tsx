@@ -14,6 +14,7 @@ interface LoginProps {
   onSuccess: () => void;
   onError: (msg: string | null) => void;
   onSuccessMsg: (msg: string | null) => void;
+  onRequireMfa?: (mfaToken: string, email: string, totpRequired: boolean) => void;
 }
 
 export const Login: React.FC<LoginProps> = ({
@@ -21,6 +22,7 @@ export const Login: React.FC<LoginProps> = ({
   onSuccess,
   onError,
   onSuccessMsg,
+  onRequireMfa,
 }) => {
   const { login } = useAuth();
   const [email, setEmail] = useState(() => {
@@ -47,8 +49,14 @@ export const Login: React.FC<LoginProps> = ({
 
     setBusy(true);
     try {
-      await login(email.trim(), password, false);
-      onSuccess();
+      const res = await login(email.trim(), password, false);
+      if (res && res.requiresMfa) {
+        if (onRequireMfa) {
+          onRequireMfa(res.mfaToken, res.email || email.trim(), !!res.totpRequired);
+        }
+      } else {
+        onSuccess();
+      }
     } catch (err: any) {
       onError(err.message || 'An unexpected authentication error occurred.');
     } finally {

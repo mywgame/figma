@@ -63,10 +63,19 @@ export const REDIS_KEYS = {
    * Generates the key for counting failed withdrawal address OTP attempts
    */
   withdrawalAddressAttempts: (email: string) => `otp:withdrawal-address:attempts:${email.toLowerCase()}`,
+
+  /**
+   * Generates keys for Admin MFA login OTP
+   */
+  adminMfaOtp: (email: string) => `otp:admin-mfa:${email.toLowerCase()}`,
+  adminMfaCooldown: (email: string) => `otp:admin-mfa:cooldown:${email.toLowerCase()}`,
+  adminMfaAttempts: (email: string) => `otp:admin-mfa:attempts:${email.toLowerCase()}`,
 };
 
 export const CACHE_TTL = {
   OTP_EXPIRY_SECONDS: 600, // 10 minutes for OTP validity
   COOLDOWN_SECONDS: 60,    // 1 minute before user can request a new OTP
   MAX_ATTEMPTS: 5,         // Max 5 attempts before lock/blacklist
+  ADMIN_MFA_EXPIRY_SECONDS: 300, // 5 minutes for Admin MFA OTP validity
+  ADMIN_MFA_COOLDOWN_SECONDS: 30, // 30 seconds resend cooldown for Admin MFA
 };

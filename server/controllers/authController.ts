@@ -140,17 +140,31 @@ export class AuthController {
         browser,
       });
 
+      // Handle Admin Multi-Factor Authentication requirement
+      if ('requiresMfa' in result && result.requiresMfa) {
+        return res.status(200).json({
+          success: true,
+          message: result.message,
+          data: {
+            requiresMfa: true,
+            mfaToken: result.mfaToken,
+            email: result.email,
+            totpRequired: result.totpRequired,
+          },
+        });
+      }
+
       // Issue tokens strictly inside secure HttpOnly cookies (neutralizes XSS extraction)
-      res.cookie('accessToken', result.tokens.accessToken, cookieOptions.accessToken);
-      res.cookie('refreshToken', result.tokens.refreshToken, cookieOptions.refreshToken);
+      res.cookie('accessToken', result.tokens!.accessToken, cookieOptions.accessToken);
+      res.cookie('refreshToken', result.tokens!.refreshToken, cookieOptions.refreshToken);
 
       return res.status(200).json({
         success: true,
         message: 'Authentication successful.',
         data: {
           user: result.user,
-          accessToken: result.tokens.accessToken,
-          refreshToken: result.tokens.refreshToken,
+          accessToken: result.tokens!.accessToken,
+          refreshToken: result.tokens!.refreshToken,
         },
       });
     } catch (error: any) {
@@ -159,6 +173,59 @@ export class AuthController {
         : error.message;
 
       return next(new ApiError(401, userMessage, 'AUTHENTICATION_FAILED'));
+    }
+  }
+
+  /**
+   * Verify Admin MFA (Email OTP + Google Authenticator)
+   */
+  async verifyAdminMfa(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { mfaToken, emailOtp, totpCode } = req.body;
+      const ipAddress = (req.headers['x-forwarded-for'] as string) || req.ip || req.socket.remoteAddress || null;
+      const userAgent = req.headers['user-agent'];
+      const { browser, device } = parseUserAgent(userAgent);
+
+      const result = await authService.verifyAdminMfa({
+        mfaToken,
+        emailOtp,
+        totpCode,
+        ipAddress,
+        device,
+        browser,
+      });
+
+      res.cookie('accessToken', result.tokens.accessToken, cookieOptions.accessToken);
+      res.cookie('refreshToken', result.tokens.refreshToken, cookieOptions.refreshToken);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Admin authentication and multi-factor verification successful.',
+        data: {
+          user: result.user,
+          accessToken: result.tokens.accessToken,
+          refreshToken: result.tokens.refreshToken,
+        },
+      });
+    } catch (error: any) {
+      return next(new ApiError(401, error.message, 'MFA_VERIFICATION_FAILED'));
+    }
+  }
+
+  /**
+   * Resend Admin MFA Email OTP
+   */
+  async resendAdminMfaOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { mfaToken } = req.body;
+      const result = await authService.resendAdminMfaOtp(mfaToken);
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {},
+      });
+    } catch (error: any) {
+      return next(new ApiError(400, error.message, 'RESEND_OTP_FAILED'));
     }
   }
 

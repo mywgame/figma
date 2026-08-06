@@ -25,13 +25,15 @@ import {
   Sparkles,
   RotateCcw,
   Vault,
-  Share2
+  Share2,
+  UserCheck
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.ts';
 
 export type AdminTab = 
   | 'dashboard'
   | 'users'
+  | 'profile'
   | 'referral'
   | 'deposits'
   | 'withdrawals'
@@ -62,17 +64,17 @@ interface AdminSidebarProps {
 // Role-Based Access Control mapping for Admin Sidebar items
 const ROLE_PERMISSIONS: Record<string, AdminTab[]> = {
   admin: [
-    'dashboard', 'users', 'referral', 'deposits', 'withdrawals', 'vip', 
+    'dashboard', 'profile', 'users', 'referral', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
     'audit', 'security', 'settings', 'trial_fund', 'treasury'
   ],
   superadmin: [
-    'dashboard', 'users', 'referral', 'deposits', 'withdrawals', 'vip', 
+    'dashboard', 'profile', 'users', 'referral', 'deposits', 'withdrawals', 'vip', 
     'income', 'rewards', 'salary', 'support', 'announcements', 
     'audit', 'security', 'settings', 'trial_fund', 'treasury', 'reset'
   ],
   operator: [
-    'dashboard', 'users', 'deposits', 'withdrawals', 'announcements', 'audit', 'security'
+    'dashboard', 'profile', 'users', 'deposits', 'withdrawals', 'announcements', 'audit', 'security'
   ],
   support: [
     'dashboard', 'users', 'support', 'announcements'
@@ -107,6 +109,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'profile', label: 'Admin Profile', icon: UserCheck, color: 'text-indigo-400' },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'referral', label: 'Referral System', icon: Share2, color: 'text-emerald-400' },
     { id: 'deposits', label: 'Deposits', icon: ArrowDownLeft, color: 'text-emerald-500' },

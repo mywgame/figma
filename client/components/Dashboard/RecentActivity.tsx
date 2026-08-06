@@ -35,43 +35,55 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ transactions, on
       </div>
 
       <div className="space-y-2">
-        {transactions.map((tx) => (
-          <div key={tx.id} className={`flex items-center justify-between rounded-xl p-3.5 transition-colors ${t.cardInner}`}>
-            <div className="flex items-center gap-3">
-              <div
-                className={`p-2 rounded-xl shrink-0 ${
-                  tx.type === 'deposit'
-                    ? 'bg-green-500/15 ring-1 ring-green-500/25'
-                    : tx.type === 'withdrawal'
-                    ? 'bg-red-500/15 ring-1 ring-red-500/25'
-                    : 'bg-blue-500/15 ring-1 ring-blue-500/25'
-                }`}
-              >
-                {tx.type === 'deposit' ? (
-                  <ArrowDownLeft className="w-4 h-4 text-green-500" />
-                ) : tx.type === 'withdrawal' ? (
-                  <ArrowUpRight className="w-4 h-4 text-red-500" />
-                ) : (
-                  <Star className="w-4 h-4 text-blue-500" />
-                )}
+        {transactions.map((tx) => {
+          const lowerType = (tx.type || '').toLowerCase();
+          const isDeposit = lowerType.includes('deposit');
+          const isWithdrawal = lowerType.includes('withdrawal');
+          const displayType =
+            tx.displayType ||
+            (tx.type || '')
+              .replace(/_/g, ' ')
+              .toLowerCase()
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+
+          return (
+            <div key={tx.id} className={`flex items-center justify-between rounded-xl p-3.5 transition-colors ${t.cardInner}`}>
+              <div className="flex items-center gap-3">
+                <div
+                  className={`p-2 rounded-xl shrink-0 ${
+                    isDeposit
+                      ? 'bg-green-500/15 ring-1 ring-green-500/25'
+                      : isWithdrawal
+                      ? 'bg-red-500/15 ring-1 ring-red-500/25'
+                      : 'bg-blue-500/15 ring-1 ring-blue-500/25'
+                  }`}
+                >
+                  {isDeposit ? (
+                    <ArrowDownLeft className="w-4 h-4 text-green-500" />
+                  ) : isWithdrawal ? (
+                    <ArrowUpRight className="w-4 h-4 text-red-500" />
+                  ) : (
+                    <Star className="w-4 h-4 text-blue-500" />
+                  )}
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${t.text}`}>{displayType}</p>
+                  <p className={`text-xs font-mono ${t.textMuted}`}>{tx.hash}</p>
+                </div>
               </div>
-              <div>
-                <p className={`text-sm font-semibold capitalize ${t.text}`}>{tx.type}</p>
-                <p className={`text-xs font-mono ${t.textMuted}`}>{tx.hash}</p>
+              <div className="text-right">
+                <p
+                  className={`text-sm font-bold ${
+                    isDeposit ? 'text-green-500' : isWithdrawal ? 'text-red-500' : 'text-blue-500'
+                  }`}
+                >
+                  {isWithdrawal ? '-' : '+'}${typeof tx.amount === 'number' ? tx.amount.toLocaleString() : tx.amount} {tx.token || 'USDT'}
+                </p>
+                <p className={`text-xs ${t.textMuted}`}>{tx.time}</p>
               </div>
             </div>
-            <div className="text-right">
-              <p
-                className={`text-sm font-bold ${
-                  tx.type === 'deposit' ? 'text-green-500' : tx.type === 'withdrawal' ? 'text-red-500' : 'text-blue-500'
-                }`}
-              >
-                {tx.type === 'withdrawal' ? '-' : '+'}${tx.amount.toLocaleString()} {tx.token}
-              </p>
-              <p className={`text-xs ${t.textMuted}`}>{tx.time}</p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

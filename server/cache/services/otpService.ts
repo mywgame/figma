@@ -7,11 +7,13 @@ import { redisClient } from '../redisClient.ts';
 import { REDIS_KEYS, CACHE_TTL } from '../redisKeys.ts';
 import { generateOTP } from '../../utils/otp.ts';
 
+export type OtpType = 'register' | 'forgot-password' | 'withdrawal' | 'withdrawal-address' | 'admin-mfa';
+
 export class OtpService {
   /**
    * Helper to resolve keys based on type
    */
-  private getKeys(email: string, type: 'register' | 'forgot-password' | 'withdrawal' | 'withdrawal-address') {
+  private getKeys(email: string, type: OtpType) {
     const trimmed = email.trim().toLowerCase();
     switch (type) {
       case 'register':
@@ -38,6 +40,12 @@ export class OtpService {
           cooldown: REDIS_KEYS.withdrawalAddressCooldown(trimmed),
           attempts: REDIS_KEYS.withdrawalAddressAttempts(trimmed)
         };
+      case 'admin-mfa':
+        return {
+          otp: REDIS_KEYS.adminMfaOtp(trimmed),
+          cooldown: REDIS_KEYS.adminMfaCooldown(trimmed),
+          attempts: REDIS_KEYS.adminMfaAttempts(trimmed)
+        };
     }
   }
 
@@ -45,11 +53,11 @@ export class OtpService {
    * Check if a cooldown is active for a given email and type.
    * Returns remaining seconds, or 0 if no cooldown is active.
    */
-  async getCooldownRemaining(email: string, type: 'register' | 'forgot-password' | 'withdrawal' | 'withdrawal-address'): Promise<number> {
+  async getCooldownRemaining(email: string, type: OtpType): Promise<number> {
     const keys = this.getKeys(email, type);
     const exists = await redisClient.exists(keys.cooldown);
     if (!exists) return 0;
-    return CACHE_TTL.COOLDOWN_SECONDS;
+    return type === 'admin-mfa' ? CACHE_TTL.ADMIN_MFA_COOLDOWN_SECONDS : CACHE_TTL.COOLDOWN_SECONDS;
   }
 
   /**
@@ -57,28 +65,32 @@ export class OtpService {
    */
   async generateAndStoreOtp(
     email: string,
-    type: 'register' | 'forgot-password' | 'withdrawal' | 'withdrawal-address'
+    type: OtpType
   ): Promise<{ otp: string }> {
     const trimmedEmail = email.trim().toLowerCase();
     const keys = this.getKeys(trimmedEmail, type);
 
+    const isAdminMfa = type === 'admin-mfa';
+    const cooldownSec = isAdminMfa ? CACHE_TTL.ADMIN_MFA_COOLDOWN_SECONDS : CACHE_TTL.COOLDOWN_SECONDS;
+    const expirySec = isAdminMfa ? CACHE_TTL.ADMIN_MFA_EXPIRY_SECONDS : CACHE_TTL.OTP_EXPIRY_SECONDS;
+
     // 1. Cooldown Rate-Limiting Check
     const isCooldownActive = await redisClient.exists(keys.cooldown);
     if (isCooldownActive) {
-      throw new Error('Please wait 60 seconds before requesting a new verification code.');
+      throw new Error(`Please wait ${cooldownSec} seconds before requesting a new verification code.`);
     }
 
     // 2. Generate secure numeric OTP
     const otp = generateOTP(6);
 
     // 3. Store OTP in Redis
-    await redisClient.set(keys.otp, otp, 'EX', CACHE_TTL.OTP_EXPIRY_SECONDS);
+    await redisClient.set(keys.otp, otp, 'EX', expirySec);
 
     // 4. Store Cooldown Key
-    await redisClient.set(keys.cooldown, '1', 'EX', CACHE_TTL.COOLDOWN_SECONDS);
+    await redisClient.set(keys.cooldown, '1', 'EX', cooldownSec);
 
     // 5. Reset verification attempts counter
-    await redisClient.set(keys.attempts, '0', 'EX', CACHE_TTL.OTP_EXPIRY_SECONDS);
+    await redisClient.set(keys.attempts, '0', 'EX', expirySec);
 
     return { otp };
   }
@@ -90,11 +102,14 @@ export class OtpService {
   async verifyOtp(
     email: string,
     otpCandidate: string,
-    type: 'register' | 'forgot-password' | 'withdrawal' | 'withdrawal-address'
+    type: OtpType
   ): Promise<boolean> {
     const trimmedEmail = email.trim().toLowerCase();
     const cleanOtp = otpCandidate.trim();
     const keys = this.getKeys(trimmedEmail, type);
+
+    const isAdminMfa = type === 'admin-mfa';
+    const expirySec = isAdminMfa ? CACHE_TTL.ADMIN_MFA_EXPIRY_SECONDS : CACHE_TTL.OTP_EXPIRY_SECONDS;
 
     // 1. Retrieve failed attempts and enforce maximum limit
     const attemptsStr = await redisClient.get(keys.attempts);
@@ -116,7 +131,7 @@ export class OtpService {
     if (storedOtp !== cleanOtp) {
       const newAttempts = await redisClient.incr(keys.attempts);
       // Ensure attempts key expires if not already set
-      await redisClient.expire(keys.attempts, CACHE_TTL.OTP_EXPIRY_SECONDS);
+      await redisClient.expire(keys.attempts, expirySec);
 
       const remaining = CACHE_TTL.MAX_ATTEMPTS - newAttempts;
       if (remaining <= 0) {

@@ -115,12 +115,16 @@ export interface MockDailyClaim {
 
 export interface MockTransaction {
   id: string;
-  type: 'deposit' | 'withdrawal' | 'daily_yield' | 'referral' | 'team_commission' | 'reward';
-  title: string;
-  subtitle: string;
-  amountUsdt: number;
-  timestampIso: string;
-  status: 'completed' | 'pending' | 'failed';
+  type: string;
+  displayType?: string;
+  title?: string;
+  subtitle?: string;
+  amountUsdt?: number;
+  amount?: number;
+  token?: string;
+  time?: string;
+  timestampIso?: string;
+  status?: string;
   hash?: string;
   network?: string;
 }

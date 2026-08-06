@@ -18,7 +18,9 @@ export interface AuthContextType {
     isRegister?: boolean,
     referralCode?: string,
     signupData?: { name?: string; username?: string; phone?: string; country?: string }
-  ) => Promise<void>;
+  ) => Promise<any>;
+  verifyAdminMfa: (mfaToken: string, emailOtp: string, totpCode: string) => Promise<any>;
+  resendAdminMfaOtp: (mfaToken: string) => Promise<any>;
   verifyOtp: (email: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
   syncProfile: () => Promise<void>;
@@ -179,6 +181,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const resData = await loginResponse.json();
       if (resData.success && resData.data) {
+        if (resData.data.requiresMfa) {
+          return resData.data;
+        }
+
         const returnedUser = resData.data.user;
         const returnedToken = resData.data.accessToken || 'cookie_based_token';
 
@@ -186,6 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(returnedUser);
         localStorage.setItem('metafirm_token', returnedToken);
         localStorage.setItem('metafirm_user', JSON.stringify(returnedUser));
+        return resData.data;
       } else {
         throw new Error('MetaFirm authentication response returned invalid payload');
       }
@@ -200,6 +207,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Verify Admin Multi-Factor Authentication (Email OTP + Google Authenticator)
+   */
+  const verifyAdminMfa = async (mfaToken: string, emailOtp: string, totpCode: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(getApiUrl('/auth/admin/verify-mfa'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mfaToken, emailOtp, totpCode }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error?.message || 'Admin MFA verification failed.');
+      }
+
+      const resData = await response.json();
+      if (resData.success && resData.data) {
+        const returnedUser = resData.data.user;
+        const returnedToken = resData.data.accessToken || 'cookie_based_token';
+
+        setToken(returnedToken);
+        setUser(returnedUser);
+        localStorage.setItem('metafirm_token', returnedToken);
+        localStorage.setItem('metafirm_user', JSON.stringify(returnedUser));
+        return resData.data;
+      } else {
+        throw new Error('MFA verification response returned invalid payload');
+      }
+    } catch (err: any) {
+      setError(err.message || 'MFA verification failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Resend Admin MFA Email OTP
+   */
+  const resendAdminMfaOtp = async (mfaToken: string) => {
+    const response = await fetch(getApiUrl('/auth/admin/resend-mfa-otp'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mfaToken }),
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || 'Failed to resend verification OTP.');
+    }
+    return await response.json();
   };
 
   /**
@@ -269,6 +331,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         error,
         login,
+        verifyAdminMfa,
+        resendAdminMfaOtp,
         verifyOtp,
         logout,
         syncProfile

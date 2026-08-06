@@ -102,7 +102,7 @@ export class DepositService {
       userId,
       walletId: wallet.id,
       type: 'DEPOSIT',
-      referenceId: deposit.id,
+      referenceId: deposit.referenceNumber || deposit.id,
       status: 'COMPLETED',
       description: `Successful deposit of ${deposit.amount} USDT via ${deposit.network}.`,
       amount: deposit.amount,

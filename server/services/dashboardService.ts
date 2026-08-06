@@ -16,6 +16,8 @@ import { claimService } from './claimService.ts';
 import { userRepository } from '../repositories/userRepository.ts';
 import { incomeRepository } from '../repositories/incomeRepository.ts';
 import { trialFundService } from './trialFundService.ts';
+import { depositRepository } from '../repositories/depositRepository.ts';
+import { withdrawalRepository } from '../repositories/withdrawalRepository.ts';
 
 export class DashboardService {
   /**
@@ -102,7 +104,27 @@ export class DashboardService {
     }
 
     // 5. Fetch recent transactions ledger (Limit 5)
-    const recentTransactions = await transactionRepository.findByUserId(userId, { limit: 5 });
+    const rawRecentTransactions = await transactionRepository.findByUserId(userId, { limit: 5 });
+    const recentTransactions = await Promise.all(
+      rawRecentTransactions.map(async (tx) => {
+        let refId = tx.referenceId;
+        if (tx.type === 'DEPOSIT' && refId && !refId.startsWith('DEP')) {
+          const dep = await depositRepository.findById(refId);
+          if (dep?.referenceNumber) {
+            refId = dep.referenceNumber;
+          }
+        } else if (tx.type === 'WITHDRAWAL' && refId && !refId.startsWith('WTH')) {
+          const wth = await withdrawalRepository.findById(refId);
+          if (wth?.reference) {
+            refId = wth.reference;
+          }
+        }
+        return {
+          ...tx,
+          referenceId: refId,
+        };
+      })
+    );
 
     // 6. Fetch recent activity security logs (Limit 5)
     const recentActivities = await activityRepository.findByUserId(userId, { limit: 5 });

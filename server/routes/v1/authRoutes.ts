@@ -45,6 +45,20 @@ router.post('/resend-otp', authController.resendRegistrationOtp);
 router.post('/login', validateRequest(LoginSchema), authController.login);
 
 /**
+ * @route POST /api/v1/auth/admin/verify-mfa
+ * @desc Verify Admin MFA (Email OTP + Google Authenticator)
+ * @access Public
+ */
+router.post('/admin/verify-mfa', authController.verifyAdminMfa);
+
+/**
+ * @route POST /api/v1/auth/admin/resend-mfa-otp
+ * @desc Resend Admin MFA Email OTP
+ * @access Public
+ */
+router.post('/admin/resend-mfa-otp', authController.resendAdminMfaOtp);
+
+/**
  * @route POST /api/v1/auth/refresh
  * @desc Rotate expired Access Tokens using a valid Refresh Token
  * @access Public

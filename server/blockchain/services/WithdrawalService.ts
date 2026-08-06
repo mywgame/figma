@@ -239,7 +239,7 @@ export class WithdrawalService {
       userId,
       walletId: wallet.id,
       type: 'WITHDRAWAL',
-      referenceId: withdrawal.id,
+      referenceId: withdrawal.reference || withdrawal.id,
       status: 'COMPLETED',
       description: `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}. TxHash: ${withdrawal.txHash}`,
       amount: withdrawal.amount,
