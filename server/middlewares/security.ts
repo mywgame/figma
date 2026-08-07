@@ -39,11 +39,32 @@ export const helmetMiddleware = (req: Request, res: Response, next: NextFunction
  */
 export const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const origin = req.headers.origin;
-  
-  // Accept local, preview, and deployment URLs
-  if (origin) {
+
+  const allowedOrigins = [
+    'https://metafirm.app',
+    'https://www.metafirm.app',
+    'https://api.metafirm.app',
+    'capacitor://localhost',
+    'http://localhost',
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ];
+
+  if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
+  }
+
+  const isAllowed =
+    !origin ||
+    allowedOrigins.includes(origin) ||
+    origin.endsWith('.vercel.app') ||
+    origin.endsWith('.run.app') ||
+    origin.endsWith('.onrender.com') ||
+    process.env.NODE_ENV !== 'production';
+
+  if (origin && isAllowed) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
+  } else if (!origin) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
 

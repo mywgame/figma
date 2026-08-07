@@ -26,10 +26,15 @@ export const getApiBaseUrl = (): string => {
       (window.location.hostname === 'localhost' && !window.location.port));
 
   if (isCapacitorNative) {
-    return 'https://metafirm.app/api/v1';
+    return 'https://api.metafirm.app/api/v1';
   }
 
-  // 3. Web app default (relative origin path)
+  // 3. Web app default when hosted on Vercel frontend (metafirm.app or *.vercel.app)
+  if (typeof window !== 'undefined' && (window.location.hostname.includes('metafirm.app') || window.location.hostname.endsWith('.vercel.app'))) {
+    return 'https://api.metafirm.app/api/v1';
+  }
+
+  // 4. Web app default for same-origin dev proxy
   return '/api/v1';
 };
 
