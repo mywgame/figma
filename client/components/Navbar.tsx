@@ -82,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigateToSection,
           </div>
 
           {/* Authentication Action Buttons */}
-          <div className="hidden lg:flex items-center space-x-4" id="navbar-auth-actions">
+          <div className="hidden lg:flex items-center space-x-3" id="navbar-auth-actions">
             {user ? (
               <button
                 onClick={() => handleLinkClick('dashboard-dev')}

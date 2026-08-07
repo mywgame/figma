@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
+import { playSuccessSound, playNotificationSound, playErrorSound } from '../../../utils/sound.ts';
 
 interface AlertProps {
   variant?: 'info' | 'success' | 'warning' | 'error';
@@ -232,6 +233,16 @@ export const Toast: React.FC<ToastProps> = ({
   variant = 'success',
   onClose,
 }) => {
+  useEffect(() => {
+    if (variant === 'success') {
+      playSuccessSound();
+    } else if (variant === 'error') {
+      playErrorSound();
+    } else {
+      playNotificationSound();
+    }
+  }, [variant, message]);
+
   const icons = {
     info: <Info className="w-4 h-4 text-blue-600" />,
     success: <CheckCircle2 className="w-4 h-4 text-emerald-600" />,

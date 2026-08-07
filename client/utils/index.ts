@@ -10,8 +10,9 @@
  * Clean helper to format amounts in notification strings to 2 decimal places.
  * e.g., "500.00000000 USDT" -> "500.00 USDT", "0.60000000 USDT" -> "0.60 USDT"
  */
+export * from './sound.ts';
+
 export function formatNotificationText(text: string): string {
-  if (!text) return '';
 
   return text.replace(/(\$)?(\d+(?:\.\d+)?)\s*(USDT|usdt|USD|usd)?/g, (match, prefix, numStr, suffix) => {
     const hasDecimal = numStr.includes('.');

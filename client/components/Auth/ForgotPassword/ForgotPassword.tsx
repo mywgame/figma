@@ -72,7 +72,7 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-3.5">
         <Input
           label="Registered Email Address"
           type="email"
@@ -88,7 +88,7 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
         <Button
           type="submit"
           isLoading={busy}
-          className="w-full mt-2"
+          className="w-full mt-1.5"
           variant="primary"
           size="lg"
           id="auth-submit-btn"

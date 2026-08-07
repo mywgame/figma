@@ -63,27 +63,33 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className={`w-full ${sizes[size]} bg-white border border-slate-200 rounded-[28px] p-6 sm:p-8 shadow-2xl relative z-10 overflow-hidden text-left text-slate-900`}
+            className={`w-full ${sizes[size]} bg-white border border-slate-200 rounded-[24px] sm:rounded-[28px] p-5 sm:p-7 shadow-2xl relative z-10 overflow-hidden text-left text-slate-900`}
             role="dialog"
             aria-modal="true"
           >
-            {/* Header row */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-5">
-              {title ? (
+            {/* Header row / Close button */}
+            {title ? (
+              <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4 sm:mb-5">
                 <h3 className="text-base sm:text-lg font-display font-bold text-slate-950">
                   {title}
                 </h3>
-              ) : (
-                <div />
-              )}
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  aria-label="Close modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
               <button
                 onClick={onClose}
-                className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                className="absolute top-3.5 right-3.5 sm:top-4.5 sm:right-4.5 z-20 w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
                 aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
-            </div>
+            )}
 
             {/* Main content body */}
             <div className="max-h-[70vh] overflow-y-auto pr-1">

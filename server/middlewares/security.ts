@@ -46,6 +46,7 @@ export const corsMiddleware = (req: Request, res: Response, next: NextFunction) 
     'https://api.metafirm.app',
     'capacitor://localhost',
     'http://localhost',
+    'https://localhost',
     'http://localhost:3000',
     'http://localhost:5173',
   ];
@@ -57,6 +58,7 @@ export const corsMiddleware = (req: Request, res: Response, next: NextFunction) 
   const isAllowed =
     !origin ||
     allowedOrigins.includes(origin) ||
+    origin.startsWith('capacitor://') ||
     origin.endsWith('.vercel.app') ||
     origin.endsWith('.run.app') ||
     origin.endsWith('.onrender.com') ||
