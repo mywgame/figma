@@ -191,8 +191,8 @@ export const Register: React.FC<RegisterProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
     >
-      <form onSubmit={handleLocalSubmit} className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 min-w-0 w-full">
+      <form onSubmit={handleLocalSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 min-w-0 w-full">
           <div className="min-w-0">
             <Input
               label="Full Name"

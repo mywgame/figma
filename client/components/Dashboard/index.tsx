@@ -55,8 +55,12 @@ import { DashboardLayout } from './Layout/DashboardLayout.tsx';
 import { DepositView } from './Deposit/DepositView.tsx';
 import { WithdrawalView } from './Withdrawal/WithdrawalView.tsx';
 import { RewardsView } from './Rewards/RewardsView.tsx';
+import { StakingView } from './Staking/StakingView.tsx';
 import { TaskView } from './Task/TaskView.tsx';
 import { DepositSuccessModal } from './Deposit/DepositSuccessModal.tsx';
+import { DailyClaimModal } from './DailyClaimModal.tsx';
+import { WelcomeTrialFundModal } from './WelcomeTrialFundModal.tsx';
+import { clientTaskService, TaskItemDTO } from '../../services/taskService.ts';
 
 // Overlay
 import { ArrowLeft } from 'lucide-react';
@@ -64,13 +68,25 @@ import { Toast } from '../ui/Feedback/index.tsx';
 
 interface UserDashboardProps {
   onBackToLanding: () => void;
+  onNavigateToVentures?: () => void;
+  initialTab?: DashboardTab;
 }
 
-export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding }) => {
+export const UserDashboard: React.FC<UserDashboardProps> = ({
+  onBackToLanding,
+  onNavigateToVentures,
+  initialTab,
+}) => {
   const { user, logout } = useAuth();
   const { t } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab || 'dashboard');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -81,16 +97,13 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
 
   // Deposit Success Modal State
   const [depositSuccessData, setDepositSuccessData] = useState<{ amount: string; network: string } | null>(null);
+  const [dailyClaimSuccessData, setDailyClaimSuccessData] = useState<{ amount: number; streakDays: number } | null>(null);
+  const [welcomeTrialTask, setWelcomeTrialTask] = useState<TaskItemDTO | null>(null);
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
+  const [isClaimingTrial, setIsClaimingTrial] = useState(false);
   const seenCompletedDepositIds = React.useRef<Set<string>>(new Set());
   const isInitialDepositCheck = React.useRef<boolean>(true);
-
-  useEffect(() => {
-    setIsPageLoading(true);
-    const timer = setTimeout(() => {
-      setIsPageLoading(false);
-    }, 650);
-    return () => clearTimeout(timer);
-  }, [activeTab]);
+  const hasCheckedWelcomeTrial = React.useRef<boolean>(false);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -116,7 +129,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
   }, []);
 
   const fetchDashboard = useCallback(async () => {
-    setIsLoading(true);
     try {
       const response = await api.get<DashboardData>('/users/dashboard');
       if (response.success && response.data) {
@@ -130,6 +142,15 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       setIsLoading(false);
     }
   }, [showToast]);
+
+  useEffect(() => {
+    setIsPageLoading(true);
+    fetchDashboard();
+    const timer = setTimeout(() => {
+      setIsPageLoading(false);
+    }, 650);
+    return () => clearTimeout(timer);
+  }, [activeTab, fetchDashboard]);
 
   // Background polling for auto-verified deposits
   const checkAutoVerifiedDeposits = useCallback(async () => {
@@ -165,9 +186,52 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
     }
   }, [fetchDashboard]);
 
+  // Check Welcome / Trial Fund gift popup on login/mount
+  const checkWelcomeTrialFund = useCallback(async () => {
+    if (hasCheckedWelcomeTrial.current) return;
+    hasCheckedWelcomeTrial.current = true;
+    try {
+      const taskData = await clientTaskService.getTasks();
+      if (taskData && Array.isArray(taskData.tasks)) {
+        const trialFundTask = taskData.tasks.find(
+          (t) => t.taskCode === 'REGISTRATION_TRIAL_FUND'
+        );
+        // Only show popup if task exists, is active, is COMPLETED (eligible for activation), and not yet CLAIMED
+        if (trialFundTask && trialFundTask.status === 'COMPLETED') {
+          setWelcomeTrialTask(trialFundTask);
+          setIsWelcomeModalOpen(true);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking welcome trial fund task status:', err);
+    }
+  }, []);
+
+  const handleClaimWelcomeTrial = async (): Promise<boolean> => {
+    if (!welcomeTrialTask) return false;
+    setIsClaimingTrial(true);
+    try {
+      const res = await clientTaskService.claimReward('REGISTRATION_TRIAL_FUND');
+      if (res.success) {
+        showToast(res.message || '🎉 Trial Fund welcome gift acknowledged and countdown activated!');
+        fetchDashboard();
+        return true;
+      } else {
+        showToast(res.message || 'Trial Fund could not be claimed.');
+        return false;
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error claiming trial fund reward.');
+      return false;
+    } finally {
+      setIsClaimingTrial(false);
+    }
+  };
+
   useEffect(() => {
     fetchDashboard();
     checkAutoVerifiedDeposits();
+    checkWelcomeTrialFund();
 
     // Poll every 8 seconds for automatic deposit verification
     const pollInterval = setInterval(() => {
@@ -175,24 +239,26 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
     }, 8000);
 
     return () => clearInterval(pollInterval);
-  }, [fetchDashboard, checkAutoVerifiedDeposits]);
+  }, [fetchDashboard, checkAutoVerifiedDeposits, checkWelcomeTrialFund]);
 
   const handleLogout = () => {
     logout();
     onBackToLanding();
   };
 
-  const handleQuickAction = (actionType: 'deposit' | 'withdraw' | 'claim' | 'team' | 'invite') => {
+  const handleQuickAction = (actionType: 'deposit' | 'withdraw' | 'claim' | 'staking' | 'team' | 'invite' | 'task' | 'transactions') => {
     if (actionType === 'deposit') {
       setActiveTab('deposit');
     } else if (actionType === 'withdraw') {
       setActiveTab('withdrawal');
-    } else if (actionType === 'claim') {
-      setActiveTab('rewards');
+    } else if (actionType === 'staking' || actionType === 'claim') {
+      setActiveTab('staking');
     } else if (actionType === 'team') {
       setActiveTab('team');
-    } else if (actionType === 'invite') {
+    } else if (actionType === 'invite' || actionType === 'task') {
       setActiveTab('task');
+    } else if (actionType === 'transactions') {
+      setActiveTab('transactions');
     }
   };
 
@@ -246,7 +312,12 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       case 'dashboard':
         return (
           <DashboardLayout variant="blank">
-            <DashboardHome dashboardData={dashboardData} onRefresh={fetchDashboard} onQuickAction={handleQuickAction} />
+            <DashboardHome
+              dashboardData={dashboardData}
+              onRefresh={fetchDashboard}
+              onQuickAction={handleQuickAction}
+              onDailyClaimSuccess={(info) => setDailyClaimSuccessData(info)}
+            />
           </DashboardLayout>
         );
       case 'profile':
@@ -264,7 +335,12 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
       case 'withdrawalAddresses':
         return <WithdrawalAddressesView />;
       case 'settings':
-        return wrapLegacyView(<SettingsView />);
+        return (
+          <SettingsView
+            onNavigate={(tab) => setActiveTab(tab)}
+            showToast={showToast}
+          />
+        );
       case 'support':
         return <SupportView />;
       case 'deposit':
@@ -284,9 +360,10 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
             onBack={() => setActiveTab('dashboard')}
           />
         );
+      case 'staking':
       case 'rewards':
         return (
-          <RewardsView
+          <StakingView
             onBack={() => setActiveTab('dashboard')}
           />
         );
@@ -294,6 +371,9 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
         return (
           <TaskView
             onBack={() => setActiveTab('dashboard')}
+            onNavigateToReferrals={() => setActiveTab('team')}
+            onNavigate={(tab) => setActiveTab(tab as DashboardTab)}
+            onRefresh={fetchDashboard}
           />
         );
       default:
@@ -375,6 +455,29 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({ onBackToLanding })
         network={depositSuccessData?.network}
         onClose={() => setDepositSuccessData(null)}
       />
+
+      {/* Daily Claim Reward Success Modal */}
+      <DailyClaimModal
+        isOpen={!!dailyClaimSuccessData}
+        amount={dailyClaimSuccessData?.amount || 0}
+        streakDays={dailyClaimSuccessData?.streakDays}
+        onClose={() => setDailyClaimSuccessData(null)}
+      />
+
+      {/* Welcome / Trial Fund Gift Modal */}
+      {welcomeTrialTask && (
+        <WelcomeTrialFundModal
+          isOpen={isWelcomeModalOpen}
+          trialTask={welcomeTrialTask}
+          isClaiming={isClaimingTrial}
+          onClaim={handleClaimWelcomeTrial}
+          onClose={() => setIsWelcomeModalOpen(false)}
+          onGoToTasks={() => {
+            setIsWelcomeModalOpen(false);
+            setActiveTab('task');
+          }}
+        />
+      )}
 
     </div>
   );

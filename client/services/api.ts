@@ -564,6 +564,34 @@ class ApiService {
   }
 
   /**
+   * Admin: Get Rewards Pool task definitions, metrics & claims
+   */
+  async getRewardsPool(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/rewards/pool');
+  }
+
+  /**
+   * Admin: Update Task Definition in Rewards Pool
+   */
+  async updateTaskDefinition(id: string, updates: any): Promise<ApiResponse<any>> {
+    return this.patch<any>(`/admin/rewards/tasks/${id}`, updates);
+  }
+
+  /**
+   * Admin: Create new Task Definition in Rewards Pool
+   */
+  async createTaskDefinition(data: any): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/rewards/tasks', data);
+  }
+
+  /**
+   * Admin: Get Task Claims history log
+   */
+  async getTaskClaims(): Promise<ApiResponse<any>> {
+    return this.get<any>('/admin/rewards/claims');
+  }
+
+  /**
    * Admin: Get reward campaigns
    */
   async getRewardCampaigns(): Promise<ApiResponse<any>> {
@@ -582,6 +610,13 @@ class ApiService {
    */
   async updateRewardCampaign(id: string, updates: any): Promise<ApiResponse<any>> {
     return this.patch<any>(`/admin/rewards/campaigns/${id}`, updates);
+  }
+
+  /**
+   * User: Get system announcements published by admin
+   */
+  async getUserAnnouncements(): Promise<ApiResponse<any>> {
+    return this.get<any>('/users/announcements');
   }
 
   /**

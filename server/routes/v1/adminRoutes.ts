@@ -636,6 +636,50 @@ router.post(
 );
 
 /**
+ * @route GET /api/v1/admin/rewards/pool
+ * @desc Get task definitions, metrics, and claim history for rewards pool
+ */
+router.get(
+  '/rewards/pool',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getRewardsPool
+);
+
+/**
+ * @route POST /api/v1/admin/rewards/tasks
+ * @desc Create a new task definition in rewards pool
+ */
+router.post(
+  '/rewards/tasks',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.createTaskDefinition
+);
+
+/**
+ * @route PATCH /api/v1/admin/rewards/tasks/:id
+ * @desc Update a task definition (reward amount, active status, threshold, etc.)
+ */
+router.patch(
+  '/rewards/tasks/:id',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.updateTaskDefinition
+);
+
+/**
+ * @route GET /api/v1/admin/rewards/claims
+ * @desc Get user claims history log
+ */
+router.get(
+  '/rewards/claims',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.getTaskClaims
+);
+
+/**
  * @route GET /api/v1/admin/rewards/campaigns
  * @desc Get reward campaigns
  */

@@ -91,8 +91,8 @@ export const Login: React.FC<LoginProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
     >
-      <form onSubmit={handleLocalSubmit} className="space-y-3 sm:space-y-3.5">
-        <div className="space-y-3">
+      <form onSubmit={handleLocalSubmit} className="space-y-4">
+        <div className="space-y-4">
           <Input
             label="Username or Email Address"
             type="text"
@@ -105,7 +105,7 @@ export const Login: React.FC<LoginProps> = ({
             autoFocus
           />
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label htmlFor="auth-password-input-login" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
                 Password
@@ -131,7 +131,7 @@ export const Login: React.FC<LoginProps> = ({
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                className="w-full pl-4 pr-10 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
                 required
               />
               <button
@@ -144,7 +144,7 @@ export const Login: React.FC<LoginProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-0.5">
+          <div className="flex items-center justify-between pt-1">
             <label className="flex items-center space-x-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -160,7 +160,7 @@ export const Login: React.FC<LoginProps> = ({
         <Button
           type="submit"
           isLoading={busy}
-          className="w-full mt-1.5"
+          className="w-full mt-2"
           variant="primary"
           size="lg"
           id="auth-submit-btn"

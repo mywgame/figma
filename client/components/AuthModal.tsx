@@ -70,30 +70,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       id="auth-modal-portal"
-      size={activeView === 'register' || activeView === 'admin-mfa' ? "md" : "sm"}
+      size="md"
     >
       {/* Top Decorative gradient strip */}
       <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-amber-400 to-emerald-500 w-full" />
 
-      <div className="pt-0">
+      <div className="pt-1">
         {/* Logo */}
-        <div className="mb-2.5 sm:mb-3 flex justify-start pr-10">
+        <div className="mb-3 sm:mb-4 flex justify-start pr-10">
           <img
             src={logoImg}
             alt="MetaFirm Logo"
             referrerPolicy="no-referrer"
-            className="h-8 sm:h-9 object-contain animate-fade-in"
+            className="h-9 sm:h-10 object-contain animate-fade-in"
           />
         </div>
 
         {/* Header Identity */}
-        <div className="mb-3 sm:mb-3.5 space-y-1">
-          <div className="inline-flex items-center space-x-1.5 bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider">
-            <ShieldCheck className="w-3.5 h-3.5" />
+        <div className="mb-4 sm:mb-5 space-y-1.5">
+          <div className="inline-flex items-center space-x-1.5 bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider">
+            <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
             <span>MetaFirm Secure Gateway</span>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-display font-extrabold text-slate-900 tracking-tight leading-tight pt-0.5">
+          <h2 className="text-xl sm:text-2xl font-display font-extrabold text-slate-900 tracking-tight leading-tight pt-1">
             {activeView === 'login' && 'Sign In'}
             {activeView === 'register' && 'Create Account'}
             {activeView === 'otp-verify' && 'Verify Your Email'}
@@ -102,7 +102,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {activeView === 'admin-mfa' && 'Admin Multi-Factor Verification'}
           </h2>
 
-          <p className="text-xs sm:text-sm text-slate-600 leading-snug font-sans font-medium pt-0.5">
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-sans font-medium pt-0.5">
             {activeView === 'login' && 'Access your secure ledger balance, team statistics, and automated payout channels.'}
             {activeView === 'register' && 'Open an institutional-grade account with real-time reserve auditing and compound yields.'}
             {activeView === 'otp-verify' && `We sent a secure 6-digit confirmation code to ${email || 'your email'}.`}
@@ -114,14 +114,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Error Alerts */}
         {validationError && (
-          <Alert variant="error" className="mb-3">
+          <Alert variant="error" className="mb-4">
             {validationError}
           </Alert>
         )}
 
         {/* Success Alerts */}
         {successMsg && (
-          <Alert variant="success" className="mb-3">
+          <Alert variant="success" className="mb-4">
             {successMsg}
           </Alert>
         )}

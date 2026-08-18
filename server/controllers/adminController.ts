@@ -27,6 +27,7 @@ import { totp } from '../utils/totp.ts';
 import { encryptText, decryptText, hashCode } from '../utils/encryption.ts';
 import { adminSecurityRepository } from '../repositories/adminSecurityRepository.ts';
 import { settingsRepository } from '../repositories/settingsRepository.ts';
+import { taskRepository } from '../repositories/taskRepository.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
 
 export class AdminController {
@@ -1282,6 +1283,96 @@ export class AdminController {
 
       const campaigns = await adminService.getRewardCampaigns();
       return sendSuccess(res, campaigns, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Rewards Pool Task Definitions & Metrics
+   */
+  async getRewardsPool(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const tasks = await taskRepository.findAllTaskDefinitionsForAdmin();
+      const metrics = await taskRepository.getRewardsPoolMetrics();
+      const claims = await taskRepository.getRecentTaskClaims(50);
+
+      return sendSuccess(res, {
+        tasks,
+        metrics,
+        claims,
+      }, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH Update Task Definition
+   */
+  async updateTaskDefinition(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const { id } = req.params;
+      const updated = await taskRepository.updateTaskDefinition(id, req.body);
+
+      await SecurityLogger.logAudit({
+        actorUid: req.user.uid,
+        action: 'UPDATE_TASK_DEFINITION',
+        resource: `task_definitions/${id}`,
+        oldValue: '',
+        newValue: JSON.stringify(req.body),
+      });
+
+      return sendSuccess(res, updated, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST Create Task Definition
+   */
+  async createTaskDefinition(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const created = await taskRepository.createTaskDefinition(req.body);
+
+      await SecurityLogger.logAudit({
+        actorUid: req.user.uid,
+        action: 'CREATE_TASK_DEFINITION',
+        resource: `task_definitions/${created?.id || 'new'}`,
+        oldValue: '',
+        newValue: JSON.stringify(req.body),
+      });
+
+      return sendSuccess(res, created, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET Recent Task Claims Log
+   */
+  async getTaskClaims(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+
+      const claims = await taskRepository.getRecentTaskClaims(100);
+      return sendSuccess(res, claims, 200);
     } catch (error) {
       next(error);
     }

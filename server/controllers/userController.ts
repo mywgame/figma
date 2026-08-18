@@ -29,9 +29,12 @@ import { totp } from '../utils/totp.ts';
 import { otpService } from '../cache/services/otpService.ts';
 import { addressService } from '../blockchain/services/AddressService.ts';
 import { referralService } from '../services/referralService.ts';
+import { adminService } from '../services/adminService.ts';
 import { userRepository } from '../repositories/userRepository.ts';
 import { walletRepository } from '../repositories/walletRepository.ts';
 import { vipRepository } from '../repositories/vipRepository.ts';
+import { claimRepository } from '../repositories/claimRepository.ts';
+import { teamCommissionHistoryRepository } from '../repositories/teamCommissionHistoryRepository.ts';
 
 function isValidCryptoAddress(network: string, address: string): boolean {
   if (network === 'USDT_BEP20' || network === 'USDT_POLYGON') {
@@ -969,11 +972,22 @@ export class UserController {
         throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
       }
       const user = await userService.getUserProfile(req.user.uid);
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
       const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
       const type = req.query.type as string | undefined;
       const status = req.query.status as string | undefined;
-      const list = await transactionRepository.findByUserId(user.id, { limit, offset, type, status });
+
+      // Filter transactions for the last 3 months (90 days)
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+      const list = await transactionRepository.findByUserId(user.id, {
+        limit,
+        offset,
+        type,
+        status,
+        startDate: threeMonthsAgo,
+      });
       return sendSuccess(res, list, 200);
     } catch (error) {
       next(error);
@@ -1029,7 +1043,12 @@ export class UserController {
       }
 
       const user = await userService.getUserProfile(req.user.uid);
+      const userVip = await vipRepository.findByUserId(user.id);
+      const userTier = userVip?.tier || 'VIP1';
+
       const descendants = await referralService.getDownlineDescendants(user.id);
+      const totalCommissionsMap = await teamCommissionHistoryRepository.getTotalCommissionsByReceiver(user.id);
+      const now = new Date();
 
       const members = await Promise.all(
         descendants.map(async (d) => {
@@ -1039,13 +1058,58 @@ export class UserController {
 
           const levelLabel = d.referralLevel === 1 ? 'Level A' : d.referralLevel === 2 ? 'Level B' : d.referralLevel === 3 ? 'Level C' : 'Level D';
 
+          // Determine today's DPY generated/claimed by that team member
+          let childClaim = (await claimRepository.findAnyClaimInWindow(d.childId, now))[0] || null;
+          if (!childClaim) {
+            childClaim = await claimService.generateClaimForUser(d.childId, now);
+          }
+
+          const childDpyAmount = childClaim ? parseFloat(childClaim.rewardAmount) : 0;
+
+          // Check current user's team commission eligibility for this referral level
+          const actualRate = referralService.getTeamCommissionRate(userTier, d.referralLevel);
+          const isEligible = actualRate > 0;
+
+          let contributionAmount = 0;
+          let contributionStatus: 'Qualified' | 'Missed' = 'Qualified';
+          let formattedIncome = '$0.00';
+
+          if (isEligible) {
+            // Actual Team Commission calculation for eligible upline
+            contributionAmount = childDpyAmount * actualRate;
+            contributionStatus = 'Qualified';
+            formattedIncome = `+$${contributionAmount.toFixed(2)}`;
+          } else {
+            // Informational display only: amount that would have been Qualified if VIP qualification was met
+            const potentialRate = referralService.getBaseCommissionRate(d.referralLevel);
+            contributionAmount = childDpyAmount * potentialRate;
+            contributionStatus = 'Missed';
+            formattedIncome = `$${contributionAmount.toFixed(2)}`;
+          }
+
+          // Cumulative total contribution from this member to current user
+          const cumulativeContribution = totalCommissionsMap[d.childId] || 0;
+          const formattedTotalContribution = `$${cumulativeContribution.toFixed(2)}`;
+
+          const rawUserId = childUser?.userId || (childUser as any)?.user_id;
+          const visibleUserId = (rawUserId && rawUserId !== 'DS------')
+            ? rawUserId
+            : (childUser ? `DS${childUser.id.replace(/-/g, '').slice(0, 6).toUpperCase()}` : 'DS000000');
+
           return {
             id: d.childId,
             username: childUser?.username || 'user_' + d.childId.slice(0, 6),
+            userId: visibleUserId,
             referralLevel: d.referralLevel,
             levelLabel,
             vipRank: childVip?.tier || 'VIP1',
-            todaysIncome: '$0.00',
+            todaysIncome: formattedIncome,
+            totalContribution: formattedTotalContribution,
+            totalContributionAmount: cumulativeContribution,
+            contributionAmount,
+            contributionStatus,
+            isEligible,
+            claimedDpy: childDpyAmount.toFixed(2),
             totalDeposited: childWallet?.totalDeposited || '0.00000000',
             createdAt: childUser?.createdAt || new Date(),
           };
@@ -1053,6 +1117,18 @@ export class UserController {
       );
 
       return sendSuccess(res, members, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fetch active platform announcements broadcasted by admin
+   */
+  async getAnnouncements(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const announcements = await adminService.getAnnouncements();
+      return sendSuccess(res, announcements || [], 200);
     } catch (error) {
       next(error);
     }

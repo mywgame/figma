@@ -46,7 +46,7 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6" id={id}>
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3.5 sm:p-6" id={id}>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -63,7 +63,7 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className={`w-full ${sizes[size]} bg-white border border-slate-200 rounded-[24px] sm:rounded-[28px] p-5 sm:p-7 shadow-2xl relative z-10 overflow-hidden text-left text-slate-900`}
+            className={`w-full ${sizes[size]} bg-white border border-slate-200 rounded-[24px] sm:rounded-[28px] p-6 sm:p-8 shadow-2xl relative z-10 overflow-hidden text-left text-slate-900`}
             role="dialog"
             aria-modal="true"
           >
@@ -84,7 +84,7 @@ export const Modal: React.FC<ModalProps> = ({
             ) : (
               <button
                 onClick={onClose}
-                className="absolute top-3.5 right-3.5 sm:top-4.5 sm:right-4.5 z-20 w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                className="absolute top-4 right-4 sm:top-5 sm:right-5 z-20 w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
                 aria-label="Close modal"
               >
                 <X className="w-4 h-4" />

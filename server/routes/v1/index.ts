@@ -8,6 +8,7 @@ import userRoutes from './userRoutes.ts';
 import authRoutes from './authRoutes.ts';
 import adminRoutes from './adminRoutes.ts';
 import webhookRoutes from './webhookRoutes.ts';
+import taskRoutes from './taskRoutes.ts';
 
 const router = Router();
 
@@ -16,6 +17,9 @@ router.use('/auth', authRoutes);
 
 // Mount user routes
 router.use('/users', userRoutes);
+
+// Mount task routes
+router.use('/tasks', taskRoutes);
 
 // Mount admin routes
 router.use('/admin', adminRoutes);

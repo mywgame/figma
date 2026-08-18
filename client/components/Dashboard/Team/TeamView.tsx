@@ -24,17 +24,23 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
   const [selectedLevel, setSelectedLevel] = useState<ReferralLevel>('Level A');
   const [searchQuery, setSearchQuery] = useState('');
   const [dbMembers, setDbMembers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     async function fetchMembers() {
       try {
+        setIsLoading(true);
         const response = await api.get<any[]>('/users/team/members');
         if (response.success && response.data && isMounted) {
           setDbMembers(response.data);
         }
       } catch (err) {
         console.error('Failed to load team members:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
     fetchMembers();
@@ -81,10 +87,29 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
         m.referralLevel === 2 ? 'Level B' :
         m.referralLevel === 3 ? 'Level C' : 'Level D';
 
+      const memberUserId =
+        (m.userId && m.userId !== 'DS------')
+          ? m.userId
+          : (m as any).user_id && (m as any).user_id !== 'DS------'
+          ? (m as any).user_id
+          : (m as any).userVisibleId
+          ? (m as any).userVisibleId
+          : m.id
+          ? `DS${m.id.replace(/-/g, '').slice(0, 6).toUpperCase()}`
+          : 'DS000000';
+
       grouped[levelKey].push({
+        id: m.id,
         username: m.username,
+        userId: memberUserId,
         vipRank: m.vipRank || 'VIP1',
-        todaysIncome: m.todaysIncome || '+$0.00',
+        todaysIncome: m.todaysIncome || '$0.00',
+        totalContribution: m.totalContribution || '$0.00',
+        totalContributionAmount: m.totalContributionAmount,
+        contributionStatus: m.contributionStatus || 'Missed',
+        isEligible: m.isEligible,
+        contributionAmount: m.contributionAmount,
+        claimedDpy: m.claimedDpy,
       });
     });
 
@@ -96,22 +121,27 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
     let total = 0;
     Object.values(allTeamMembers).forEach((levelMembers) => {
       levelMembers.forEach((member) => {
-        const value = parseFloat(member.todaysIncome.replace(/[^0-9.-]/g, ''));
-        if (!isNaN(value)) {
-          total += value;
+        if (member.contributionStatus === 'Qualified') {
+          const value = parseFloat(member.todaysIncome.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(value) && value > 0) {
+            total += value;
+          }
         }
       });
     });
-    return `+$${total.toFixed(2)}`;
+    return total > 0 ? `+$${total.toFixed(2)}` : '$0.00';
   }, [allTeamMembers]);
 
-  // Filter members for active view
+  // Filter members for active view (supporting username and DS ID search)
   const activeLevelMembers = useMemo(() => {
     const list = allTeamMembers[selectedLevel] || [];
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
-    return list.filter((member) => member.username.toLowerCase().includes(q));
-  }, [selectedLevel, searchQuery]);
+    return list.filter((member) => 
+      member.username.toLowerCase().includes(q) || 
+      member.userId.toLowerCase().includes(q)
+    );
+  }, [selectedLevel, searchQuery, allTeamMembers]);
 
   return (
     <DashboardLayout
@@ -136,7 +166,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
           {/* Glassmorphic level tab selectors */}
-          <div className={`flex flex-wrap gap-1 p-1 rounded-2xl border transition-all duration-300 ${
+          <div className={`grid grid-cols-4 sm:flex sm:flex-wrap gap-1 p-1 rounded-2xl border transition-all duration-300 w-full sm:w-auto ${
             t.isDark ? 'bg-white/3 border-white/5' : 'bg-black/3 border-black/5'
           }`}>
             {(['Level A', 'Level B', 'Level C', 'Level D'] as ReferralLevel[]).map((level) => {
@@ -147,7 +177,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
                 <button
                   key={level}
                   onClick={() => setSelectedLevel(level)}
-                  className={`relative text-[10px] xs:text-xs font-bold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-colors duration-200 cursor-pointer focus:outline-none select-none z-10 ${
+                  className={`relative text-[10px] xs:text-xs font-bold px-1 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-colors duration-200 cursor-pointer focus:outline-none select-none z-10 text-center flex flex-col sm:flex-row items-center justify-center sm:gap-1 ${
                     isActive
                       ? t.isDark ? 'text-cyan-400' : 'text-blue-600'
                       : `${t.textSub} hover:${t.text}`
@@ -164,7 +194,8 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
                       }`}
                     />
                   )}
-                  <span>{level} ({count})</span>
+                  <span className="truncate">{level}</span>
+                  <span className="text-[9px] sm:text-xs opacity-75">({count})</span>
                 </button>
               );
             })}
@@ -182,8 +213,10 @@ export const TeamView: React.FC<TeamViewProps> = ({ dashboardData }) => {
 
         {/* Team Table list container */}
         <TeamTable
+          key={selectedLevel}
           members={activeLevelMembers}
           levelLabel={selectedLevel}
+          isLoading={isLoading}
           t={t}
         />
       </div>
