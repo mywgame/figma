@@ -705,7 +705,7 @@ export class AdminService {
   }
 
   /**
-   * Retrieve platform system wide audit logs
+   * Retrieve platform system wide audit logs with enriched user and resource details
    */
   async getSystemAuditLogs(options?: { limit?: number; offset?: number; action?: string }) {
     const logs = await auditRepository.findAll(options);
@@ -713,21 +713,73 @@ export class AdminService {
     for (const a of logs) {
       let adminLabel = 'System';
       if (a.actorUid && a.actorUid !== 'SYSTEM') {
-        const u = await userRepository.findByUid(a.actorUid);
-        adminLabel = u ? (u.name || u.email || a.actorUid) : a.actorUid;
+        // Try finding actor by auth uid or database id
+        let actorUser = await userRepository.findByUid(a.actorUid);
+        if (!actorUser) {
+          actorUser = await userRepository.findById(a.actorUid);
+        }
+
+        if (actorUser) {
+          if (actorUser.role === 'ADMIN') {
+            adminLabel = actorUser.name ? `${actorUser.name} (Super Admin)` : 'Super Admin';
+          } else {
+            // Standard User action (e.g., Daily DPY Claim, Tasks, Self operations)
+            adminLabel = actorUser.userId
+              ? `${actorUser.name || actorUser.username || 'Member'} (${actorUser.userId})`
+              : (actorUser.name || actorUser.email || 'User');
+          }
+        } else if (a.userId && a.actorUid === a.userId) {
+          // Actor is the target user
+          const target = await userRepository.findById(a.userId);
+          if (target) {
+            adminLabel = target.userId
+              ? `${target.name || target.username || 'Member'} (${target.userId})`
+              : (target.name || target.email || 'User');
+          } else {
+            adminLabel = 'User';
+          }
+        } else if (a.actorUid.toLowerCase().includes('admin')) {
+          adminLabel = 'Super Admin';
+        } else {
+          adminLabel = 'System';
+        }
+      }
+
+      let targetUserName: string | null = null;
+      let targetUserDsId: string | null = null;
+      let targetUserLabel: string | null = null;
+      if (a.userId) {
+        const target = await userRepository.findById(a.userId);
+        if (target) {
+          targetUserName = target.name || target.username || target.email || 'Member';
+          targetUserDsId = target.userId || null;
+          targetUserLabel = target.userId ? `${targetUserName} (${target.userId})` : targetUserName;
+        }
       }
 
       let module = 'Settings';
       if (a.resource?.includes('user')) module = 'Users';
       else if (a.resource?.includes('deposit')) module = 'Deposits';
       else if (a.resource?.includes('withdrawal')) module = 'Withdrawals';
+      else if (a.resource?.includes('claim') || a.resource?.includes('yield')) module = 'Yield & Rewards';
+      else if (a.resource?.includes('wallet')) module = 'Wallets';
 
       result.push({
         id: a.id,
         action: a.action,
         admin: adminLabel,
+        actorUid: a.actorUid,
+        targetUser: targetUserLabel,
+        targetUserName,
+        targetUserDsId,
+        userId: a.userId,
+        resource: a.resource,
+        oldValue: a.oldValue,
+        newValue: a.newValue,
         ip: a.ipAddress || '127.0.0.1',
+        device: a.device || 'Web Console',
         time: new Date(a.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        rawTimestamp: a.createdAt,
         module,
       });
     }

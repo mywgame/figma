@@ -131,15 +131,15 @@ export class DashboardService {
 
     // 7. Check if there's any active DPY yield claim open today, lazy-generating if none exists
     const now = new Date();
-    let activeClaims = await claimRepository.findActiveClaimsInWindow(userId, now);
-    if (activeClaims.length === 0) {
-      const generated = await claimService.generateClaimForUser(userId, now);
-      if (generated) {
-        activeClaims = [generated];
-      }
+    const existingClaimsToday = await claimRepository.findAnyClaimInWindow(userId, now);
+    let todayClaim = existingClaimsToday.length > 0 ? existingClaimsToday[0] : null;
+
+    if (!todayClaim) {
+      todayClaim = await claimService.generateClaimForUser(userId, now);
     }
-    const dailyClaimAvailable = activeClaims.length > 0;
-    const pendingClaim = dailyClaimAvailable ? activeClaims[0] : null;
+
+    const dailyClaimAvailable = todayClaim !== null && todayClaim.claimStatus === 'PENDING';
+    const pendingClaim = todayClaim;
 
     // 8. Load settings for debug trial fund representation
     const trialAmountSetting = await settingsRepository.findSystemSettingByKey('TRIAL_FUND_AMOUNT');
