@@ -24,8 +24,8 @@ import { salaryService } from './salaryService.ts';
 import { addressService } from '../blockchain/services/AddressService.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
 import { db } from '../../src/db/index.ts';
-import { users, wallets, deposits, withdrawals, supportTickets, activityLogs, vipStatus, sessions } from '../../src/db/schema.ts';
-import { eq, like, or, and, desc, asc, sql } from 'drizzle-orm';
+import { users, wallets, deposits, withdrawals, supportTickets, activityLogs, vipStatus, sessions, referralRelationships } from '../../src/db/schema.ts';
+import { eq, like, ilike, or, and, desc, asc, sql } from 'drizzle-orm';
 
 /**
  * BUSINESS RULE — Single Source of Truth:
@@ -48,15 +48,18 @@ export class AdminService {
   }) {
     const conditions = [];
 
-    if (options.search) {
-      const pattern = `%${options.search}%`;
+    if (options.search && options.search.trim()) {
+      const searchClean = options.search.trim();
+      const pattern = `%${searchClean}%`;
       conditions.push(
         or(
-          like(users.name, pattern),
-          like(users.email, pattern),
-          like(users.phone, pattern),
-          like(users.userId, pattern),
-          like(users.uid, pattern)
+          ilike(users.name, pattern),
+          ilike(users.username, pattern),
+          ilike(users.email, pattern),
+          ilike(users.phone, pattern),
+          ilike(users.userId, pattern),
+          ilike(users.uid, pattern),
+          ilike(users.referralCode, pattern)
         )
       );
     }
@@ -73,6 +76,20 @@ export class AdminService {
 
     let orderByClause;
     switch (options.sortBy) {
+      case 'TopDepositor':
+      case 'top_depositor':
+        // Sum of all deposits for this user (High to Low)
+        orderByClause = desc(
+          sql<number>`COALESCE((SELECT SUM(${deposits.amount}) FROM ${deposits} WHERE ${deposits.userId} = ${users.id} AND ${deposits.status} = 'COMPLETED'), (SELECT SUM(${deposits.amount}) FROM ${deposits} WHERE ${deposits.userId} = ${users.id}), 0)`
+        );
+        break;
+      case 'TopPerformer':
+      case 'top_performer':
+        // Total referrals referred by this user (High to Low)
+        orderByClause = desc(
+          sql<number>`COALESCE((SELECT COUNT(*) FROM ${referralRelationships} WHERE ${referralRelationships.parentId} = ${users.id}), 0)`
+        );
+        break;
       case 'HighestBalance':
         orderByClause = desc(wallets.availableBalance);
         break;
@@ -80,10 +97,14 @@ export class AdminService {
         orderByClause = asc(wallets.availableBalance);
         break;
       case 'HighestReferrals':
-        orderByClause = desc(vipStatus.levelAValidCount);
+        orderByClause = desc(
+          sql<number>`COALESCE((SELECT COUNT(*) FROM ${referralRelationships} WHERE ${referralRelationships.parentId} = ${users.id} AND ${referralRelationships.referralLevel} = 1), 0)`
+        );
         break;
       case 'HighestTeamSize':
-        orderByClause = desc(vipStatus.teamTotalCount);
+        orderByClause = desc(
+          sql<number>`COALESCE((SELECT COUNT(*) FROM ${referralRelationships} WHERE ${referralRelationships.parentId} = ${users.id}), 0)`
+        );
         break;
       case 'Newest':
         orderByClause = desc(users.createdAt);
@@ -136,11 +157,13 @@ export class AdminService {
       mappedUsers.push({
         id: u.uid, // mapped to uid so frontend actions target uid
         userId: u.userId,
-        name: u.name || '',
+        username: u.username || '',
+        name: u.name || u.username || u.userId,
         email: u.email,
         mobile: u.phone || '',
         rank: vip?.tier || 'VIP1',
         balance: wallet ? `$${parseFloat(wallet.availableBalance).toFixed(2)}` : '$0.00',
+        referralCode: u.referralCode,
         levelA,
         levelB,
         levelC,

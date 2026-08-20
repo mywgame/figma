@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Eye,
@@ -52,9 +52,35 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
   const [filter, setFilter] = useState<string>('All');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<string>('Newest');
+  const [isSortOpen, setIsSortOpen] = useState<boolean>(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(10);
   const [total, setTotal] = useState<number>(0);
+
+  const sortOptions = [
+    { value: 'Newest', label: 'Newest Users' },
+    { value: 'Oldest', label: 'Oldest Users' },
+    { value: 'TopDepositor', label: 'Top Depositor' },
+    { value: 'TopPerformer', label: 'Top Performer' },
+    { value: 'HighestBalance', label: 'Highest Wallet Balance' },
+    { value: 'LowestBalance', label: 'Lowest Wallet Balance' },
+    { value: 'HighestReferrals', label: 'Highest Direct Referrals' },
+    { value: 'HighestTeamSize', label: 'Highest Team Size' },
+  ];
+
+  // Close sort dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
+        setIsSortOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Dynamic Detail/History States for Modals
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
@@ -566,7 +592,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
               <Search className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${t.textMuted}`} />
               <input
                 type="text"
-                placeholder="Search by name, ID, phone, email..."
+                placeholder="Search by username, name, ID, phone, email..."
                 value={search}
                 onChange={e => { setSearch(e.target.value); setPage(1); }}
                 className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${t.input}`}
@@ -574,20 +600,61 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
             </div>
 
             {/* Sort Select */}
-            <div className="relative w-full sm:w-56 flex items-center gap-2">
+            <div className="relative w-full sm:w-auto flex items-center gap-2" ref={sortDropdownRef}>
               <span className={`text-xs whitespace-nowrap font-bold font-mono ${t.textMuted}`}>Sort By:</span>
-              <select
-                value={sortBy}
-                onChange={e => { setSortBy(e.target.value); setPage(1); }}
-                className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white dark:bg-white/5 text-gray-900 dark:text-white border-gray-200 dark:border-white/10`}
-              >
-                <option value="Newest">Newest Users</option>
-                <option value="Oldest">Oldest Users</option>
-                <option value="HighestBalance">Highest Wallet Balance</option>
-                <option value="LowestBalance">Lowest Wallet Balance</option>
-                <option value="HighestReferrals">Highest Direct Referrals</option>
-                <option value="HighestTeamSize">Highest Team Size</option>
-              </select>
+              <div className="relative w-full sm:w-56">
+                <button
+                  type="button"
+                  onClick={() => setIsSortOpen(prev => !prev)}
+                  className={`w-full px-3.5 py-2 text-xs rounded-xl border flex items-center justify-between font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${
+                    isDark
+                      ? 'bg-[#101426] border-white/15 text-white hover:border-white/25 shadow-sm'
+                      : 'bg-white border-gray-200 text-gray-900 hover:border-gray-300 shadow-xs'
+                  }`}
+                >
+                  <span className="truncate">
+                    {sortOptions.find(o => o.value === sortBy)?.label || 'Newest Users'}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 ml-2 shrink-0 transition-transform duration-200 ${isSortOpen ? 'rotate-180 text-blue-500' : t.textMuted}`} />
+                </button>
+
+                {isSortOpen && (
+                  <div
+                    className={`absolute left-0 right-0 top-full mt-1.5 rounded-xl border py-1.5 z-50 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 ${
+                      isDark
+                        ? 'bg-[#101426] border-white/15 text-white shadow-black/90'
+                        : 'bg-white border-gray-200 text-gray-900 shadow-xl'
+                    }`}
+                  >
+                    {sortOptions.map(opt => {
+                      const isSelected = sortBy === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setSortBy(opt.value);
+                            setPage(1);
+                            setIsSortOpen(false);
+                          }}
+                          className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between font-medium transition-colors ${
+                            isSelected
+                              ? isDark
+                                ? 'bg-blue-600/20 text-blue-400 font-bold'
+                                : 'bg-blue-50 text-blue-600 font-bold'
+                              : isDark
+                              ? 'text-gray-300 hover:bg-white/6 hover:text-white'
+                              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -644,12 +711,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
                 <tr className={`border-b ${t.sep} ${isDark ? 'bg-white/2' : 'bg-gray-50'}`}>
                   <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>User Profile</th>
                   <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>User ID</th>
-                  <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>VIP Tier</th>
                   <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>Wallet Balance</th>
-                  <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted} text-center`}>Level A</th>
-                  <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted} text-center`}>Level B</th>
-                  <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted} text-center`}>Level C</th>
-                  <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted} text-center`}>Level D</th>
                   <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>Access Status</th>
                   <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>Registered Date</th>
                   <th className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted} text-right`}>Actions</th>
@@ -662,7 +724,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
                       {/* User Profile column */}
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
-                          <Avatar name={user.name} size="md" className={user.status === 'Suspended' ? 'opacity-60' : ''} />
+                          <Avatar
+                            name={user.name}
+                            fallbackText={user.rank || 'VIP1'}
+                            size="md"
+                            className={`font-mono text-xs font-black tracking-tight !bg-blue-600 !text-white border border-blue-400/40 shadow-sm ${
+                              user.status === 'Suspended' ? 'opacity-60' : ''
+                            }`}
+                          />
                           <div className="min-w-0">
                             <p className="font-bold truncate text-sm">{user.name}</p>
                             <div className={`flex flex-col text-[10px] ${t.textMuted} mt-0.5 space-y-0.5`}>
@@ -676,32 +745,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
                       {/* User ID */}
                       <td className={`px-5 py-3 font-mono font-semibold text-xs ${t.textMuted}`}>{user.userId}</td>
 
-                      {/* VIP Tier */}
-                      <td className="px-5 py-3">{getVipBadge(user.rank)}</td>
-
                       {/* Wallet Balance */}
                       <td className="px-5 py-3 font-bold font-display text-sm text-gray-900 dark:text-white">
                         {user.balance}
-                      </td>
-
-                      {/* Level A */}
-                      <td className="px-5 py-3 text-center font-mono font-bold text-gray-800 dark:text-gray-200">
-                        {user.levelA}
-                      </td>
-
-                      {/* Level B */}
-                      <td className="px-5 py-3 text-center font-mono text-gray-500 dark:text-gray-400">
-                        {user.levelB}
-                      </td>
-
-                      {/* Level C */}
-                      <td className="px-5 py-3 text-center font-mono text-gray-500 dark:text-gray-400">
-                        {user.levelC}
-                      </td>
-
-                      {/* Level D */}
-                      <td className="px-5 py-3 text-center font-mono text-gray-500 dark:text-gray-400">
-                        {user.levelD}
                       </td>
 
                       {/* Access Status */}
@@ -844,7 +890,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ t, isDark }) => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={11} className={`px-5 py-12 text-center font-medium ${t.textMuted}`}>
+                    <td colSpan={6} className={`px-5 py-12 text-center font-medium ${t.textMuted}`}>
                       No users found matching current filters.
                     </td>
                   </tr>

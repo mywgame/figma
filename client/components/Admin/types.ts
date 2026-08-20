@@ -5,6 +5,8 @@
 
 export interface AdminUser {
   id: string;
+  userId?: string;
+  username?: string;
   name: string;
   email: string;
   mobile: string;
