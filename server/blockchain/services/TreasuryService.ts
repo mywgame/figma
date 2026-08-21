@@ -251,6 +251,9 @@ export class TreasuryService {
    * 4. Syncs wallet records to the database
    */
   public async validateAndSyncTreasuryWallets() {
+    if (this.isValidated) {
+      return;
+    }
     logger.info('[TreasuryService] Commencing multi-wallet Treasury architecture startup validation...');
 
     // Automatically apply schema migrations if new columns don't exist yet on database
