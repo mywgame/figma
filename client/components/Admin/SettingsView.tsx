@@ -36,10 +36,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
   const [baseRefBonus, setBaseRefBonus] = useState('5.0');
 
   // Mobile APK Force Update State
-  const [minApkVersion, setMinApkVersion] = useState('1.0.0');
-  const [latestApkVersion, setLatestApkVersion] = useState('1.0.0');
-  const [apkDownloadUrl, setApkDownloadUrl] = useState('https://metafirm.app/download/metafirm-latest.apk');
-  const [apkReleaseNotes, setApkReleaseNotes] = useState('Critical security patch, enhanced connection stability, and high-speed network routing.');
+  const [minApkVersion, setMinApkVersion] = useState('2.0.1');
+  const [latestApkVersion, setLatestApkVersion] = useState('2.0.1');
+  const [apkDownloadUrl, setApkDownloadUrl] = useState('https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.1.apk');
+  const [apkReleaseNotes, setApkReleaseNotes] = useState('MetaFirm v2.0.1: Security updates, performance enhancements, and improved trading node connectivity.');
   const [forceUpdateEnabled, setForceUpdateEnabled] = useState(true);
   
   const [loading, setLoading] = useState<boolean>(true);

@@ -30,10 +30,10 @@ router.get('/app-version', async (req: Request, res: Response, next: NextFunctio
       settingsRepository.findSystemSettingByKey('FORCE_UPDATE_ENABLED'),
     ]);
 
-    const minRequiredVersion = minVersionSetting?.value || '1.0.0';
-    const latestVersion = latestVersionSetting?.value || '1.0.0';
-    const downloadUrl = downloadUrlSetting?.value || 'https://metafirm.app/download/metafirm-latest.apk';
-    const releaseNotes = releaseNotesSetting?.value || 'Critical security update, database node connectivity improvements, and performance enhancements.';
+    const minRequiredVersion = minVersionSetting?.value || '2.0.1';
+    const latestVersion = latestVersionSetting?.value || '2.0.1';
+    const downloadUrl = downloadUrlSetting?.value || 'https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.1.apk';
+    const releaseNotes = releaseNotesSetting?.value || 'MetaFirm v2.0.1: Security updates, performance enhancements, and improved trading node connectivity.';
     const forceUpdateEnabled = forceUpdateSetting?.value ? forceUpdateSetting.value === 'true' : true;
 
     return sendSuccess(res, {

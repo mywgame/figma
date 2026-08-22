@@ -7,8 +7,10 @@ import React, { useState, useEffect } from 'react';
 import { Download, Check, ExternalLink, ShieldCheck, Info } from 'lucide-react';
 import { Modal } from '../ui/index.ts';
 import { useTheme } from '../../hooks/useTheme.ts';
+import { api } from '../../services/api.ts';
 
-const APK_URL = 'https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v1.0.1..apk';
+const DEFAULT_APK_URL = 'https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.1.apk';
+const DEFAULT_APK_VERSION = 'v2.0.1';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -43,8 +45,30 @@ export const DownloadAppsSection: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
   const [showInstallGuide, setShowInstallGuide] = useState<boolean>(false);
+  const [apkUrl, setApkUrl] = useState<string>(DEFAULT_APK_URL);
+  const [apkVersion, setApkVersion] = useState<string>(DEFAULT_APK_VERSION);
 
   useEffect(() => {
+    // Fetch dynamic APK configuration from admin settings
+    const loadApkConfig = async () => {
+      try {
+        const res = await api.getAppVersionConfig();
+        if (res.success && res.data) {
+          if (res.data.downloadUrl) {
+            setApkUrl(res.data.downloadUrl);
+          }
+          if (res.data.latestVersion) {
+            const rawVer = res.data.latestVersion.trim();
+            const formattedVer = rawVer.startsWith('v') || rawVer.startsWith('V') ? rawVer : `v${rawVer}`;
+            setApkVersion(formattedVer);
+          }
+        }
+      } catch (err) {
+        // Fallback to default v2.0.1
+      }
+    };
+    loadApkConfig();
+
     const checkInstalled = () => {
       const isStandalone =
         window.matchMedia('(display-mode: standalone)').matches ||
@@ -77,8 +101,8 @@ export const DownloadAppsSection: React.FC = () => {
   }, []);
 
   const handleDownloadApk = () => {
-    window.open(APK_URL, '_blank', 'noopener,noreferrer');
-    setDownloadMsg('Downloading MetaFirm Android APK...');
+    window.open(apkUrl, '_blank', 'noopener,noreferrer');
+    setDownloadMsg(`Downloading MetaFirm Android APK (${apkVersion})...`);
     setTimeout(() => setDownloadMsg(null), 4000);
   };
 
@@ -131,7 +155,7 @@ export const DownloadAppsSection: React.FC = () => {
                     ? 'bg-white/4 hover:bg-emerald-500/10 text-white border-white/10 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5'
                     : 'bg-white hover:bg-emerald-50/70 text-gray-900 border-gray-200 hover:border-emerald-500/40 hover:shadow-sm'
                 }`}
-                title="Download Android APK (v1.0.1)"
+                title={`Download Android APK (${apkVersion})`}
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center transition-colors shrink-0">
@@ -141,7 +165,7 @@ export const DownloadAppsSection: React.FC = () => {
                     <div className="flex items-center gap-1.5">
                       <span className={`text-xs font-bold ${t.text}`}>Android APK</span>
                       <span className="px-1.5 py-0.2 text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded">
-                        v1.0.1
+                        {apkVersion}
                       </span>
                     </div>
                     <div className={`text-[10px] ${t.textMuted} mt-0.5`}>Direct Download</div>
