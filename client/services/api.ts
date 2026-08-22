@@ -35,6 +35,7 @@ class ApiService {
     try {
       const url = getApiUrl(endpoint);
       const response = await fetch(url, {
+        credentials: 'include',
         ...options,
         headers,
       });
