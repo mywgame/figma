@@ -100,6 +100,20 @@ class ApiService {
   }
 
   /**
+   * Public: Retrieve current mobile app version requirements & APK download configuration
+   */
+  async getAppVersionConfig(): Promise<ApiResponse<{
+    minRequiredVersion: string;
+    latestVersion: string;
+    downloadUrl: string;
+    releaseNotes: string;
+    forceUpdateEnabled: boolean;
+    checkedAt: string;
+  }>> {
+    return this.get<any>('/system/app-version');
+  }
+
+  /**
    * Admin: Fetch admin dashboard overview metrics
    */
   async getAdminDashboardOverview(): Promise<ApiResponse<any>> {

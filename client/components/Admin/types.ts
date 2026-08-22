@@ -17,6 +17,16 @@ export interface AdminUser {
   levelB: number;
   levelC: number;
   levelD: number;
+  teamSize?: number;
+  teamCounts?: {
+    levelA: number;
+    levelB: number;
+    levelC: number;
+    levelD: number;
+    total: number;
+  };
+  totalDeposits?: string | number;
+  totalEarnings?: string | number;
   status: 'Active' | 'Suspended';
   joined: string;
   adminNotes?: string;

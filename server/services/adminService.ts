@@ -153,6 +153,21 @@ export class AdminService {
       const levelB = descendants.filter(d => d.referralLevel === 2).length;
       const levelC = descendants.filter(d => d.referralLevel === 3).length;
       const levelD = descendants.filter(d => d.referralLevel === 4).length;
+      const teamSize = descendants.length;
+
+      const totalDepRes = await db
+        .select({ total: sql<string>`COALESCE(SUM(${deposits.amount}), 0)` })
+        .from(deposits)
+        .where(eq(deposits.userId, u.id));
+      const totalDeposits = parseFloat(totalDepRes[0]?.total || '0').toFixed(2);
+
+      const totalEarningsVal = wallet
+        ? parseFloat(wallet.totalEarned || '0') ||
+          (parseFloat(wallet.dailyYield || '0') +
+           parseFloat(wallet.referralIncome || '0') +
+           parseFloat(wallet.teamIncome || '0') +
+           parseFloat(wallet.incentiveIncome || '0'))
+        : 0;
 
       mappedUsers.push({
         id: u.uid, // mapped to uid so frontend actions target uid
@@ -163,11 +178,21 @@ export class AdminService {
         mobile: u.phone || '',
         rank: vip?.tier || 'VIP1',
         balance: wallet ? `$${parseFloat(wallet.availableBalance).toFixed(2)}` : '$0.00',
+        totalDeposits: `$${totalDeposits}`,
+        totalEarnings: `$${totalEarningsVal.toFixed(2)}`,
         referralCode: u.referralCode,
         levelA,
         levelB,
         levelC,
         levelD,
+        teamSize,
+        teamCounts: {
+          levelA,
+          levelB,
+          levelC,
+          levelD,
+          total: teamSize,
+        },
         status: u.status === 'ACTIVE' ? 'Active' : 'Suspended',
         joined: new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         adminNotes: u.name ? `Administrative profile for ${u.name}.` : 'No administrative notes.',
@@ -614,7 +639,8 @@ export class AdminService {
         amount: `$${parseFloat(d.amount).toFixed(2)}`,
         method: d.network || 'USDT',
         txHash: d.txHash || 'N/A',
-        date: new Date(d.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        date: new Date(d.createdAt).toISOString(),
+        rawTimestamp: d.createdAt,
         status: d.status === 'COMPLETED' ? 'Completed' : d.status === 'PENDING' ? 'Pending' : 'Rejected',
       });
     }
@@ -682,7 +708,8 @@ export class AdminService {
         user: userName,
         amount: `$${parseFloat(w.amount).toFixed(2)}`,
         wallet: w.walletAddress,
-        date: new Date(w.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        date: new Date(w.createdAt).toISOString(),
+        rawTimestamp: w.createdAt,
         status: w.status === 'COMPLETED' ? 'Approved' : w.status === 'PENDING' ? 'Pending' : 'Rejected',
       });
     }

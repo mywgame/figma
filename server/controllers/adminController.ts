@@ -97,7 +97,7 @@ export class AdminController {
       const filter = req.query.filter as string || 'All';
       const sortBy = req.query.sortBy as string || 'Newest';
       const page = parseInt(req.query.page as string || '1', 10);
-      const limit = parseInt(req.query.limit as string || '10', 10);
+      const limit = parseInt(req.query.limit as string || '500', 10);
       const offset = (page - 1) * limit;
 
       const result = await adminService.getAdminUsersPaginated({

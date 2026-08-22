@@ -18,6 +18,7 @@ import { Card, Badge, Button } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
 import { AdminWithdrawal } from './types.ts';
 import { api } from '../../services/api.ts';
+import { formatDateTime } from '../../utils/dateFormatter.ts';
 
 interface WithdrawalsViewProps {
   t: ThemeTokens;
@@ -234,7 +235,17 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                         </button>
                       </div>
                     </td>
-                    <td className={`px-5 py-4 font-medium ${t.textMuted}`}>{wd.date}</td>
+                    <td className={`px-5 py-4 font-medium ${t.textMuted}`}>
+                      {(() => {
+                        const formatted = formatDateTime(wd.date);
+                        return (
+                          <div className="flex flex-col" title={`System Time: ${formatted.utcFull} (${formatted.timeZoneAbbr})`}>
+                            <span className="font-semibold text-gray-900 dark:text-white">{formatted.localDate}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">{formatted.utcFull}</span>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="px-5 py-4">
                       <Badge
                         variant={

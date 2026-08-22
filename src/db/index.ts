@@ -22,7 +22,7 @@ export const createPool = () => {
       connectionTimeoutMillis: 15000,
       idleTimeoutMillis: 10000, // Terminate idle pool connections after 10s so Neon compute can scale-to-zero
       max: parseInt(process.env.DB_POOL_MAX || '10', 10),
-      ssl: connectionString.includes('neon.tech') || connectionString.includes('sslmode=require')
+      ssl: connectionString.includes('neon.tech') || connectionString.includes('sslmode=require') || connectionString.includes('railway') || connectionString.includes('rlwy.net') || process.env.DATABASE_SSL === 'true'
         ? { rejectUnauthorized: false }
         : undefined,
     });

@@ -26,6 +26,7 @@ import {
 import { Card, Badge, Button } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
 import { api } from '../../services/api.ts';
+import { formatDateTime } from '../../utils/dateFormatter.ts';
 
 interface AdminAuditLog {
   id?: string;
@@ -323,7 +324,15 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ t, isDark }) => {
 
                       {/* 5. Timestamp Column */}
                       <td className={`px-5 py-3.5 text-[11px] whitespace-nowrap ${t.textSub}`}>
-                        {log.time}
+                        {(() => {
+                          const formatted = formatDateTime(log.rawTimestamp || log.time);
+                          return (
+                            <div className="flex flex-col" title={`System Time: ${formatted.utcFull} (${formatted.timeZoneAbbr})`}>
+                              <span className="font-semibold">{formatted.localDate}</span>
+                              <span className="text-[10px] text-gray-400 font-mono">{formatted.utcFull}</span>
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );

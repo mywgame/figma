@@ -12,6 +12,7 @@ import { TransactionTable } from './TransactionTable.tsx';
 import { ReceiptModal } from './ReceiptModal.tsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../../../services/api.ts';
+import { formatDateTime } from '../../../utils/dateFormatter.ts';
 
 export const TransactionsView: React.FC = () => {
   const { t } = useTheme();
@@ -71,7 +72,7 @@ export const TransactionsView: React.FC = () => {
             const isNegative = numericAmount < 0 || mappedType === 'Withdrawal' || mappedType === 'Trial Expiry' || (mappedType === 'System Adjustment' && numericAmount <= 0);
             const formattedAmount = `${isNegative ? '-' : '+'}$${Math.abs(numericAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-            const dateStr = dbTx.createdAt ? new Date(dbTx.createdAt).toLocaleString() : 'N/A';
+            const formattedTime = formatDateTime(dbTx.createdAt);
 
             return {
               id: dbTx.id,
@@ -79,7 +80,7 @@ export const TransactionsView: React.FC = () => {
               amount: formattedAmount,
               status: mappedStatus,
               method: dbTx.description || 'USDT',
-              date: dateStr,
+              date: formattedTime.localDate,
             };
           });
           setTransactions(mapped);

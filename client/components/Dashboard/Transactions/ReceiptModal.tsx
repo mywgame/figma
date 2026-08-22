@@ -224,11 +224,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               <span className={`font-mono font-semibold ${isDark ? 'text-cyan-400' : 'text-blue-600'}`}>{transaction.method}</span>
             </div>
 
-            {/* Settled UTC Time */}
+            {/* Settled Time */}
             <div className={`flex items-center justify-between py-1.5 border-b border-dashed ${
               isDark ? 'border-white/10' : 'border-gray-200'
             }`}>
-              <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Settled Time (UTC)</span>
+              <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Settled Time</span>
               <div className="flex items-center space-x-1.5 font-mono">
                 <Clock className={`w-3.5 h-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                 <span className={`font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{transaction.date}</span>
