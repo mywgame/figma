@@ -730,6 +730,20 @@ class ApiService {
   }
 
   /**
+   * Admin: Reclaim/collect native gas from a specific user deposit address
+   */
+  async sweepUserNativeGas(addressId: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep/gas/address', { addressId });
+  }
+
+  /**
+   * Admin: Reclaim/collect native gas from all eligible deposit addresses on a network
+   */
+  async sweepAllUserNativeGas(network: string): Promise<ApiResponse<any>> {
+    return this.post<any>('/admin/treasury/sweep/gas/all', { network });
+  }
+
+  /**
    * Admin: Sweep all eligible positive balance addresses for a network
    */
   async sweepAllEligibleAddresses(network: string): Promise<ApiResponse<any>> {

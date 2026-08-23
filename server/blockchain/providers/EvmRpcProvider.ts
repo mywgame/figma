@@ -141,6 +141,41 @@ export class EvmRpcProvider implements BlockchainProvider {
   }
 
   /**
+   * Broadcast native coin transfer (e.g. BNB or POL/MATIC) signed with a given private key
+   */
+  async broadcastNativeTransaction(
+    network: string,
+    toAddress: string,
+    amount: string,
+    fromPrivateKey?: string
+  ): Promise<string> {
+    const netConfig = blockchainConfig.networks[network];
+    const signerKey = fromPrivateKey || netConfig?.hotPrivateKey;
+    const normalizedTo = normalizeEvmAddress(toAddress);
+
+    if (!signerKey) {
+      throw new Error(
+        `Signer private key is required for native transfer on network '${network}'.`
+      );
+    }
+
+    try {
+      return await rpcManager.executeRpc(network, async (rpcUrl) => {
+        const provider = rpcManager.getProvider(network, rpcUrl);
+        const wallet = new ethers.Wallet(signerKey, provider);
+        const tx = await wallet.sendTransaction({
+          to: normalizedTo,
+          value: ethers.parseEther(amount),
+        });
+        return tx.hash;
+      });
+    } catch (err: any) {
+      console.error(`[EvmRpcProvider] Broadcast native transaction failed on ${network}:`, err.message);
+      throw new Error(`Failed to broadcast native transaction on ${network}: ${err.message}`);
+    }
+  }
+
+  /**
    * Validate EVM address
    */
   async validateAddress(_network: string, address: string): Promise<boolean> {
