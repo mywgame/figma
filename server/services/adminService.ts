@@ -582,8 +582,8 @@ export class AdminService {
     });
 
     // Recalculate VIP tier — VipService is the single source of truth for VIP logic.
-    // Business Logic Spec Section 6: VIP recalculates after Wallet Balance Change.
-    await vipService.recalculateVip(userId);
+    // Business Logic Spec Section 6: VIP recalculates after Wallet Balance Change for both user and uplines.
+    await vipService.recalculateUserAndUplines(userId);
 
     return updatedWallet;
   }

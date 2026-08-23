@@ -12,6 +12,7 @@ import { incomeRepository } from '../repositories/incomeRepository.ts';
 import { auditRepository } from '../repositories/auditRepository.ts';
 import { referralService } from './referralService.ts';
 import { trialFundService } from './trialFundService.ts';
+import { vipService } from './vipService.ts';
 import { SecurityLogger } from '../utils/securityLogger.ts';
 
 // Business Logic Spec Section 4 — Trial Fund: "Generates DPY using the VIP1 rate."
@@ -194,6 +195,9 @@ export class ClaimService {
     // ReferralService (Section 17 — Service Ownership Matrix). ClaimService never
     // calculates or distributes Team Commission itself.
     await referralService.distributeTeamCommission(userId, rewardAmount, claim.id);
+
+    // 8. Recalculate VIP tier for user and uplines (Business Logic Spec Section 6: VIP recalculates after Wallet Balance Change)
+    await vipService.recalculateUserAndUplines(userId);
 
     return updatedClaim || lockedClaim;
   }
