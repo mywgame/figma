@@ -46,9 +46,12 @@ export interface AdminWithdrawal {
   id: string;
   user: string;
   amount: string;
+  network?: string;
   wallet: string;
+  txHash?: string | null;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  rawStatus?: string;
 }
 
 export interface AdminTicket {
