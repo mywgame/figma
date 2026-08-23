@@ -163,9 +163,31 @@ export class EvmRpcProvider implements BlockchainProvider {
       return await rpcManager.executeRpc(network, async (rpcUrl) => {
         const provider = rpcManager.getProvider(network, rpcUrl);
         const wallet = new ethers.Wallet(signerKey, provider);
+
+        const balance = await provider.getBalance(wallet.address);
+        const feeData = await provider.getFeeData();
+        const gasPrice = feeData.gasPrice ?? ethers.parseUnits('3', 'gwei');
+        const gasLimit = 21000n;
+        const txCost = gasLimit * gasPrice;
+
+        let sendValue = ethers.parseEther(amount);
+
+        // When sweeping native coin (e.g. BNB/POL), total cost = sendValue + txCost.
+        // If sendValue + txCost exceeds current balance, auto-deduct the minimal tx fee
+        if (sendValue + txCost > balance) {
+          if (balance <= txCost) {
+            throw new Error(
+              `Address native balance (${ethers.formatEther(balance)}) is lower than network transaction fee (${ethers.formatEther(txCost)}).`
+            );
+          }
+          sendValue = balance - txCost;
+        }
+
         const tx = await wallet.sendTransaction({
           to: normalizedTo,
-          value: ethers.parseEther(amount),
+          value: sendValue,
+          gasLimit,
+          gasPrice,
         });
         return tx.hash;
       });
