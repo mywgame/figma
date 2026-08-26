@@ -64,12 +64,17 @@ export class SweepQueueProcessor {
   constructor(private readonly provider = activeBlockchainProvider) {}
 
   /**
-   * Start the background sweep queue worker
+   * Start the background sweep queue worker (Automatic polling is disabled for scale-to-zero compute efficiency; manual admin execution mode active)
    */
   public start(intervalMs: number = parseInt(process.env.SWEEP_INTERVAL_MS || '180000', 10)) {
-    if (this.intervalId) return;
-    logger.info(`[SweepQueueProcessor] Starting background sweep queue processing loop (Interval: ${intervalMs}ms)...`);
-    this.intervalId = setInterval(() => this.processQueue(), intervalMs);
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    if (!this.hasLoggedManualMode) {
+      logger.info('[SweepQueueProcessor] Automatic background sweep polling is DISABLED. Manual execution mode active.');
+      this.hasLoggedManualMode = true;
+    }
   }
 
   /**

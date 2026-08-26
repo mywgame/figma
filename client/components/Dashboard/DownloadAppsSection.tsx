@@ -9,8 +9,8 @@ import { Modal } from '../ui/index.ts';
 import { useTheme } from '../../hooks/useTheme.ts';
 import { api } from '../../services/api.ts';
 
-const DEFAULT_APK_URL = 'https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.1.apk';
-const DEFAULT_APK_VERSION = 'v2.0.1';
+const DEFAULT_APK_URL = 'https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.2.apk';
+const DEFAULT_APK_VERSION = 'v2.0.2';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -91,10 +91,23 @@ export const DownloadAppsSection: React.FC = () => {
       setTimeout(() => setDownloadMsg(null), 4000);
     };
 
+    const handleApkUpdated = (e: any) => {
+      if (e.detail?.downloadUrl) {
+        setApkUrl(e.detail.downloadUrl);
+      }
+      if (e.detail?.latestVersion) {
+        const rawVer = e.detail.latestVersion.trim();
+        const formattedVer = rawVer.startsWith('v') || rawVer.startsWith('V') ? rawVer : `v${rawVer}`;
+        setApkVersion(formattedVer);
+      }
+    };
+
+    window.addEventListener('metafirm_apk_updated', handleApkUpdated);
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
+      window.removeEventListener('metafirm_apk_updated', handleApkUpdated);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };

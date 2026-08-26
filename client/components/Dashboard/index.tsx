@@ -150,40 +150,6 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
     }
   }, [showToast]);
 
-  // Background polling for auto-verified deposits
-  const checkAutoVerifiedDeposits = useCallback(async () => {
-    const token = localStorage.getItem('metafirm_token');
-    if (!token) return;
-    try {
-      const res = await api.getUserDeposits();
-      if (res.success && Array.isArray(res.data)) {
-        const completedDeposits = res.data.filter((d: any) => d.status === 'COMPLETED');
-        
-        if (isInitialDepositCheck.current) {
-          // On boot, record existing completed deposit IDs
-          completedDeposits.forEach((d: any) => seenCompletedDepositIds.current.add(d.id));
-          isInitialDepositCheck.current = false;
-        } else {
-          // Check if any new completed deposit has arrived
-          for (const dep of completedDeposits) {
-            if (!seenCompletedDepositIds.current.has(dep.id)) {
-              seenCompletedDepositIds.current.add(dep.id);
-              setDepositSuccessData({
-                amount: dep.amount,
-                network: dep.network || 'USDT',
-              });
-              // Refresh wallet & dashboard balances
-              fetchDashboard(true);
-              break;
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error polling user deposits for auto-verification:', err);
-    }
-  }, [fetchDashboard]);
-
   // Check Welcome / Trial Fund gift popup on login/mount
   const checkWelcomeTrialFund = useCallback(async () => {
     if (hasCheckedWelcomeTrial.current) return;
@@ -232,31 +198,13 @@ export const UserDashboard: React.FC<UserDashboardProps> = ({
 
     // Defer non-critical background routines so initial screen render has zero CPU/network contention
     const secondaryTimer = setTimeout(() => {
-      checkAutoVerifiedDeposits();
       checkWelcomeTrialFund();
     }, 1000);
 
-    // Check for auto-verified deposits only when the tab is visible
-    const pollInterval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        checkAutoVerifiedDeposits();
-      }
-    }, 45000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        checkAutoVerifiedDeposits();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
       clearTimeout(secondaryTimer);
-      clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchDashboard, checkAutoVerifiedDeposits, checkWelcomeTrialFund]);
+  }, [fetchDashboard, checkWelcomeTrialFund]);
 
   // Check Exclusive Promotions modal on login / boot (with frequency capping)
   useEffect(() => {

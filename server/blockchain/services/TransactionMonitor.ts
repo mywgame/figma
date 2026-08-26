@@ -26,27 +26,14 @@ export class TransactionMonitor {
   constructor(private readonly provider: BlockchainProvider = activeBlockchainProvider) {}
 
   /**
-   * Start background transaction monitor loop
+   * Start background transaction monitor loop (Continuous interval polling disabled for Neon scale-to-zero compute efficiency; on-demand active)
    */
   start(intervalMs: number = blockchainConfig.monitoringIntervalMs) {
     if (this.timer) {
-      logger.info('Transaction monitor is already running.');
-      return;
+      clearInterval(this.timer);
+      this.timer = null;
     }
-    
-    logger.info(`Starting background transaction monitoring loop (Interval: ${intervalMs}ms)...`);
-    this.timer = setInterval(() => {
-      this.checkPendingDeposits().catch((err) => logger.error('Error in deposit monitor tick:', err));
-      this.checkProcessingWithdrawals().catch((err) => logger.error('Error in withdrawal monitor tick:', err));
-    }, intervalMs);
-    
-    // Execute first check immediately on boot
-    this.checkPendingDeposits().catch((err) => {
-      logger.error('Error in initial deposit monitoring check:', err);
-    });
-    this.checkProcessingWithdrawals().catch((err) => {
-      logger.error('Error in initial withdrawal monitoring check:', err);
-    });
+    logger.info('Transaction monitor initialized in on-demand mode (automatic continuous polling disabled).');
   }
 
   /**

@@ -5,17 +5,14 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Settings,
-  Mail,
-  Wallet,
-  Shield,
-  HelpCircle,
+  Smartphone,
   Save,
   Info,
   RefreshCw,
   AlertTriangle,
-  Smartphone,
-  Sparkles
+  Download,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 import { Card, Button, Input } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
@@ -28,18 +25,11 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
-  const [platformName, setPlatformName] = useState('MetaFirm');
-  const [supportEmail, setSupportEmail] = useState('operations@metafirm.app');
-  const [minDeposit, setMinDeposit] = useState('100');
-  const [minWithdrawal, setMinWithdrawal] = useState('50');
-  const [withdrawalFee, setWithdrawalFee] = useState('2.5');
-  const [baseRefBonus, setBaseRefBonus] = useState('5.0');
-
   // Mobile APK Force Update State
-  const [minApkVersion, setMinApkVersion] = useState('2.0.1');
-  const [latestApkVersion, setLatestApkVersion] = useState('2.0.1');
-  const [apkDownloadUrl, setApkDownloadUrl] = useState('https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.1.apk');
-  const [apkReleaseNotes, setApkReleaseNotes] = useState('MetaFirm v2.0.1: Security updates, performance enhancements, and improved trading node connectivity.');
+  const [minApkVersion, setMinApkVersion] = useState('2.0.2');
+  const [latestApkVersion, setLatestApkVersion] = useState('2.0.2');
+  const [apkDownloadUrl, setApkDownloadUrl] = useState('https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.2.apk');
+  const [apkReleaseNotes, setApkReleaseNotes] = useState('MetaFirm v2.0.2: Security updates, performance enhancements, and improved trading node connectivity.');
   const [forceUpdateEnabled, setForceUpdateEnabled] = useState(true);
   
   const [loading, setLoading] = useState<boolean>(true);
@@ -56,13 +46,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
         const settingsMap = new Map<string, any>();
         res.data.forEach((s: any) => settingsMap.set(s.key, s));
 
-        if (settingsMap.has('PLATFORM_NAME')) setPlatformName(settingsMap.get('PLATFORM_NAME').value);
-        if (settingsMap.has('SUPPORT_EMAIL')) setSupportEmail(settingsMap.get('SUPPORT_EMAIL').value);
-        if (settingsMap.has('MIN_DEPOSIT_THRESHOLD')) setMinDeposit(settingsMap.get('MIN_DEPOSIT_THRESHOLD').value);
-        if (settingsMap.has('MIN_WITHDRAWAL_THRESHOLD')) setMinWithdrawal(settingsMap.get('MIN_WITHDRAWAL_THRESHOLD').value);
-        if (settingsMap.has('WITHDRAWAL_PROCESSING_FEE')) setWithdrawalFee(settingsMap.get('WITHDRAWAL_PROCESSING_FEE').value);
-        if (settingsMap.has('BASE_REFERRAL_BONUS')) setBaseRefBonus(settingsMap.get('BASE_REFERRAL_BONUS').value);
-
         // APK Versioning
         if (settingsMap.has('MIN_REQUIRED_APK_VERSION')) setMinApkVersion(settingsMap.get('MIN_REQUIRED_APK_VERSION').value);
         if (settingsMap.has('LATEST_APK_VERSION')) setLatestApkVersion(settingsMap.get('LATEST_APK_VERSION').value);
@@ -70,7 +53,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
         if (settingsMap.has('APK_UPDATE_RELEASE_NOTES')) setApkReleaseNotes(settingsMap.get('APK_UPDATE_RELEASE_NOTES').value);
         if (settingsMap.has('FORCE_UPDATE_ENABLED')) setForceUpdateEnabled(settingsMap.get('FORCE_UPDATE_ENABLED').value === 'true');
       } else {
-        setError(res.error?.message || 'Failed to fetch platform configurations.');
+        setError(res.error?.message || 'Failed to fetch APK version configurations.');
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred while loading settings.');
@@ -90,23 +73,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
       setError(null);
 
       await Promise.all([
-        api.updateAdminSetting('PLATFORM_NAME', platformName),
-        api.updateAdminSetting('SUPPORT_EMAIL', supportEmail),
-        api.updateAdminSetting('MIN_DEPOSIT_THRESHOLD', minDeposit),
-        api.updateAdminSetting('MIN_WITHDRAWAL_THRESHOLD', minWithdrawal),
-        api.updateAdminSetting('WITHDRAWAL_PROCESSING_FEE', withdrawalFee),
-        api.updateAdminSetting('BASE_REFERRAL_BONUS', baseRefBonus),
-        api.updateAdminSetting('MIN_REQUIRED_APK_VERSION', minApkVersion),
-        api.updateAdminSetting('LATEST_APK_VERSION', latestApkVersion),
-        api.updateAdminSetting('APK_DOWNLOAD_URL', apkDownloadUrl),
-        api.updateAdminSetting('APK_UPDATE_RELEASE_NOTES', apkReleaseNotes),
+        api.updateAdminSetting('MIN_REQUIRED_APK_VERSION', minApkVersion.trim()),
+        api.updateAdminSetting('LATEST_APK_VERSION', latestApkVersion.trim()),
+        api.updateAdminSetting('APK_DOWNLOAD_URL', apkDownloadUrl.trim()),
+        api.updateAdminSetting('APK_UPDATE_RELEASE_NOTES', apkReleaseNotes.trim()),
         api.updateAdminSetting('FORCE_UPDATE_ENABLED', forceUpdateEnabled ? 'true' : 'false'),
       ]);
+
+      // Dispatch event to notify any live dashboard instances
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('metafirm_apk_updated', {
+          detail: {
+            latestVersion: latestApkVersion.trim(),
+            downloadUrl: apkDownloadUrl.trim()
+          }
+        }));
+      }
 
       setIsToastOpen(true);
       setTimeout(() => setIsToastOpen(false), 3000);
     } catch (err: any) {
-      setError(err.message || 'Failed to save settings.');
+      setError(err.message || 'Failed to save APK settings.');
     } finally {
       setSaving(false);
     }
@@ -117,8 +104,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Platform Configurations</h2>
-          <p className={`text-xs mt-1 ${t.textSub}`}>Configure default operational nameplates, financial thresholds, withdrawal tax fees, and support emails.</p>
+          <h2 className="text-xl font-bold tracking-tight flex items-center gap-2.5">
+            <Smartphone className="w-5 h-5 text-emerald-500" />
+            <span>Android APK Release &amp; Update Console</span>
+          </h2>
+          <p className={`text-xs mt-1 ${t.textSub}`}>
+            Control live Android APK binary packages, target versions, direct Cloudflare R2 download endpoints, and forced update policies.
+          </p>
         </div>
         <Button onClick={fetchSettings} variant="secondary" className="flex items-center gap-1.5 px-3 py-2 text-xs">
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -144,99 +136,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
           {loading ? (
             <div className="py-16 text-center text-gray-400 flex flex-col items-center justify-center gap-2">
               <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
-              <span className="text-xs font-medium">Loading platform configurations...</span>
+              <span className="text-xs font-medium">Loading APK release configurations...</span>
             </div>
           ) : (
             <form onSubmit={handleSave} className="space-y-6">
               
-              {/* Subsection 1: Branding */}
+              {/* Android APK Versioning & Force Update Control */}
               <div className="space-y-4">
-                <h3 className="font-display font-bold text-sm border-b pb-2 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-blue-500" />
-                  <span>General Configurations & Branding</span>
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Platform Identity Name"
-                    value={platformName}
-                    onChange={e => setPlatformName(e.target.value)}
-                    required
-                  />
-                  <Input
-                    label="Inbound Support Dispatch Email"
-                    type="email"
-                    value={supportEmail}
-                    onChange={e => setSupportEmail(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+                <div className="border-b pb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-bold text-sm">
+                        Android APK Versioning &amp; Force Update Control
+                      </h3>
+                      <p className={`text-[11px] ${t.textMuted}`}>
+                        Configure live distribution packages for all Android mobile users.
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Subsection 2: Financial minimums */}
-              <div className="space-y-4">
-                <h3 className="font-display font-bold text-sm border-b pb-2 flex items-center gap-2">
-                  <Wallet className="w-4 h-4 text-purple-500" />
-                  <span>Transaction Limits & Thresholds</span>
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Minimum Deposit Size Threshold (USD)"
-                    type="number"
-                    value={minDeposit}
-                    onChange={e => setMinDeposit(e.target.value)}
-                    required
-                  />
-                  <Input
-                    label="Minimum Withdrawal Size Threshold (USD)"
-                    type="number"
-                    value={minWithdrawal}
-                    onChange={e => setMinWithdrawal(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Subsection 3: Withdrawal fees */}
-              <div className="space-y-4">
-                <h3 className="font-display font-bold text-sm border-b pb-2 flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-cyan-500" />
-                  <span>Financial Ledger Charges</span>
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Withdrawal Processing Fee Percentage (%)"
-                    type="number"
-                    step="0.01"
-                    value={withdrawalFee}
-                    onChange={e => setWithdrawalFee(e.target.value)}
-                    required
-                  />
-                  <Input
-                    label="Fallback Base Referral Bonus (%)"
-                    type="number"
-                    step="0.01"
-                    value={baseRefBonus}
-                    onChange={e => setBaseRefBonus(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Subsection 4: Mobile APK & Force Update Policies */}
-              <div className="space-y-4">
-                <div className="border-b pb-2 flex items-center justify-between">
-                  <h3 className="font-display font-bold text-sm flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-amber-500" />
-                    <span>Android APK Versioning & Force Update Control</span>
-                  </h3>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
                     <input
                       type="checkbox"
                       checked={forceUpdateEnabled}
                       onChange={e => setForceUpdateEnabled(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                     />
-                    <span className={forceUpdateEnabled ? 'text-amber-500 font-bold' : 'text-gray-400'}>
+                    <span className={forceUpdateEnabled ? 'text-emerald-500 font-bold' : 'text-gray-400'}>
                       {forceUpdateEnabled ? 'Force Update Active' : 'Force Update Disabled'}
                     </span>
                   </label>
@@ -244,17 +173,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
-                    label="Minimum Required APK Version (e.g. 1.1.0)"
+                    label="Minimum Required APK Version"
                     value={minApkVersion}
                     onChange={e => setMinApkVersion(e.target.value)}
-                    placeholder="1.1.0"
+                    placeholder="2.0.2"
                     required
                   />
                   <Input
                     label="Latest Available APK Version"
                     value={latestApkVersion}
                     onChange={e => setLatestApkVersion(e.target.value)}
-                    placeholder="1.1.0"
+                    placeholder="2.0.2"
                     required
                   />
                 </div>
@@ -264,20 +193,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
                     label="Direct APK Package Download URL"
                     value={apkDownloadUrl}
                     onChange={e => setApkDownloadUrl(e.target.value)}
-                    placeholder="https://metafirm.app/download/metafirm-latest.apk"
+                    placeholder="https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/android/metafirm-v2.0.2.apk"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5 text-left">
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                    Release Highlights / Changelog (Shown in App Modal)
+                    Release Highlights / Changelog (Shown in App Update Modal)
                   </label>
                   <textarea
-                    rows={2}
+                    rows={3}
                     value={apkReleaseNotes}
                     onChange={e => setApkReleaseNotes(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none font-mono"
                     placeholder="Describe key improvements, security patches, or backend connection updates..."
                     required
                   />
@@ -285,9 +214,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-4 border-t flex justify-end">
+              <div className="pt-4 border-t flex items-center justify-between">
+                <div className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Changes apply globally across Web and Android clients instantly.</span>
+                </div>
                 <Button type="submit" variant="primary" disabled={saving} leftIcon={<Save className="w-4 h-4" />}>
-                  {saving ? 'Saving...' : 'Save Configurations'}
+                  {saving ? 'Saving & Deploying...' : 'Save APK Configurations'}
                 </Button>
               </div>
             </form>
@@ -295,24 +228,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
         </Card>
 
         {/* Right Info card */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-4">
           <Card className="p-5 space-y-4 text-xs">
-            <h4 className="font-display font-bold text-xs flex items-center gap-2 text-blue-500 uppercase tracking-wider">
-              <Info className="w-4 h-4 text-blue-500" />
-              <span>Settings Guidelines</span>
+            <h4 className="font-display font-bold text-xs flex items-center gap-2 text-emerald-500 uppercase tracking-wider">
+              <Info className="w-4 h-4 text-emerald-500" />
+              <span>APK Distribution Guidelines</span>
             </h4>
             <div className="space-y-3">
               <div className="space-y-1">
-                <span className="font-bold">Transaction Size Limits</span>
-                <p className={`leading-relaxed text-[11px] ${t.textSub}`}>Prevents high-frequency microtransactions from clogging cold wallet nodes and inflating fee overheads.</p>
+                <span className="font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                  <Download className="w-3.5 h-3.5 text-emerald-500" />
+                  Direct Download CDN
+                </span>
+                <p className={`leading-relaxed text-[11px] ${t.textSub}`}>
+                  Point your APK download URL to a fast CDN (e.g. Cloudflare R2 bucket) for direct, uninterrupted mobile package downloads.
+                </p>
               </div>
               <div className="space-y-1">
-                <span className="font-bold">Withdrawal tax fees</span>
-                <p className={`leading-relaxed text-[11px] ${t.textSub}`}>Withheld automatically from outbound balances to cover gas limits on BNB chain/Polygon networks during transfers.</p>
+                <span className="font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  Force Update Policy
+                </span>
+                <p className={`leading-relaxed text-[11px] ${t.textSub}`}>
+                  When enabled, installed apps below the <strong>Minimum Required APK Version</strong> will be prompted with a non-dismissible update screen directing users to download the latest APK build.
+                </p>
               </div>
               <div className="space-y-1">
-                <span className="font-bold">Support Dispatch</span>
-                <p className={`leading-relaxed text-[11px] ${t.textSub}`}>System-generated alerts (such as failed OTP alerts) are directed to this mailbox for administrator moderation.</p>
+                <span className="font-bold text-slate-900 dark:text-white">Dashboard Download Button</span>
+                <p className={`leading-relaxed text-[11px] ${t.textSub}`}>
+                  The dashboard <strong>"Get MetaFirm App"</strong> badge displays the <strong>Latest Available APK Version</strong> tag and routes direct downloads to this configured link.
+                </p>
               </div>
             </div>
           </Card>
@@ -321,7 +266,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
 
       {isToastOpen && (
         <Toast
-          message="Platform settings updated and deployed."
+          message="Android APK configurations updated and published successfully."
           variant="success"
           onClose={() => setIsToastOpen(false)}
         />
@@ -330,3 +275,4 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ t, isDark }) => {
   );
 };
 export default SettingsView;
+
