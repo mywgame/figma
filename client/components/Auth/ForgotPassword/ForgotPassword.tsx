@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Input, Button } from '../../ui/index.ts';
+import { Button } from '../../ui/index.ts';
 import { ArrowRight } from 'lucide-react';
 import { getApiUrl } from '../../../services/apiConfig.ts';
 
@@ -72,28 +72,28 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
-          <label htmlFor="auth-forgot-email-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+          <label htmlFor="auth-forgot-email-input" className="block text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
             Registered Email Address
           </label>
           <input
+            id="auth-forgot-email-input"
             type="email"
             value={resetEmail}
             onChange={(e) => handleEmailChange(e.target.value)}
             placeholder="investor@metafirm.io"
-            id="auth-forgot-email-input"
+            className="w-full px-4 py-3 sm:py-3.5 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none shadow-sm"
             required
             autoFocus
             disabled={busy}
-            className="w-full px-4 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
           />
         </div>
 
         <Button
           type="submit"
           isLoading={busy}
-          className="w-full mt-2"
+          className="w-full mt-2 !py-3.5 !bg-[image:var(--background-image-brand-gradient)] hover:!opacity-90 !shadow-lg !shadow-blue-500/25 !text-white !border-none"
           variant="primary"
           size="lg"
           id="auth-submit-btn"

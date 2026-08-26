@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../../../hooks/useAuth.ts';
 import { Eye, EyeOff, ArrowRight } from 'lucide-react';
-import { Input, Button } from '../../ui/index.ts';
+import { Button } from '../../ui/index.ts';
 import { playSuccessSound } from '../../../utils/sound.ts';
 
 interface LoginProps {
@@ -91,28 +91,31 @@ export const Login: React.FC<LoginProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
     >
-      <form onSubmit={handleLocalSubmit} className="space-y-4">
-        <div className="space-y-4">
+      <form onSubmit={handleLocalSubmit} method="POST" action="#" name="loginForm" autoComplete="on" className="space-y-5 sm:space-y-6">
+        <div className="space-y-4 sm:space-y-5">
           <div className="space-y-1.5">
-            <label htmlFor="auth-email-input-login" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+            <label htmlFor="auth-email-input-login" className="block text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Username or Email Address
             </label>
             <input
+              id="auth-email-input-login"
+              name="username"
               type="text"
+              inputMode="email"
               value={email}
               onChange={(e) => handleEmailChange(e.target.value)}
+              onInput={(e) => handleEmailChange((e.target as HTMLInputElement).value)}
               placeholder="Username or email address"
-              id="auth-email-input-login"
               autoComplete="username"
+              className="w-full px-4 py-3 sm:py-3.5 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none shadow-sm"
               required
               autoFocus
-              className="w-full px-4 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
             />
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label htmlFor="auth-password-input-login" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+              <label htmlFor="auth-password-input-login" className="block text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
                 Password
               </label>
               <button
@@ -122,7 +125,7 @@ export const Login: React.FC<LoginProps> = ({
                   onSuccessMsg(null);
                   onForgotPasswordClick(email);
                 }}
-                className="text-[11px] font-mono font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer focus:outline-none bg-transparent border-none p-0"
+                className="text-[11px] font-mono font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline cursor-pointer focus:outline-none bg-transparent border-none p-0"
               >
                 Forgot password?
               </button>
@@ -131,18 +134,20 @@ export const Login: React.FC<LoginProps> = ({
             <div className="relative">
               <input
                 id="auth-password-input-login"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="w-full pl-4 pr-10 py-3 sm:py-3.5 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none shadow-sm"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 focus:outline-none bg-transparent border-none p-1"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -155,9 +160,9 @@ export const Login: React.FC<LoginProps> = ({
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                className="w-4 h-4 text-blue-600 border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 focus:ring-blue-500 cursor-pointer"
               />
-              <span className="text-xs font-medium text-gray-600">Remember me</span>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Remember me</span>
             </label>
           </div>
         </div>
@@ -165,7 +170,7 @@ export const Login: React.FC<LoginProps> = ({
         <Button
           type="submit"
           isLoading={busy}
-          className="w-full mt-2"
+          className="w-full mt-2 !py-3.5 !bg-[image:var(--background-image-brand-gradient)] hover:!opacity-90 !shadow-lg !shadow-blue-500/25 !text-white !border-none"
           variant="primary"
           size="lg"
           id="auth-submit-btn"

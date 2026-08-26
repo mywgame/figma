@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Eye, EyeOff, ArrowRight } from 'lucide-react';
-import { Input, Button } from '../../ui/index.ts';
+import { Button } from '../../ui/index.ts';
 import { COUNTRIES, COUNTRY_DATA } from '../Shared/countries.ts';
 import { getApiUrl } from '../../../services/apiConfig.ts';
 
@@ -191,67 +191,78 @@ export const Register: React.FC<RegisterProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
     >
-      <form onSubmit={handleLocalSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 min-w-0 w-full">
-          <div className="space-y-1 min-w-0">
-            <label htmlFor="auth-name-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+      <form onSubmit={handleLocalSubmit} method="POST" action="#" name="registerForm" autoComplete="on" className="space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 min-w-0 w-full">
+          <div className="min-w-0 space-y-1">
+            <label htmlFor="auth-name-input" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Full Name
             </label>
             <input
               type="text"
+              id="auth-name-input"
+              name="name"
+              autoComplete="name"
               value={fullName}
               onChange={(e) => updateField('reg_fullName', e.target.value, setFullName)}
+              onInput={(e) => updateField('reg_fullName', (e.target as HTMLInputElement).value, setFullName)}
               placeholder="John Doe"
-              id="auth-name-input"
+              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none"
               required
-              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
             />
           </div>
 
-          <div className="space-y-1 min-w-0">
-            <label htmlFor="auth-username-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+          <div className="min-w-0 space-y-1">
+            <label htmlFor="auth-username-input" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Username
             </label>
             <input
               type="text"
+              id="auth-username-input"
+              name="username"
+              autoComplete="username"
               value={username}
               onChange={(e) => updateField('reg_username', e.target.value, setUsername)}
+              onInput={(e) => updateField('reg_username', (e.target as HTMLInputElement).value, setUsername)}
               placeholder="johndoe"
-              id="auth-username-input"
+              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none"
               required
-              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
             />
           </div>
 
-          <div className="space-y-1 min-w-0">
-            <label htmlFor="auth-email-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+          <div className="min-w-0 space-y-1">
+            <label htmlFor="auth-email-input" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Email Address
             </label>
             <input
               type="email"
+              id="auth-email-input"
+              name="email"
+              inputMode="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => updateField('reg_email', e.target.value, setEmail)}
+              onInput={(e) => updateField('reg_email', (e.target as HTMLInputElement).value, setEmail)}
               placeholder="investor@metafirm.io"
-              id="auth-email-input"
+              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none"
               required
-              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
             />
           </div>
 
           {/* Country Selector */}
           <div className="space-y-1 min-w-0">
-            <label htmlFor="auth-country-select" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+            <label htmlFor="auth-country-select" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Country
             </label>
             <select
               id="auth-country-select"
+              name="country"
               value={country}
               onChange={(e) => handleCountryChange(e.target.value)}
-              className="w-full max-w-full min-w-0 px-3.5 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 transition-all duration-150 focus-visible:outline-none cursor-pointer"
+              className="w-full max-w-full min-w-0 px-3.5 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/80 backdrop-blur-sm text-slate-900 dark:text-white transition-all duration-150 focus-visible:outline-none cursor-pointer"
             >
               {COUNTRIES.map((c) => {
                 return (
-                  <option key={c} value={c} className="text-gray-900 bg-white font-medium">
+                  <option key={c} value={c} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900 font-medium">
                     {c}
                   </option>
                 );
@@ -261,49 +272,56 @@ export const Register: React.FC<RegisterProps> = ({
 
           {/* Country Code + Mobile Number */}
           <div className="space-y-1 md:col-span-2 min-w-0">
-            <label htmlFor="auth-mobile-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+            <label htmlFor="auth-mobile-input" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Mobile Number
             </label>
             <div className="flex space-x-2 min-w-0">
               <input
                 type="text"
                 id="auth-country-code"
+                name="country-code"
                 value={countryCode}
                 readOnly
                 placeholder="+1"
-                className="w-20 flex-shrink-0 px-3 py-2.5 sm:py-3 text-sm border border-gray-300 rounded-xl focus:outline-none bg-gray-100 text-gray-700 text-center transition-all duration-150 focus-visible:outline-none cursor-not-allowed font-bold"
+                className="w-20 flex-shrink-0 px-3 py-2.5 sm:py-3 text-sm border border-slate-300/80 dark:border-white/15 rounded-xl focus:outline-none bg-slate-100/80 dark:bg-white/10 backdrop-blur-sm text-slate-700 dark:text-slate-300 text-center transition-all duration-150 focus-visible:outline-none cursor-not-allowed font-bold"
                 required
               />
               <input
                 type="tel"
                 id="auth-mobile-input"
+                name="tel"
+                autoComplete="tel"
                 value={mobileNumber}
                 onChange={(e) => updateField('reg_mobile', e.target.value, setMobileNumber)}
+                onInput={(e) => updateField('reg_mobile', (e.target as HTMLInputElement).value, setMobileNumber)}
                 placeholder="555-0199"
-                className="flex-1 min-w-0 px-4 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="flex-1 min-w-0 px-4 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none"
                 required
               />
             </div>
           </div>
 
           <div className="space-y-1 min-w-0 relative">
-            <label htmlFor="auth-password-input-reg" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+            <label htmlFor="auth-password-input-reg" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Password
             </label>
             <div className="relative">
               <input
                 id="auth-password-input-reg"
+                name="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
                 placeholder="••••••••"
-                className="w-full pl-4 pr-10 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="w-full pl-4 pr-10 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 focus:outline-none bg-transparent border-none p-1"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -311,40 +329,43 @@ export const Register: React.FC<RegisterProps> = ({
           </div>
 
           <div className="space-y-1 min-w-0 relative">
-            <label htmlFor="auth-confirm-password-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+            <label htmlFor="auth-confirm-password-input" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Confirm Password
             </label>
             <div className="relative">
               <input
                 id="auth-confirm-password-input"
+                name="confirm-password"
                 type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                onInput={(e) => setConfirmPassword((e.target as HTMLInputElement).value)}
                 placeholder="••••••••"
-                className="w-full pl-4 pr-10 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none"
+                className="w-full pl-4 pr-10 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none bg-transparent border-none p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 focus:outline-none bg-transparent border-none p-1"
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          <div className="space-y-1 md:col-span-2 min-w-0">
-            <label htmlFor="auth-referral-input" className="block text-xs font-semibold text-gray-800 tracking-wide mb-1">
+          <div className="md:col-span-2 min-w-0 space-y-1">
+            <label htmlFor="auth-referral-input" className="block text-xs font-semibold text-slate-800 dark:text-slate-200 tracking-wide mb-1.5">
               Referral Code (Optional)
             </label>
             <input
               type="text"
+              id="auth-referral-input"
               value={referralCode}
               onChange={(e) => updateField('reg_referralCode', e.target.value, setReferralCode)}
               placeholder="e.g. PARTNER88"
-              id="auth-referral-input"
-              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-gray-300 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 bg-white text-gray-900 placeholder:text-gray-400 transition-all duration-150 focus-visible:outline-none uppercase"
+              className="w-full px-4 py-2.5 sm:py-3 text-sm font-medium border border-slate-300/80 dark:border-white/15 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-400 shadow-sm bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-150 focus-visible:outline-none"
             />
           </div>
         </div>
@@ -352,7 +373,7 @@ export const Register: React.FC<RegisterProps> = ({
         <Button
           type="submit"
           isLoading={busy}
-          className="w-full mt-1.5"
+          className="w-full mt-2 !py-3.5 !bg-[image:var(--background-image-brand-gradient)] hover:!opacity-90 !shadow-lg !shadow-blue-500/25 !text-white !border-none"
           variant="primary"
           size="lg"
           id="auth-submit-btn"

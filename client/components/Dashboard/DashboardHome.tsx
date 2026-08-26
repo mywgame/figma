@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, Coins, DollarSign, Zap, Link as LinkIcon, Users, Award } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Coins, DollarSign } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.ts';
 import { api } from '../../services/api.ts';
 import { DashboardData } from '../../types/index.ts';
@@ -14,11 +14,12 @@ import { getReferralLink } from '../../utils/referral.ts';
 import { Announcements } from './Announcements.tsx';
 import { DailyClaimCard } from './DailyClaimCard.tsx';
 import { HeroBalanceCard } from './HeroBalanceCard.tsx';
-import { IncomeStatCard } from './IncomeStatCard.tsx';
+import { IncomeOverview } from './IncomeOverview.tsx';
 import { MonthlyEarningsChart } from './MonthlyEarningsChart.tsx';
 import { NetworkLevels } from './NetworkLevels.tsx';
 import { RecentActivity } from './RecentActivity.tsx';
 import { DownloadAppsSection } from './DownloadAppsSection.tsx';
+import { PromoOfferSlider } from './Promo/PromoOfferSlider.tsx';
 import { useLocalization } from '../../contexts/LocalizationContext.tsx';
 
 const VIP_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
@@ -58,10 +59,10 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
     ? parseFloat(dashboardData.trialFundInfo.activeTrialBalance || '0')
     : 0;
   const totalBalance = parseFloat(dashboardData.wallet.availableBalance) + activeTrialBalance;
-  const totalEarned = parseFloat(dashboardData.earnings.dailyYield) +
-                      parseFloat(dashboardData.earnings.referralIncome) +
-                      parseFloat(dashboardData.earnings.teamIncome) +
-                      parseFloat(dashboardData.earnings.incentiveIncome);
+  const totalEarned = parseFloat(dashboardData.earnings?.dailyYield || '0') +
+                      parseFloat(dashboardData.earnings?.referralIncome || '0') +
+                      parseFloat(dashboardData.earnings?.teamIncome || '0') +
+                      parseFloat(dashboardData.earnings?.incentiveIncome || '0');
   const totalWithdrawn = parseFloat(dashboardData.wallet.totalWithdrawn);
 
     const vipTier = dashboardData?.vip?.tier || user?.vipTier || 'VIP1';
@@ -144,13 +145,6 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
       ],
     };
 
-    const realIncomeCards = [
-      { key: 'dailyYield', label: t('dailyYield', 'Daily Yield'), today: parseFloat(dashboardData.earnings.todayDailyYield || '0'), total: parseFloat(dashboardData.earnings.dailyYield), icon: Zap, accent: 'emerald' as const },
-      { key: 'referralIncome', label: t('referralIncome', 'Referral Income'), today: parseFloat(dashboardData.earnings.todayReferralIncome || '0'), total: parseFloat(dashboardData.earnings.referralIncome), icon: LinkIcon, accent: 'cyan' as const },
-      { key: 'teamIncome', label: t('teamIncome', 'Team Income'), today: parseFloat(dashboardData.earnings.todayTeamIncome || '0'), total: parseFloat(dashboardData.earnings.teamIncome), icon: Users, accent: 'purple' as const },
-      { key: 'incentiveIncome', label: t('incentiveIncome', 'Incentive Income'), today: parseFloat(dashboardData.earnings.todayIncentiveIncome || '0'), total: parseFloat(dashboardData.earnings.incentiveIncome), icon: Award, accent: 'amber' as const },
-    ];
-
     const realRecentTransactions = (dashboardData.recentTransactions || []).map((tx: any) => {
       const rawType = (tx.type || 'deposit').toString();
       const displayType = rawType
@@ -221,12 +215,29 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
           </button>
         </div>
 
-        {/* 3. Income Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="income-cards-container">
-          {realIncomeCards.map((card) => (
-            <IncomeStatCard key={card.key} label={card.label} today={card.today} total={card.total} icon={card.icon} accent={card.accent} />
-          ))}
-        </div>
+        {/* 2.5 Promotional Offers Hero Carousel */}
+        <PromoOfferSlider onQuickAction={onQuickAction} />
+
+        {/* 3. Income Overview Section */}
+        <IncomeOverview
+          totalEarned={totalEarned}
+          dailyYield={{
+            today: parseFloat(dashboardData.earnings?.todayDailyYield || '0'),
+            total: parseFloat(dashboardData.earnings?.dailyYield || '0'),
+          }}
+          referralIncome={{
+            today: parseFloat(dashboardData.earnings?.todayReferralIncome || '0'),
+            total: parseFloat(dashboardData.earnings?.referralIncome || '0'),
+          }}
+          teamIncome={{
+            today: parseFloat(dashboardData.earnings?.todayTeamIncome || '0'),
+            total: parseFloat(dashboardData.earnings?.teamIncome || '0'),
+          }}
+          incentiveIncome={{
+            today: parseFloat(dashboardData.earnings?.todayIncentiveIncome || '0'),
+            total: parseFloat(dashboardData.earnings?.incentiveIncome || '0'),
+          }}
+        />
 
         {/* 4. Daily Claim + Monthly Earnings Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="yield-collection-container">

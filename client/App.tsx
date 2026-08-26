@@ -39,6 +39,8 @@ import { EnterpriseAdminDashboard } from './components/Admin/index.tsx';
 import { Button } from './components/ui/Buttons/index.tsx';
 import { LoadingScreen } from './components/LoadingScreen.tsx';
 import { AppVersionGuard } from './components/AppVersionGuard.tsx';
+import { FloatingSupportWidget } from './components/support/FloatingSupportWidget.tsx';
+import { prefetchDashboardData } from './services/dashboardCache.ts';
 
 
 /**
@@ -142,9 +144,8 @@ function MainAppContent() {
   // 3. Automatically transition logged in users to ventures (or admin) immediately
   useEffect(() => {
     if (!authLoading && user && currentView === 'landing') {
-      if (isAuthModalOpen) {
-        setIsAuthModalOpen(false);
-      }
+      setIsAuthModalOpen(false);
+      prefetchDashboardData();
       const role = (user.role || '').toLowerCase();
       if (['admin', 'superadmin', 'operator', 'support', 'finance', 'auditor'].includes(role)) {
         setCurrentView('admin');
@@ -152,7 +153,7 @@ function MainAppContent() {
         setCurrentView('ventures');
       }
     }
-  }, [user, currentView, authLoading, isAuthModalOpen]);
+  }, [user, currentView, authLoading]);
 
   // Section Tracking for Navbar Highlighter
   useEffect(() => {
@@ -359,17 +360,13 @@ function MainAppContent() {
           className="min-h-screen flex flex-col"
           style={{ background: '#04091a' }}
         >
-          <ThemeProvider>
-            <LocalizationProvider>
-              <VenturesPage
-                onNavigateToDashboard={(tab) => {
-                  if (tab) setDashboardInitialTab(tab);
-                  setCurrentView('dashboard');
-                }}
-                onLogout={logout}
-              />
-            </LocalizationProvider>
-          </ThemeProvider>
+          <VenturesPage
+            onNavigateToDashboard={(tab) => {
+              if (tab) setDashboardInitialTab(tab);
+              setCurrentView('dashboard');
+            }}
+            onLogout={logout}
+          />
         </motion.div>
       </>
     );
@@ -396,15 +393,11 @@ function MainAppContent() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="min-h-screen bg-navy-950 flex flex-col"
         >
-          <ThemeProvider>
-            <LocalizationProvider>
-              <UserDashboard
-                onBackToLanding={() => setCurrentView('landing')}
-                onNavigateToVentures={() => setCurrentView('ventures')}
-                initialTab={dashboardInitialTab}
-              />
-            </LocalizationProvider>
-          </ThemeProvider>
+          <UserDashboard
+            onBackToLanding={() => setCurrentView('landing')}
+            onNavigateToVentures={() => setCurrentView('ventures')}
+            initialTab={dashboardInitialTab}
+          />
         </motion.div>
       </>
     );
@@ -491,6 +484,9 @@ function MainAppContent() {
       />
 
     </motion.div>
+
+    {/* 5. 24/7 Floating Support Desk on Landing Page for Guests & Visitors */}
+    {!isAuthModalOpen && <FloatingSupportWidget />}
   </>
   );
 }
