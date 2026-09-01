@@ -34,7 +34,13 @@ export interface AdminUser {
 
 export interface AdminDeposit {
   id: string;
+  displayId?: string;
+  referenceNumber?: string;
   user: string;
+  userId?: string;
+  userUid?: string;
+  userEmail?: string;
+  userCustomId?: string;
   amount: string;
   method: string;
   txHash: string;
@@ -44,11 +50,20 @@ export interface AdminDeposit {
 
 export interface AdminWithdrawal {
   id: string;
+  displayId?: string;
+  reference?: string;
   user: string;
+  userId?: string;
+  userUid?: string;
+  userEmail?: string;
+  userCustomId?: string;
   amount: string;
+  network?: string;
   wallet: string;
+  txHash?: string | null;
   date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  rawStatus?: string;
 }
 
 export interface AdminTicket {

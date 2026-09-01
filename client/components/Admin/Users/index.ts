@@ -22,3 +22,4 @@ export {
   TeamNetworkModal,
   AuditLogsModal,
 } from './UserHistoryModals.tsx';
+export { UserQuickProfileModal } from './UserQuickProfileModal.tsx';

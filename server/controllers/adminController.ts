@@ -1084,6 +1084,22 @@ export class AdminController {
   }
 
   /**
+   * POST Verify / Finalize On-Chain Withdrawal
+   */
+  async verifyWithdrawal(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) {
+        throw new ApiError(401, 'Authentication credentials required', 'UNAUTHORIZED');
+      }
+      const { id } = req.params;
+      const result = await adminService.verifyWithdrawal(id, req.user.uid);
+      return sendSuccess(res, result, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET System Audit Logs
    */
   async getSystemAuditLogs(req: AuthRequest, res: Response, next: NextFunction) {

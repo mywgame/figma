@@ -512,6 +512,13 @@ class ApiService {
   }
 
   /**
+   * Admin: Verify on-chain status of a processing withdrawal
+   */
+  async verifyAdminWithdrawal(id: string): Promise<ApiResponse<any>> {
+    return this.post<any>(`/admin/withdrawals/${id}/verify`, {});
+  }
+
+  /**
    * Admin: Get system audit logs
    */
   async getAdminAuditLogs(params?: { action?: string; page?: number; limit?: number }): Promise<ApiResponse<any>> {

@@ -14,6 +14,15 @@ import { WithdrawalSuccessModal } from './WithdrawalSuccessModal.tsx';
 import { getApiUrl } from '../../../services/apiConfig.ts';
 import { formatDateTime } from '../../../utils/dateFormatter.ts';
 
+const formatNetworkLabel = (rawNetwork?: string): string => {
+  if (!rawNetwork) return 'USDT BEP20';
+  const upper = rawNetwork.toUpperCase().trim();
+  if (upper === 'USDT_BEP20' || upper === 'BEP20' || upper === 'BSC') return 'USDT BEP20';
+  if (upper === 'USDT_TRC20' || upper === 'TRC20' || upper === 'TRON') return 'USDT TRC20';
+  if (upper === 'USDT_POLYGON' || upper === 'POLYGON' || upper === 'MATIC') return 'USDT POLYGON';
+  return upper.replace(/_/g, ' ');
+};
+
 interface WithdrawalViewProps {
   showToast: (msg: string) => void;
   onBack: () => void;
@@ -321,23 +330,23 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
               withdrawalsHistory.map((item) => {
                 const formattedTime = formatDateTime(item.createdAt);
                 return (
-                <div key={item.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-[11px]">
+                <div key={item.id} className={`p-3.5 rounded-2xl ${t.cardInner} border ${t.sep} space-y-2 text-[11px] transition-colors`}>
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-white">{item.network.replace('_', ' ')}</span>
-                    <span className="font-mono text-amber-400 font-bold">{parseFloat(item.amount).toFixed(2)} USDT</span>
+                    <span className="font-bold text-amber-500 dark:text-amber-400">{formatNetworkLabel(item.network)}</span>
+                    <span className="font-mono text-amber-500 dark:text-amber-400 font-bold">{parseFloat(item.amount).toFixed(2)} USDT</span>
                   </div>
-                  <div className="flex justify-between text-gray-400 text-[10px]">
+                  <div className="flex justify-between text-gray-500 dark:text-gray-400 text-[10px]">
                     <span title={`System Time: ${formattedTime.utcFull} (${formattedTime.timeZoneAbbr})`}>
                       {formattedTime.localDate}
                     </span>
                     <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${
                       item.status === 'PENDING'
-                        ? 'bg-amber-500/10 text-amber-400'
+                        ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400'
                         : item.status === 'PROCESSING'
-                        ? 'bg-blue-500/10 text-blue-400'
+                        ? 'bg-blue-500/10 text-blue-500 dark:text-blue-400'
                         : item.status === 'COMPLETED'
-                        ? 'bg-emerald-500/10 text-emerald-400'
-                        : 'bg-rose-500/10 text-rose-400'
+                        ? 'bg-emerald-500/10 text-emerald-500 dark:text-emerald-400'
+                        : 'bg-rose-500/10 text-rose-500 dark:text-rose-400'
                     }`}>
                       {item.status === 'PENDING'
                         ? 'Waiting for Approval'
@@ -350,28 +359,28 @@ export const WithdrawalView: React.FC<WithdrawalViewProps> = ({
                         : item.status}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[10px] border-t border-white/5 pt-2 font-mono text-gray-500">
-                    <span>TX: {item.reference}</span>
+                  <div className={`flex justify-between items-center text-[10px] border-t ${t.sep} pt-2 font-mono text-gray-500 dark:text-gray-400`}>
+                    <span className="font-semibold text-gray-600 dark:text-gray-300">TX: {item.reference}</span>
                     {item.txHash ? (
                       <button
                         type="button"
                         onClick={() => handleCopyTxHash(item.txHash)}
-                        className="hover:text-amber-400 flex items-center gap-1 transition-colors cursor-pointer"
+                        className="hover:text-amber-500 dark:hover:text-amber-400 flex items-center gap-1 transition-colors cursor-pointer"
                         title="Click to copy Hash"
                       >
                         <span>{item.txHash.slice(0, 8)}...{item.txHash.slice(-6)}</span>
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     ) : (
-                      <span className="italic text-gray-600">Pending Blockchain Execution</span>
+                      <span className="italic text-gray-400 dark:text-gray-600">Pending Blockchain Execution</span>
                     )}
                   </div>
                 </div>
               );})
             ) : (
-              <div className="p-6 text-center rounded-2xl bg-white/5 border border-white/5 space-y-1">
-                <span className="text-xs text-gray-400 block font-semibold">No withdrawals logged yet</span>
-                <span className="text-[10px] text-gray-500 block">Once you submit a request and it's verified, it will appear here.</span>
+              <div className={`p-6 text-center rounded-2xl ${t.cardInner} border ${t.sep} space-y-1`}>
+                <span className={`text-xs ${t.textMuted} block font-semibold`}>No withdrawals logged yet</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 block">Once you submit a request and it's verified, it will appear here.</span>
               </div>
             )}
           </div>

@@ -5,6 +5,7 @@
 
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import { createServer as createViteServer } from 'vite';
 import { config } from './server/config/index.ts';
@@ -52,20 +53,25 @@ async function bootstrap() {
   app.use('/api', rateLimiter(15 * 60 * 1000, 300), apiRoutes);
 
   // 4. Vite Dev Middleware / Production Static Asset Handling
-  if (config.nodeEnv !== 'production') {
-    logger.info('Mounting Vite middleware for Hot-Module replacement and client builds...');
+  const distPath = path.join(process.cwd(), 'dist');
+  const distIndexExists = fs.existsSync(path.join(distPath, 'index.html'));
+
+  if (distIndexExists) {
+    logger.info('Serving static assets from dist/ directory...');
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
+    logger.info('Mounting Vite middleware for SPA serving and Hot-Module development...');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    logger.info('Mounting production static assets build directories...');
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
 
   // 5. Centralized Error Handler (Mounted last)

@@ -213,9 +213,18 @@ export class AdminService {
    * Get complete details of a single user
    */
   async getUserProfileDetail(targetUid: string) {
-    const user = await userRepository.findByUid(targetUid);
+    let user = await userRepository.findByUid(targetUid);
     if (!user) {
-      throw new Error(`User not found with UID: ${targetUid}`);
+      user = await userRepository.findById(targetUid);
+    }
+    if (!user) {
+      user = await userRepository.findByUserId(targetUid);
+    }
+    if (!user) {
+      user = await userRepository.findByEmail(targetUid);
+    }
+    if (!user) {
+      throw new Error(`User not found with UID/ID: ${targetUid}`);
     }
 
     const wallet = await walletRepository.findByUserId(user.id);
@@ -634,15 +643,28 @@ export class AdminService {
     const result = [];
     for (const d of deps) {
       let userName = 'Unknown User';
+      let userUid = '';
+      let userEmail = '';
+      let userCustomId = '';
       if (d.userId) {
         const u = await userRepository.findById(d.userId);
         if (u) {
           userName = u.name || u.email || u.uid;
+          userUid = u.uid;
+          userEmail = u.email;
+          userCustomId = u.userId;
         }
       }
+      const displayId = (d as any).referenceNumber || `DEP${d.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
       result.push({
         id: d.id,
+        displayId,
+        referenceNumber: (d as any).referenceNumber || displayId,
         user: userName,
+        userId: d.userId,
+        userUid: userUid || d.userId,
+        userEmail,
+        userCustomId,
         amount: `$${parseFloat(d.amount).toFixed(2)}`,
         method: d.network || 'USDT',
         txHash: d.txHash || 'N/A',
@@ -704,15 +726,28 @@ export class AdminService {
     const result = [];
     for (const w of withs) {
       let userName = 'Unknown User';
+      let userUid = '';
+      let userEmail = '';
+      let userCustomId = '';
       if (w.userId) {
         const u = await userRepository.findById(w.userId);
         if (u) {
           userName = u.name || u.email || u.uid;
+          userUid = u.uid;
+          userEmail = u.email;
+          userCustomId = u.userId;
         }
       }
+      const displayId = (w as any).reference || `WD${w.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
       result.push({
         id: w.id,
+        displayId,
+        reference: (w as any).reference || displayId,
         user: userName,
+        userId: w.userId,
+        userUid: userUid || w.userId,
+        userEmail,
+        userCustomId,
         amount: `$${parseFloat(w.amount).toFixed(2)}`,
         network: w.network || 'USDT_BEP20',
         wallet: w.walletAddress,
@@ -747,6 +782,36 @@ export class AdminService {
     });
 
     return updatedW;
+  }
+
+  /**
+   * Administrative Verification & Finalization of processing on-chain Withdrawals.
+   */
+  async verifyWithdrawal(withdrawalId: string, adminUid: string) {
+    const w = await withdrawalRepository.findById(withdrawalId);
+    if (!w) {
+      throw new Error(`Withdrawal not found: ${withdrawalId}`);
+    }
+
+    if (w.status === 'COMPLETED') {
+      return { success: true, message: 'Withdrawal already completed.', withdrawal: w };
+    }
+
+    if (w.status !== 'PROCESSING' && w.status !== 'PENDING') {
+      throw new Error(`Cannot verify withdrawal in state: ${w.status}`);
+    }
+
+    const updatedW = await withdrawalService.finalizeSuccessfulWithdrawal(withdrawalId);
+
+    await auditRepository.createAuditLog({
+      actorUid: adminUid,
+      userId: updatedW.userId,
+      action: 'WITHDRAWAL_ONCHAIN_VERIFICATION',
+      resource: `withdrawals/${updatedW.id}`,
+      newValue: 'COMPLETED',
+    });
+
+    return { success: true, message: 'Withdrawal verified and finalized successfully.', withdrawal: updatedW };
   }
 
   /**

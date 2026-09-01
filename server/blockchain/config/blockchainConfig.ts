@@ -66,11 +66,9 @@ export const blockchainConfig = {
   networks: {
     USDT_BEP20: {
       contractAddress:
-        process.env.USDT_BEP20_CONTRACT ||
-        process.env.USDT_CONTRACT ||
         (isTestnet
-          ? '0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C'
-          : '0x55d398326f99059ff775485246999027b3197955'),
+          ? (process.env.USDT_BEP20_TESTNET_CONTRACT || '0x01F9Bc7BaBaFDFA8713628994dAEd75b8D07bF3C')
+          : (process.env.USDT_BEP20_CONTRACT || process.env.USDT_CONTRACT || '0x55d398326f99059ff775485246999027b3197955')),
       xpub: process.env.USDT_BEP20_XPUB || process.env.USDT_XPUB || '',
       hotPrivateKey:
         process.env.USDT_BEP20_HOT1_PRIVATE_KEY ||

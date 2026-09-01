@@ -12,6 +12,7 @@ import { auditRepository } from '../../repositories/auditRepository.ts';
 import { vipService } from '../../services/vipService.ts';
 import { BlockchainProvider } from '../interfaces/BlockchainProvider.ts';
 import { activeBlockchainProvider } from '../providers/index.ts';
+import { blockchainConfig } from '../config/blockchainConfig.ts';
 
 export class WithdrawalService {
   constructor(private readonly provider: BlockchainProvider = activeBlockchainProvider) {}
@@ -183,6 +184,21 @@ export class WithdrawalService {
       type: 'withdrawal',
       priority: 'HIGH',
     });
+
+    // 3. Instant On-Chain Verification check: if transaction is already confirmed, finalize immediately
+    try {
+      const networkConfig = blockchainConfig.networks[withdrawal.network as keyof typeof blockchainConfig.networks];
+      const requiredConfirmations = networkConfig?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
+      const txInfo = await this.provider.getTransaction(withdrawal.network, realTxHash);
+
+      if (txInfo && txInfo.isSuccessful && txInfo.confirmations >= requiredConfirmations) {
+        console.log(`[WithdrawalService] Instant on-chain confirmation verified for ${withdrawalId}. Finalizing immediately.`);
+        const finalized = await this.finalizeSuccessfulWithdrawal(withdrawalId);
+        return finalized;
+      }
+    } catch (verErr: any) {
+      console.warn(`[WithdrawalService] Immediate on-chain verification skipped (will be monitored): ${verErr.message}`);
+    }
 
     return updatedWithdrawal;
   }

@@ -36,6 +36,32 @@ export class UserRepository {
   }
 
   /**
+   * Find user by custom alphanumeric User ID (e.g. DS123456)
+   */
+  async findByUserId(userId: string) {
+    try {
+      const result = await db.select().from(users).where(eq(users.userId, userId));
+      return result[0] || null;
+    } catch (error) {
+      console.error('Database query (findByUserId) failed:', error);
+      throw new Error('Failed to retrieve user from database.', { cause: error });
+    }
+  }
+
+  /**
+   * Find user by email
+   */
+  async findByEmail(email: string) {
+    try {
+      const result = await db.select().from(users).where(eq(users.email, email));
+      return result[0] || null;
+    } catch (error) {
+      console.error('Database query (findByEmail) failed:', error);
+      throw new Error('Failed to retrieve user from database.', { cause: error });
+    }
+  }
+
+  /**
    * Create a new user account explicitly
    */
   async createUser(data: {

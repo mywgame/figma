@@ -537,6 +537,17 @@ router.post(
 );
 
 /**
+ * @route POST /api/v1/admin/withdrawals/:id/verify
+ * @desc Verify and finalize on-chain status of a processing withdrawal
+ */
+router.post(
+  '/withdrawals/:id/verify',
+  requireAuth,
+  requireRole([UserRole.ADMIN, UserRole.SUPERADMIN]),
+  adminController.verifyWithdrawal
+);
+
+/**
  * @route GET /api/v1/admin/audit-logs
  * @desc Retrieve platform-wide system audit trail logs
  */

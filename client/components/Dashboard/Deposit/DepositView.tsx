@@ -15,6 +15,15 @@ import { api } from '../../../services/api.ts';
 import { getApiUrl } from '../../../services/apiConfig.ts';
 import { formatDateTime } from '../../../utils/dateFormatter.ts';
 
+const formatNetworkLabel = (rawNetwork?: string): string => {
+  if (!rawNetwork) return 'USDT BEP20';
+  const upper = rawNetwork.toUpperCase().trim();
+  if (upper === 'USDT_BEP20' || upper === 'BEP20' || upper === 'BSC') return 'USDT BEP20';
+  if (upper === 'USDT_TRC20' || upper === 'TRC20' || upper === 'TRON') return 'USDT TRC20';
+  if (upper === 'USDT_POLYGON' || upper === 'POLYGON' || upper === 'MATIC') return 'USDT POLYGON';
+  return upper.replace(/_/g, ' ');
+};
+
 interface DepositViewProps {
   dashboardData: DashboardData | null;
   showToast: (msg: string) => void;
@@ -347,7 +356,7 @@ export const DepositView: React.FC<DepositViewProps> = ({
             {loadingHistory ? (
               <div className="p-4 text-center text-xs text-gray-400">Loading deposit history...</div>
             ) : depositHistory.length === 0 ? (
-              <div className="p-4 text-center text-xs text-gray-400 border border-white/5 rounded-2xl bg-white/5">
+              <div className={`p-4 text-center text-xs ${t.textMuted} border ${t.sep} rounded-2xl ${t.cardInner}`}>
                 No deposit history found.
               </div>
             ) : (
@@ -355,36 +364,36 @@ export const DepositView: React.FC<DepositViewProps> = ({
                 const txHashVal = item.txHash || '';
                 const formattedTime = formatDateTime(item.createdAt);
                 return (
-                  <div key={item.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-[11px]">
+                  <div key={item.id} className={`p-3.5 rounded-2xl ${t.cardInner} border ${t.sep} space-y-2 text-[11px] transition-colors`}>
                     <div className="flex justify-between items-center">
-                      <span className="font-semibold text-white">{item.network || 'USDT'}</span>
-                      <span className="font-mono text-cyan-400 font-bold">{item.amount} USDT</span>
+                      <span className="font-bold text-cyan-500 dark:text-cyan-400">{formatNetworkLabel(item.network)}</span>
+                      <span className="font-mono text-cyan-500 dark:text-cyan-400 font-bold">{item.amount} USDT</span>
                     </div>
-                    <div className="flex justify-between text-gray-400 text-[10px]">
+                    <div className="flex justify-between text-gray-500 dark:text-gray-400 text-[10px]">
                       <span title={`System Time: ${formattedTime.utcFull} (${formattedTime.timeZoneAbbr})`}>
                         {formattedTime.localDate}
                       </span>
                       <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${
-                        item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' :
-                        item.status === 'FAILED' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400'
+                        item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 dark:text-emerald-400' :
+                        item.status === 'FAILED' ? 'bg-rose-500/10 text-rose-500 dark:text-rose-400' : 'bg-amber-500/10 text-amber-500 dark:text-amber-400'
                       }`}>
                         {item.status}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-[10px] border-t border-white/5 pt-2 font-mono text-gray-500">
-                      <span>REF: {item.referenceNumber || item.id.slice(0, 8)}</span>
+                    <div className={`flex justify-between items-center text-[10px] border-t ${t.sep} pt-2 font-mono text-gray-500 dark:text-gray-400`}>
+                      <span className="font-semibold text-gray-600 dark:text-gray-300">REF: {item.referenceNumber || item.id.slice(0, 8)}</span>
                       {txHashVal ? (
                         <button
                           type="button"
                           onClick={() => handleCopyTxHash(txHashVal)}
-                          className="hover:text-cyan-400 flex items-center gap-1 transition-colors cursor-pointer"
+                          className="hover:text-cyan-500 dark:hover:text-cyan-400 flex items-center gap-1 transition-colors cursor-pointer"
                           title="Click to copy Hash"
                         >
                           <span>{txHashVal.length > 14 ? `${txHashVal.slice(0, 8)}...${txHashVal.slice(-6)}` : txHashVal}</span>
                           <Copy className="w-3.5 h-3.5" />
                         </button>
                       ) : (
-                        <span className="text-gray-600">Pending Tx</span>
+                        <span className="text-gray-400 dark:text-gray-600">Pending Tx</span>
                       )}
                     </div>
                   </div>
