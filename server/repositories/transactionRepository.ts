@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { eq, and, desc, gte } from 'drizzle-orm';
+import { eq, and, desc, gte, notInArray } from 'drizzle-orm';
 import { db } from '../../src/db/index.ts';
 import { transactions } from '../../src/db/schema.ts';
 
@@ -38,7 +38,7 @@ export class TransactionRepository {
   }
 
   /**
-   * Get transactions for a user with pagination and optional filters (type, status, startDate)
+   * Get transactions for a user with pagination and optional filters (type, status, startDate, excludeTypes)
    */
   async findByUserId(
     userId: string,
@@ -48,6 +48,7 @@ export class TransactionRepository {
       type?: string;
       status?: string;
       startDate?: Date;
+      excludeTypes?: string[];
     }
   ) {
     try {
@@ -56,12 +57,16 @@ export class TransactionRepository {
       const type = options?.type;
       const status = options?.status;
       const startDate = options?.startDate;
+      const excludeTypes = options?.excludeTypes;
 
       let query = db.select().from(transactions).$dynamic();
       const conditions = [eq(transactions.userId, userId)];
 
       if (type) {
         conditions.push(eq(transactions.type, type));
+      }
+      if (excludeTypes && excludeTypes.length > 0) {
+        conditions.push(notInArray(transactions.type, excludeTypes));
       }
       if (status) {
         conditions.push(eq(transactions.status, status));

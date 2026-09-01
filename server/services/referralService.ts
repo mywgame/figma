@@ -218,12 +218,8 @@ export class ReferralService {
               newValue: JSON.stringify({ sourceUserId, level, receiverTier, rate, sourceDpyAmount: dpyAmount.toFixed(8), commissionAmount: commissionStr }),
             });
 
-            // 6. Notification
-            await notificationRepository.createNotification({
-              userId: receiverUserId,
-              message: `You received ${commissionStr} USDT in Team Commission (Level ${level}) from a downline's DPY claim.`,
-              priority: 'LOW',
-            });
+            // 6. Note: Individual notification creation for team commission is omitted to prevent notification drawer spam.
+            // Aggregated team income and downline performance remain tracked in My Team view.
           }
         }
 

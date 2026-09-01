@@ -51,9 +51,14 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ transactions, on
       </div>
 
       <div className="space-y-2">
-        {transactions.map((tx) => {
-          const lowerType = (tx.type || '').toLowerCase();
-          const isWithdrawal = lowerType.includes('withdrawal');
+        {transactions
+          .filter((tx) => {
+            const lowerType = (tx.type || '').toLowerCase();
+            return !lowerType.includes('team');
+          })
+          .map((tx) => {
+            const lowerType = (tx.type || '').toLowerCase();
+            const isWithdrawal = lowerType.includes('withdrawal');
           const isExpiry = lowerType.includes('expiry') || lowerType.includes('expire');
           const isDebit = lowerType.includes('debit') || lowerType.includes('penalty') || lowerType.includes('fee') || lowerType.includes('deduct');
           const isDeduction = isWithdrawal || isExpiry || isDebit;

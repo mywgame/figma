@@ -987,6 +987,7 @@ export class UserController {
         type,
         status,
         startDate: threeMonthsAgo,
+        excludeTypes: type ? undefined : ['TEAM_INCOME', 'TEAM_COMMISSION'],
       });
       return sendSuccess(res, list, 200);
     } catch (error) {

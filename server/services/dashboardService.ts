@@ -98,8 +98,11 @@ export class DashboardService {
       }
     }
 
-    // 5. Fetch recent transactions ledger (Limit 5)
-    const rawRecentTransactions = await transactionRepository.findByUserId(userId, { limit: 5 });
+    // 5. Fetch recent transactions ledger (Limit 5, excluding team commission entries)
+    const rawRecentTransactions = await transactionRepository.findByUserId(userId, {
+      limit: 5,
+      excludeTypes: ['TEAM_INCOME', 'TEAM_COMMISSION'],
+    });
     const recentTransactions = rawRecentTransactions.map((tx) => {
       let refId = tx.referenceId;
       return {

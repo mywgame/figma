@@ -86,7 +86,12 @@ export const NotificationBell: React.FC = () => {
       const response = await api.getNotifications();
       if (response.success && response.data) {
         const rawList = response.data as NotificationData[];
-        const parsedList = rawList.map(parseNotification);
+        const parsedList = rawList
+          .filter((n) => {
+            const raw = (n.message || '').toLowerCase();
+            return !raw.includes('team commission');
+          })
+          .map(parseNotification);
         setNotifications(parsedList);
       }
     } catch (error) {

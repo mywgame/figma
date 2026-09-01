@@ -32,7 +32,12 @@ export const TransactionsView: React.FC = () => {
       try {
         const res = await api.getUserTransactions();
         if (res.success && Array.isArray(res.data)) {
-          const mapped: Transaction[] = res.data.map((dbTx: any) => {
+          const mapped: Transaction[] = res.data
+            .filter((dbTx: any) => {
+              const rawType = (dbTx.type || '').toUpperCase();
+              return !rawType.includes('TEAM');
+            })
+            .map((dbTx: any) => {
             let mappedType: TransactionType = 'Deposit';
             const rawType = (dbTx.type || '').toUpperCase();
             const rawDesc = (dbTx.description || '').toUpperCase();

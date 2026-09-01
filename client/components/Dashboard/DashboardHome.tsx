@@ -145,24 +145,29 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
       ],
     };
 
-    const realRecentTransactions = (dashboardData.recentTransactions || []).map((tx: any) => {
-      const rawType = (tx.type || 'deposit').toString();
-      const displayType = rawType
-        .replace(/_/g, ' ')
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+    const realRecentTransactions = (dashboardData.recentTransactions || [])
+      .filter((tx: any) => {
+        const rawType = (tx.type || '').toUpperCase();
+        return !rawType.includes('TEAM');
+      })
+      .map((tx: any) => {
+        const rawType = (tx.type || 'deposit').toString();
+        const displayType = rawType
+          .replace(/_/g, ' ')
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase());
 
-      return {
-        id: tx.id,
-        type: rawType.toLowerCase(),
-        displayType,
-        hash: tx.referenceId || `TX-${tx.id.slice(0, 8)}`,
-        amount: Math.abs(parseFloat(tx.amount || '0')),
-        token: 'USDT',
-        createdAt: tx.createdAt,
-        time: tx.createdAt ? formatDate(tx.createdAt) : 'N/A',
-      };
-    });
+        return {
+          id: tx.id,
+          type: rawType.toLowerCase(),
+          displayType,
+          hash: tx.referenceId || `TX-${tx.id.slice(0, 8)}`,
+          amount: Math.abs(parseFloat(tx.amount || '0')),
+          token: 'USDT',
+          createdAt: tx.createdAt,
+          time: tx.createdAt ? formatDate(tx.createdAt) : 'N/A',
+        };
+      });
 
     return (
       <div className="space-y-6 w-full text-left" id="metafirm-dashboard-home">
