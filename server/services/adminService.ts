@@ -14,6 +14,7 @@ import { withdrawalRepository } from '../repositories/withdrawalRepository.ts';
 import { vipRepository } from '../repositories/vipRepository.ts';
 import { depositAddressRepository } from '../repositories/depositAddressRepository.ts';
 import { settingsRepository } from '../repositories/settingsRepository.ts';
+import { referralRepository } from '../repositories/referralRepository.ts';
 import { withdrawalService } from './withdrawalService.ts';
 import { depositService } from './depositService.ts';
 import { notificationService } from './notificationService.ts';
@@ -169,6 +170,33 @@ export class AdminService {
            parseFloat(wallet.incentiveIncome || '0'))
         : 0;
 
+      // Resolve direct parent (sponsor) info
+      let parentObj: { id?: string; userId?: string; name?: string; email?: string } | null = null;
+      if (u.parentReferralId) {
+        const parentUser = await userRepository.findById(u.parentReferralId);
+        if (parentUser) {
+          parentObj = {
+            id: parentUser.uid,
+            userId: parentUser.userId,
+            name: parentUser.name || parentUser.username || parentUser.userId,
+            email: parentUser.email,
+          };
+        }
+      } else {
+        const parentRel = await referralRepository.findRelationshipByChildId(u.id);
+        if (parentRel && parentRel.parentId) {
+          const parentUser = await userRepository.findById(parentRel.parentId);
+          if (parentUser) {
+            parentObj = {
+              id: parentUser.uid,
+              userId: parentUser.userId,
+              name: parentUser.name || parentUser.username || parentUser.userId,
+              email: parentUser.email,
+            };
+          }
+        }
+      }
+
       mappedUsers.push({
         id: u.uid, // mapped to uid so frontend actions target uid
         userId: u.userId,
@@ -181,6 +209,10 @@ export class AdminService {
         totalDeposits: `$${totalDeposits}`,
         totalEarnings: `$${totalEarningsVal.toFixed(2)}`,
         referralCode: u.referralCode,
+        parent: parentObj,
+        parentId: parentObj?.userId || null,
+        parentUserId: parentObj?.userId || null,
+        parentName: parentObj?.name || null,
         levelA,
         levelB,
         levelC,
@@ -248,6 +280,33 @@ export class AdminService {
       }
     }
 
+    // Parent sponsor info
+    let parentObj: { id?: string; userId?: string; name?: string; email?: string } | null = null;
+    if (user.parentReferralId) {
+      const parentUser = await userRepository.findById(user.parentReferralId);
+      if (parentUser) {
+        parentObj = {
+          id: parentUser.uid,
+          userId: parentUser.userId,
+          name: parentUser.name || parentUser.username || parentUser.userId,
+          email: parentUser.email,
+        };
+      }
+    } else {
+      const parentRel = await referralRepository.findRelationshipByChildId(user.id);
+      if (parentRel && parentRel.parentId) {
+        const parentUser = await userRepository.findById(parentRel.parentId);
+        if (parentUser) {
+          parentObj = {
+            id: parentUser.uid,
+            userId: parentUser.userId,
+            name: parentUser.name || parentUser.username || parentUser.userId,
+            email: parentUser.email,
+          };
+        }
+      }
+    }
+
     return {
       id: user.uid,
       userId: user.userId,
@@ -255,6 +314,10 @@ export class AdminService {
       email: user.email,
       mobile: user.phone || '',
       rank: vip[0]?.tier || 'VIP1',
+      parent: parentObj,
+      parentId: parentObj?.userId || null,
+      parentUserId: parentObj?.userId || null,
+      parentName: parentObj?.name || null,
       balance: wallet ? `$${parseFloat(wallet.availableBalance).toFixed(2)}` : '$0.00',
       status: user.status === 'ACTIVE' ? 'Active' : 'Suspended',
       joined: new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),

@@ -30,6 +30,15 @@ export interface AdminUser {
   status: 'Active' | 'Suspended';
   joined: string;
   adminNotes?: string;
+  parent?: {
+    id?: string;
+    userId?: string;
+    name?: string;
+    email?: string;
+  } | null;
+  parentId?: string | null;
+  parentUserId?: string | null;
+  parentName?: string | null;
 }
 
 export interface AdminDeposit {

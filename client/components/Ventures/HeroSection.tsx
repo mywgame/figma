@@ -55,28 +55,50 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onNavigateToDashboard 
     }
   };
 
+  const HERO_BG_MOBILE =
+    'https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/venture/images/9-16hero.webp';
+  const HERO_BG_DESKTOP =
+    'https://pub-9c62303890854a49a9eda8efb728c7ff.r2.dev/venture/images/16-9hero.webp';
+
   return (
-    <section className="relative min-h-[92vh] flex flex-col items-center justify-center overflow-hidden pt-20 pb-16">
-      {/* Background radial effects */}
+    <section className="relative min-h-[92vh] flex flex-col items-center justify-center overflow-hidden pt-20 pb-16 bg-[#04091a]" id="venture-hero-section">
+      {/* Background Images: Responsive Picture & Auto-Fit Layer */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center bg-[#04091a]">
+        <picture className="w-full h-full flex items-center justify-center">
+          {/* Portrait & Narrow screens (Mobile & Tablet Portrait): Use 9:16 vertical asset with edge-to-edge coverage */}
+          <source media="(orientation: portrait), (max-aspect-ratio: 1/1)" srcSet={HERO_BG_MOBILE} type="image/webp" />
+          {/* Landscape screens (Desktop & Tablet Landscape): 16:9 widescreen asset */}
+          <source media="(orientation: landscape)" srcSet={HERO_BG_DESKTOP} type="image/webp" />
+          {/* Fallback Image */}
+          <img
+            src={HERO_BG_DESKTOP}
+            alt="MetaFirm Ventures background"
+            referrerPolicy="no-referrer"
+            className="venture-hero-bg-img"
+            loading="eager"
+            fetchPriority="high"
+          />
+        </picture>
+      </div>
+
+      {/* Horizontal subtle edge vignette active ONLY on large desktop landscape */}
       <div
-        className="absolute inset-0"
+        className="venture-hero-vignette absolute inset-0 pointer-events-none z-[1]"
         style={{
           background:
-            'radial-gradient(ellipse 100% 80% at 50% -10%, rgba(99,80,255,0.18) 0%, rgba(30,15,80,0.12) 40%, transparent 70%), radial-gradient(ellipse 60% 50% at 80% 60%, rgba(34,211,238,0.07) 0%, transparent 60%), #04091a',
+            'linear-gradient(90deg, #04091a 0%, rgba(4,9,26,0.6) 8%, transparent 22%, transparent 78%, rgba(4,9,26,0.6) 92%, #04091a 100%)',
         }}
       />
-      <div className="absolute inset-0 venture-hero-grid" />
-      <div className="absolute inset-0 venture-noise-overlay" />
 
-      {/* Glow Orbs */}
+      {/* Subtle Readability & Seamless Bottom Fade Overlay */}
       <div
-        className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20 blur-3xl"
-        style={{ background: 'radial-gradient(circle, rgba(99,80,255,0.6) 0%, transparent 70%)' }}
+        className="absolute inset-0 pointer-events-none z-[1]"
+        style={{
+          background:
+            'linear-gradient(180deg, rgba(4,9,26,0.35) 0%, rgba(4,9,26,0.1) 40%, rgba(4,9,26,0.6) 80%, #04091a 100%)',
+        }}
       />
-      <div
-        className="absolute bottom-1/3 right-1/4 w-64 h-64 rounded-full opacity-15 blur-3xl"
-        style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.5) 0%, transparent 70%)' }}
-      />
+      <div className="absolute inset-0 venture-noise-overlay opacity-25 pointer-events-none z-[2]" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 w-full">
         <div className="flex flex-col items-center text-center mb-10 sm:mb-12">

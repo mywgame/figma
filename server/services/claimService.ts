@@ -37,11 +37,11 @@ export class ClaimService {
   }
 
   /**
-   * Generate a pending daily claim record for a single user for a given date
+   * Calculate current eligible DPY yield and active balance components for a user
    */
-  async generateClaimForUser(userId: string, date: Date = new Date()) {
+  async calculateCurrentEligibleDpy(userId: string, date: Date = new Date()) {
     // Lazily expire the Trial Principal first (Business Logic Spec Section 4) so an
-    // already-expired trial balance never generates a fresh day's DPY.
+    // already-expired trial balance never generates yield.
     await trialFundService.checkAndExpireTrialFund(userId);
 
     const wallet = await walletRepository.findByUserId(userId);
@@ -67,9 +67,28 @@ export class ClaimService {
     const totalEligibleBalance = activeBalance + (trialActive ? trialBalance : 0);
     const rewardAmount = mainComponent + trialComponent;
 
-    if (rewardAmount <= 0) {
+    return {
+      wallet,
+      vipTier,
+      vipRate: rate,
+      activeBalance,
+      trialBalance,
+      trialActive,
+      totalEligibleBalance,
+      rewardAmount,
+    };
+  }
+
+  /**
+   * Generate a pending daily claim record for a single user for a given date
+   */
+  async generateClaimForUser(userId: string, date: Date = new Date()) {
+    const calc = await this.calculateCurrentEligibleDpy(userId, date);
+    if (!calc || calc.rewardAmount <= 0) {
       return null; // No assets to generate DPY
     }
+
+    const { vipTier, vipRate, totalEligibleBalance, rewardAmount } = calc;
 
     // Set today's window bounds (00:00 to 23:59:59 UTC)
     const openTime = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
@@ -88,12 +107,56 @@ export class ClaimService {
       rewardAmount: rewardAmount.toFixed(8),
       totalAssets: totalEligibleBalance.toFixed(8),
       vipTier,
-      vipRate: rate.toFixed(4),
+      vipRate: vipRate.toFixed(4),
       claimWindowOpenTime: openTime,
       claimWindowCloseTime: closeTime,
     });
 
     return claim;
+  }
+
+  /**
+   * Synchronize an existing PENDING claim for today with the user's latest eligible wallet balance.
+   * Ensures that if the user deposited funds before claiming, the pending reward and assets
+   * immediately reflect their live balance on the dashboard and claim cards.
+   */
+  async syncPendingClaimForUser(userId: string, date: Date = new Date()) {
+    const existingClaims = await claimRepository.findAnyClaimInWindow(userId, date);
+    if (!existingClaims || existingClaims.length === 0) {
+      return null;
+    }
+
+    const pendingClaim = existingClaims.find((c) => c.claimStatus === 'PENDING');
+    if (!pendingClaim) {
+      return null; // Claim is already CLAIMED, EXPIRED, etc. Do not modify finalized claims!
+    }
+
+    const calc = await this.calculateCurrentEligibleDpy(userId, date);
+    if (!calc || calc.rewardAmount <= 0) {
+      return pendingClaim;
+    }
+
+    const newRewardStr = calc.rewardAmount.toFixed(8);
+    const newAssetsStr = calc.totalEligibleBalance.toFixed(8);
+    const newRateStr = calc.vipRate.toFixed(4);
+
+    // If amounts already match, no update needed
+    if (
+      pendingClaim.rewardAmount === newRewardStr &&
+      pendingClaim.totalAssets === newAssetsStr &&
+      pendingClaim.vipTier === calc.vipTier
+    ) {
+      return pendingClaim;
+    }
+
+    const updated = await claimRepository.updatePendingClaimReward(pendingClaim.id, {
+      rewardAmount: newRewardStr,
+      totalAssets: newAssetsStr,
+      vipTier: calc.vipTier,
+      vipRate: newRateStr,
+    });
+
+    return updated || pendingClaim;
   }
 
   /**
@@ -123,11 +186,29 @@ export class ClaimService {
       throw new Error(`Wallet not found for user: ${userId}`);
     }
 
-    // 1. Atomically lock and transition claim status to CLAIMED first to prevent double claim race conditions
+    // Recalculate live eligible DPY at the exact time of claim execution
+    // to capture any deposits made prior to claiming on the same day.
+    const calc = await this.calculateCurrentEligibleDpy(userId, now);
+    const liveRewardAmountStr = (calc && calc.rewardAmount > 0)
+      ? calc.rewardAmount.toFixed(8)
+      : claim.rewardAmount;
+    const liveTotalAssetsStr = (calc && calc.totalEligibleBalance > 0)
+      ? calc.totalEligibleBalance.toFixed(8)
+      : claim.totalAssets;
+    const liveVipTier = calc?.vipTier || claim.vipTier;
+    const liveVipRateStr = calc ? calc.vipRate.toFixed(4) : claim.vipRate;
+
+    // 1. Atomically lock and transition claim status to CLAIMED with the finalized live reward amount
     const lockedClaim = await claimRepository.updateClaimStatus(
       claim.id,
       'CLAIMED',
-      { claimedAt: now },
+      {
+        claimedAt: now,
+        rewardAmount: liveRewardAmountStr,
+        totalAssets: liveTotalAssetsStr,
+        vipTier: liveVipTier,
+        vipRate: liveVipRateStr,
+      },
       'PENDING'
     );
 
@@ -135,15 +216,15 @@ export class ClaimService {
       throw new Error('This claim has already been processed or is no longer pending.');
     }
 
-    const rewardAmount = parseFloat(claim.rewardAmount);
+    const rewardAmount = parseFloat(lockedClaim.rewardAmount);
     const balanceBefore = parseFloat(wallet.availableBalance);
     const balanceAfter = balanceBefore + rewardAmount;
 
     // 2. Credit main wallet balances atomically
     await walletRepository.incrementBalances(wallet.id, {
-      availableBalance: claim.rewardAmount,
-      dailyYield: claim.rewardAmount,
-      totalEarned: claim.rewardAmount,
+      availableBalance: lockedClaim.rewardAmount,
+      dailyYield: lockedClaim.rewardAmount,
+      totalEarned: lockedClaim.rewardAmount,
     });
 
     // 3. Create immutable transaction ledger entry
@@ -151,10 +232,10 @@ export class ClaimService {
       userId,
       walletId: wallet.id,
       type: 'DAILY_YIELD',
-      referenceId: claim.id,
+      referenceId: lockedClaim.id,
       status: 'COMPLETED',
-      description: `Claimed daily DPY yield: ${claim.rewardAmount} USDT (VIP rate: ${(parseFloat(claim.vipRate) * 100).toFixed(2)}%).`,
-      amount: claim.rewardAmount,
+      description: `Claimed daily DPY yield: ${lockedClaim.rewardAmount} USDT (VIP rate: ${(parseFloat(lockedClaim.vipRate) * 100).toFixed(2)}%).`,
+      amount: lockedClaim.rewardAmount,
       balanceBefore: balanceBefore.toFixed(8),
       balanceAfter: balanceAfter.toFixed(8),
       createdBy: 'SYSTEM',
@@ -165,20 +246,20 @@ export class ClaimService {
       userId,
       walletId: wallet.id,
       type: 'DAILY_YIELD',
-      amount: claim.rewardAmount,
-      description: `Daily DPY yield matching VIP tier ${claim.vipTier}`,
+      amount: lockedClaim.rewardAmount,
+      description: `Daily DPY yield matching VIP tier ${lockedClaim.vipTier}`,
       transactionId: txn.id,
     });
 
     // 5. Update transactionId in Claim record
-    const updatedClaim = await claimRepository.updateClaimStatus(claim.id, 'CLAIMED', {
+    const updatedClaim = await claimRepository.updateClaimStatus(lockedClaim.id, 'CLAIMED', {
       transactionId: txn.id,
     });
 
     // 6. Trigger notifications
     await notificationRepository.createNotification({
       userId,
-      message: `Successfully claimed daily yield of ${claim.rewardAmount} USDT.`,
+      message: `Successfully claimed daily yield of ${lockedClaim.rewardAmount} USDT.`,
       priority: 'MEDIUM',
     });
 
@@ -187,14 +268,21 @@ export class ClaimService {
       actorUid: userId,
       userId,
       action: 'DAILY_DPY_CLAIMED',
-      resource: `claims/${claim.id}`,
-      newValue: JSON.stringify({ rewardAmount: claim.rewardAmount, vipTier: claim.vipTier, vipRate: claim.vipRate }),
+      resource: `claims/${lockedClaim.id}`,
+      oldValue: JSON.stringify({ initialReward: claim.rewardAmount, initialAssets: claim.totalAssets }),
+      newValue: JSON.stringify({
+        rewardAmount: lockedClaim.rewardAmount,
+        totalAssets: lockedClaim.totalAssets,
+        vipTier: lockedClaim.vipTier,
+        vipRate: lockedClaim.vipRate,
+        balanceAfter: balanceAfter.toFixed(8),
+      }),
     });
 
     // 7. Team Commission distribution (Level A-D uplines) — owned EXCLUSIVELY by
     // ReferralService (Section 17 — Service Ownership Matrix). ClaimService never
     // calculates or distributes Team Commission itself.
-    await referralService.distributeTeamCommission(userId, rewardAmount, claim.id);
+    await referralService.distributeTeamCommission(userId, rewardAmount, lockedClaim.id);
 
     // 8. Recalculate VIP tier for user and uplines (Business Logic Spec Section 6: VIP recalculates after Wallet Balance Change)
     await vipService.recalculateUserAndUplines(userId);

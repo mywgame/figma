@@ -42,15 +42,8 @@ export const VenturesNavbar: React.FC<VenturesNavbarProps> = ({
           </span>
         </button>
 
-        {/* Navigation Links */}
-        <div className="hidden md:flex items-center gap-8">
-          <button
-            onClick={onNavigateToDashboard}
-            className="text-sm font-medium text-slate-400 hover:text-cyan-300 transition-colors duration-200 cursor-pointer flex items-center gap-1.5"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5" />
-            <span>Dashboard</span>
-          </button>
+        {/* Navigation Links - Clean, non-duplicate, responsive (lg:flex) */}
+        <div className="hidden lg:flex items-center gap-7">
           <span className="text-sm font-semibold text-violet-300 border-b border-violet-400/60 pb-0.5">
             Ventures
           </span>
@@ -69,15 +62,16 @@ export const VenturesNavbar: React.FC<VenturesNavbarProps> = ({
         </div>
 
         {/* Right actions */}
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2 venture-glass rounded-full px-3 py-1.5">
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          <div className="hidden md:flex items-center gap-2 venture-glass rounded-full px-3 py-1.5 shrink-0">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs text-slate-300 font-medium font-display-outfit">Live Platform</span>
           </div>
 
+          {/* Desktop-only Go to Dashboard (completely removed from mobile + tab view as requested) */}
           <button
             onClick={onNavigateToDashboard}
-            className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 text-violet-200 hover:text-white border border-violet-500/30 text-xs font-semibold font-display-outfit transition-all cursor-pointer"
+            className="hidden lg:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 text-violet-200 hover:text-white border border-violet-500/30 text-xs font-semibold font-display-outfit transition-all cursor-pointer shrink-0"
           >
             <span>Go to Dashboard</span>
             <ArrowRight className="w-3.5 h-3.5" />

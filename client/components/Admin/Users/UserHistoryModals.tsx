@@ -118,6 +118,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             {/* Extra Details */}
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div>
+                <p className={`font-bold ${t.textMuted}`}>Parent ID</p>
+                {profileDetail.parentName || profileDetail.parent?.name || profileDetail.parentUserId || profileDetail.parent?.userId || profileDetail.parentId ? (
+                  <div className="mt-1">
+                    <p className="font-bold text-gray-900 dark:text-white">
+                      {profileDetail.parentName || profileDetail.parent?.name}
+                    </p>
+                    <p className="text-[10px] font-mono text-blue-500 font-semibold">
+                      {profileDetail.parentUserId || profileDetail.parent?.userId || profileDetail.parentId}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="font-semibold mt-1 text-gray-400">Root</p>
+                )}
+              </div>
+              <div>
                 <p className={`font-bold ${t.textMuted}`}>Mobile Contact</p>
                 <p className="font-semibold mt-1 text-gray-900 dark:text-white">{profileDetail.mobile || 'None Listed'}</p>
               </div>

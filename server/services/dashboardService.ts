@@ -121,6 +121,8 @@ export class DashboardService {
 
     if (!todayClaim) {
       todayClaim = await claimService.generateClaimForUser(userId, now);
+    } else if (todayClaim.claimStatus === 'PENDING') {
+      todayClaim = (await claimService.syncPendingClaimForUser(userId, now)) || todayClaim;
     }
 
     const dailyClaimAvailable = todayClaim !== null && todayClaim.claimStatus === 'PENDING';

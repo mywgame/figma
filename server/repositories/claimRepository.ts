@@ -105,6 +105,10 @@ export class ClaimRepository {
       claimedAt: Date;
       transactionId: string;
       expired: boolean;
+      rewardAmount: string;
+      totalAssets: string;
+      vipTier: string;
+      vipRate: string;
     }>,
     expectedCurrentStatus?: string
   ) {
@@ -126,6 +130,36 @@ export class ClaimRepository {
     } catch (error) {
       console.error('Database update (updateClaimStatus) failed:', error);
       throw new Error('Failed to update claim state.');
+    }
+  }
+
+  /**
+   * Atomically update a PENDING claim's reward amount, total assets, and VIP tier when balances change.
+   */
+  async updatePendingClaimReward(
+    id: string,
+    data: {
+      rewardAmount: string;
+      totalAssets: string;
+      vipTier: string;
+      vipRate: string;
+    }
+  ) {
+    try {
+      const result = await db
+        .update(claims)
+        .set({
+          rewardAmount: data.rewardAmount,
+          totalAssets: data.totalAssets,
+          vipTier: data.vipTier,
+          vipRate: data.vipRate,
+        })
+        .where(and(eq(claims.id, id), eq(claims.claimStatus, 'PENDING')))
+        .returning();
+      return result[0] || null;
+    } catch (error) {
+      console.error('Database update (updatePendingClaimReward) failed:', error);
+      throw new Error('Failed to update pending claim reward.');
     }
   }
 

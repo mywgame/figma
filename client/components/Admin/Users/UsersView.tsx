@@ -27,6 +27,7 @@ import {
   CheckSquare,
   Square,
   Sparkles,
+  UserCheck,
 } from 'lucide-react';
 import { Button, Avatar } from '../../ui/index.ts';
 import { ThemeTokens } from '../../ui/themeTokens.ts';
@@ -435,13 +436,13 @@ export const UsersView: React.FC<UsersViewProps> = ({ t: propT, isDark: propIsDa
     setIsExporting(true);
     try {
       const targetUsers = specificIds ? users.filter(u => specificIds.includes(u.id)) : users;
-      const headers = ['User ID', 'Name', 'Email', 'Mobile', 'VIP Rank', 'Balance (USDT)', 'Team Size', 'Status', 'Registration Date'];
+      const headers = ['User ID', 'Name', 'Email', 'Mobile', 'Parent ID', 'Balance (USDT)', 'Team Size', 'Status', 'Registration Date'];
       const rows = targetUsers.map(u => [
         `"${u.userId || u.id}"`,
         `"${u.name}"`,
         `"${u.email}"`,
         `"${u.mobile || ''}"`,
-        `"${u.rank}"`,
+        `"${u.parentName || u.parent?.name ? `${u.parentName || u.parent?.name} (${u.parentUserId || u.parent?.userId || u.parentId || ''})` : 'Root'}"`,
         `"${u.balance}"`,
         `"${u.teamSize ?? ((u.levelA || 0) + (u.levelB || 0) + (u.levelC || 0) + (u.levelD || 0))}"`,
         `"${u.status}"`,
@@ -514,6 +515,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ t: propT, isDark: propIsDa
         u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (u.userId && u.userId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (u.parentUserId && u.parentUserId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (u.parentName && u.parentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         u.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesRank = selectedRank === 'all' || u.rank === selectedRank;
       const matchesStatus = selectedStatus === 'all' || u.status === selectedStatus;
@@ -823,7 +826,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ t: propT, isDark: propIsDa
                   </button>
                 </th>
                 <th className="py-3.5 px-4">User Account</th>
-                <th className="py-3.5 px-4">VIP Level</th>
+                <th className="py-3.5 px-4">PARENT ID</th>
                 <th className="py-3.5 px-4 text-right">Wallet Balance</th>
                 <th className="py-3.5 px-4 text-center">Referral Network</th>
                 <th className="py-3.5 px-4">Registration</th>
@@ -887,9 +890,27 @@ export const UsersView: React.FC<UsersViewProps> = ({ t: propT, isDark: propIsDa
                         </div>
                       </td>
 
-                      {/* VIP Rank */}
+                      {/* Parent / Sponsor ID & Name */}
                       <td className="py-3.5 px-4">
-                        <UserVipBadge rank={u.rank} />
+                        {u.parentName || u.parent?.name || u.parentUserId || u.parent?.userId || u.parentId ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                              <UserCheck className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-gray-900 dark:text-white truncate max-w-[140px] text-xs">
+                                {u.parentName || u.parent?.name || 'Sponsor'}
+                              </div>
+                              <div className="text-[10px] font-mono text-blue-600 dark:text-blue-400 font-semibold tracking-tight">
+                                {u.parentUserId || u.parent?.userId || u.parentId}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-gray-500">
+                            Root
+                          </span>
+                        )}
                       </td>
 
                       {/* Wallet Balance */}

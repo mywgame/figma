@@ -11,6 +11,7 @@ import { incomeRepository } from '../../repositories/incomeRepository.ts';
 import { notificationService } from '../../services/notificationService.ts';
 import { settingsRepository } from '../../repositories/settingsRepository.ts';
 import { vipService } from '../../services/vipService.ts';
+import { claimService } from '../../services/claimService.ts';
 import { auditRepository } from '../../repositories/auditRepository.ts';
 import { BlockchainProvider } from '../interfaces/BlockchainProvider.ts';
 import { activeBlockchainProvider } from '../providers/index.ts';
@@ -136,6 +137,13 @@ export class DepositService {
     // 7. Recalculate VIP tier for depositor and all affected uplines (Levels A-D)
     // Business Logic Spec Section 6: VIP recalculates immediately after any Successful Deposit
     await vipService.recalculateUserAndUplines(userId);
+
+    // 7b. Sync any active PENDING daily DPY claim with the new deposit balance
+    try {
+      await claimService.syncPendingClaimForUser(userId);
+    } catch (claimSyncErr) {
+      console.error('[DepositService] Failed to sync pending claim reward after deposit:', claimSyncErr);
+    }
 
     // 8. Update on-chain balance of the associated permanent deposit address & check auto-sweep
     try {
