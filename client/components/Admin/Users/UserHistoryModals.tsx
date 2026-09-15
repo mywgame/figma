@@ -14,6 +14,10 @@ import {
   FileDown,
   Network,
   ShieldAlert,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Check,
 } from 'lucide-react';
 import { Avatar, Button } from '../../ui/index.ts';
 import { ThemeTokens } from '../../ui/themeTokens.ts';
@@ -647,11 +651,27 @@ export const WithdrawalsModal: React.FC<WithdrawalsModalProps> = ({
                       </td>
                       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{wd.date}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          wd.status === 'Approved' ? 'bg-emerald-500/15 text-emerald-500' : wd.status === 'Pending' ? 'bg-amber-500/15 text-amber-500' : 'bg-red-500/15 text-red-500'
-                        }`}>
-                          {wd.status}
-                        </span>
+                        {wd.status === 'Rejected' || wd.status === 'REJECTED' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-500">
+                            <XCircle className="w-3 h-3" />
+                            <span>REJECTED</span>
+                          </span>
+                        ) : wd.txHash ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-500">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Completed</span>
+                            </span>
+                            <span className="font-mono text-[9px] text-gray-400" title={wd.txHash}>
+                              {wd.txHash.length > 10 ? `${wd.txHash.slice(0, 10)}...` : wd.txHash}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500">
+                            <Clock className="w-3 h-3" />
+                            <span>Pending</span>
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))

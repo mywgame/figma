@@ -14,7 +14,8 @@ import {
   RefreshCw,
   AlertTriangle,
   Eye,
-  User
+  User,
+  Clock,
 } from 'lucide-react';
 import { Card, Badge, Button } from '../ui/index.ts';
 import { ThemeTokens } from '../ui/themeTokens.ts';
@@ -33,6 +34,19 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
   const [filter, setFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
   const [search, setSearch] = useState('');
   const [copiedWallet, setCopiedWallet] = useState<string | null>(null);
+  const [copiedTx, setCopiedTx] = useState<string | null>(null);
+
+  const copyTxHash = (hash: string) => {
+    navigator.clipboard.writeText(hash);
+    setCopiedTx(hash);
+    setTimeout(() => setCopiedTx(null), 2000);
+  };
+
+  const formatTxHash = (hash: string) => {
+    if (!hash) return '';
+    if (hash.length <= 10) return hash;
+    return `${hash.slice(0, 10)}...`;
+  };
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +146,10 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
     const matchesSearch =
       wd.user.toLowerCase().includes(search.toLowerCase()) ||
       wd.wallet.toLowerCase().includes(search.toLowerCase()) ||
-      wd.id.toLowerCase().includes(search.toLowerCase());
+      wd.id.toLowerCase().includes(search.toLowerCase()) ||
+      (wd.displayId && wd.displayId.toLowerCase().includes(search.toLowerCase())) ||
+      (wd.userCustomId && wd.userCustomId.toLowerCase().includes(search.toLowerCase())) ||
+      (wd.txHash && wd.txHash.toLowerCase().includes(search.toLowerCase()));
 
     if (!matchesSearch) return false;
     if (filter === 'All') return true;
@@ -313,64 +330,74 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                       })()}
                     </td>
                     <td className="px-5 py-4">
-                      {wd.status === 'Pending' ? (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="amber">Pending</Badge>
-                          <button
-                            disabled={actionProcessing === wd.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              approveWithdrawal(wd.id);
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 hover:border-emerald-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
-                            title="Confirm Outbound Payout"
-                          >
+                      {wd.status === 'Rejected' || wd.status === 'REJECTED' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>REJECTED</span>
+                        </span>
+                      ) : wd.txHash ? (
+                        <div className="flex flex-col items-start gap-1.5">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Approve</span>
-                          </button>
-                          <button
-                            disabled={actionProcessing === wd.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              rejectWithdrawal(wd.id);
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
-                            title="Decline Request"
+                            <span>Completed</span>
+                          </span>
+                          <div
+                            className="flex items-center gap-1.5 font-mono text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded border border-gray-200/60 dark:border-white/10"
+                            title={wd.txHash}
                           >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Reject</span>
-                          </button>
+                            <span className="cursor-default select-all" title={wd.txHash}>
+                              {formatTxHash(wd.txHash)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyTxHash(wd.txHash!);
+                              }}
+                              className="text-gray-400 hover:text-blue-500 transition-colors p-0.5 rounded cursor-pointer"
+                              title="Copy full Txn Hash"
+                            >
+                              {copiedTx === wd.txHash ? (
+                                <Check className="w-3 h-3 text-emerald-500" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              wd.status === 'Completed' || wd.status === 'COMPLETED'
-                                ? 'emerald'
-                                : wd.status === 'Processing' || wd.status === 'PROCESSING' || wd.status === 'Approved'
-                                ? 'blue'
-                                : 'rose'
-                            }
-                          >
-                            {wd.status === 'Processing' || wd.status === 'PROCESSING'
-                              ? 'Processing'
-                              : wd.status === 'Approved'
-                              ? 'Completed'
-                              : wd.status}
-                          </Badge>
-                          {(wd.status === 'Processing' || wd.status === 'PROCESSING') && (
-                            <button
-                              disabled={actionProcessing === wd.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                verifyWithdrawal(wd.id);
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white border border-blue-500/20 hover:border-blue-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
-                              title="Verify on-chain status & finalize"
-                            >
-                              <RefreshCw className={`w-3.5 h-3.5 ${actionProcessing === wd.id ? 'animate-spin' : ''}`} />
-                              <span>Verify</span>
-                            </button>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Pending</span>
+                          </span>
+                          {wd.status === 'Pending' && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                disabled={actionProcessing === wd.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  approveWithdrawal(wd.id);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 hover:border-emerald-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
+                                title="Confirm Outbound Payout"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Approve</span>
+                              </button>
+                              <button
+                                disabled={actionProcessing === wd.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  rejectWithdrawal(wd.id);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-rose-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
+                                title="Decline Request"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>Reject</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       )}
