@@ -185,22 +185,16 @@ export class WithdrawalService {
       priority: 'HIGH',
     });
 
-    // 3. Instant On-Chain Verification check: if transaction is already confirmed, finalize immediately
-    try {
-      const networkConfig = blockchainConfig.networks[withdrawal.network as keyof typeof blockchainConfig.networks];
-      const requiredConfirmations = networkConfig?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
-      const txInfo = await this.provider.getTransaction(withdrawal.network, realTxHash);
+    // 3. Auto-finalize withdrawal immediately upon successful on-chain broadcast:
+    // The on-chain payout transaction has been broadcast and received a valid txHash.
+    // Auto-finalizing at approval ensures locked_balance is released, total_withdrawn is incremented,
+    // and the immutable WITHDRAWAL ledger transaction is recorded immediately.
+    const finalized = await this.finalizeSuccessfulWithdrawal(
+      withdrawalId,
+      notes ? `Approved and finalized by ${adminUid}: ${notes}` : `Approved and broadcast on-chain by administrator ${adminUid}. TxHash: ${realTxHash}`
+    );
 
-      if (txInfo && txInfo.isSuccessful && txInfo.confirmations >= requiredConfirmations) {
-        console.log(`[WithdrawalService] Instant on-chain confirmation verified for ${withdrawalId}. Finalizing immediately.`);
-        const finalized = await this.finalizeSuccessfulWithdrawal(withdrawalId);
-        return finalized;
-      }
-    } catch (verErr: any) {
-      console.warn(`[WithdrawalService] Immediate on-chain verification skipped (will be monitored): ${verErr.message}`);
-    }
-
-    return updatedWithdrawal;
+    return finalized;
   }
 
   /**
@@ -211,9 +205,9 @@ export class WithdrawalService {
   }
 
   /**
-   * Finalize a processing withdrawal once on-chain confirmations are verified
+   * Finalize a processing withdrawal once on-chain payout is broadcast or verified
    */
-  async finalizeSuccessfulWithdrawal(withdrawalId: string) {
+  async finalizeSuccessfulWithdrawal(withdrawalId: string, customNotes?: string) {
     const withdrawal = await withdrawalRepository.findById(withdrawalId);
     if (!withdrawal) {
       throw new Error(`Withdrawal not found for ID: ${withdrawalId}`);
@@ -236,7 +230,7 @@ export class WithdrawalService {
     // 1. Mark status as COMPLETED
     const updatedWithdrawal = await withdrawalRepository.updateStatus(withdrawalId, 'COMPLETED', {
       adminApprovalStatus: 'APPROVED',
-      adminNotes: 'Confirmed on-chain by transaction monitor.',
+      adminNotes: customNotes || withdrawal.adminNotes || 'Confirmed on-chain.',
     });
 
     const amount = parseFloat(withdrawal.amount);
@@ -247,27 +241,31 @@ export class WithdrawalService {
       totalWithdrawn: amount.toFixed(8),
     });
 
-    // 3. Record immutable ledger transaction
+    // 3. Record immutable ledger transaction (with deduplication check)
     const balanceBefore = parseFloat(wallet.availableBalance) + amount;
     const balanceAfter = parseFloat(wallet.availableBalance);
+    const finalTxHash = updatedWithdrawal.txHash || withdrawal.txHash || '';
 
-    await transactionRepository.createTransaction({
-      userId,
-      walletId: wallet.id,
-      type: 'WITHDRAWAL',
-      referenceId: withdrawal.reference || withdrawal.id,
-      status: 'COMPLETED',
-      description: `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}. TxHash: ${withdrawal.txHash}`,
-      amount: withdrawal.amount,
-      balanceBefore: balanceBefore.toFixed(8),
-      balanceAfter: balanceAfter.toFixed(8),
-      createdBy: 'SYSTEM',
-    });
+    const existingTx = await transactionRepository.findByReferenceId(withdrawal.reference || withdrawal.id);
+    if (!existingTx || existingTx.length === 0) {
+      await transactionRepository.createTransaction({
+        userId,
+        walletId: wallet.id,
+        type: 'WITHDRAWAL',
+        referenceId: withdrawal.reference || withdrawal.id,
+        status: 'COMPLETED',
+        description: `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}.${finalTxHash ? ` TxHash: ${finalTxHash}` : ''}`,
+        amount: withdrawal.amount,
+        balanceBefore: balanceBefore.toFixed(8),
+        balanceAfter: balanceAfter.toFixed(8),
+        createdBy: 'SYSTEM',
+      });
+    }
 
     // 4. Create Success notification
     await notificationService.createStructuredNotification(userId, {
       title: 'Withdrawal Successful',
-      description: `Your withdrawal request of ${withdrawal.amount} USDT has been confirmed on the blockchain.`,
+      description: `Your withdrawal request of ${withdrawal.amount} USDT has been confirmed on the blockchain.${finalTxHash ? ` TxHash: ${finalTxHash}` : ''}`,
       icon: 'ArrowUpCircle',
       type: 'withdrawal',
       priority: 'HIGH',
@@ -277,6 +275,39 @@ export class WithdrawalService {
     await vipService.recalculateUserAndUplines(userId);
 
     return updatedWithdrawal;
+  }
+
+  /**
+   * Scan and auto-finalize any existing withdrawals stuck in 'PROCESSING' status that have a valid txHash.
+   * This heals database desyncs where approvals were broadcast but background polling was inactive.
+   */
+  async reconcileStuckProcessingWithdrawals(): Promise<number> {
+    try {
+      const processingWithdrawals = await withdrawalRepository.findAll({ status: 'PROCESSING', limit: 500 });
+      const stuckWithTx = processingWithdrawals.filter((w) => !!w.txHash && w.status === 'PROCESSING');
+      if (stuckWithTx.length === 0) {
+        return 0;
+      }
+
+      console.log(`[WithdrawalService] Found ${stuckWithTx.length} stuck PROCESSING withdrawal(s) with txHash. Reconciling...`);
+      let reconciledCount = 0;
+      for (const w of stuckWithTx) {
+        try {
+          await this.finalizeSuccessfulWithdrawal(
+            w.id,
+            w.adminNotes || 'Reconciled and finalized from stuck PROCESSING state.'
+          );
+          reconciledCount++;
+          console.log(`[WithdrawalService] Reconciled and finalized stuck withdrawal ${w.id} (txHash: ${w.txHash})`);
+        } catch (err: any) {
+          console.error(`[WithdrawalService] Failed to reconcile stuck withdrawal ${w.id}:`, err.message);
+        }
+      }
+      return reconciledCount;
+    } catch (err: any) {
+      console.error('[WithdrawalService] Error during reconcileStuckProcessingWithdrawals:', err.message);
+      return 0;
+    }
   }
 
   /**

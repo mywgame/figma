@@ -785,6 +785,13 @@ export class AdminService {
    * Retrieve all platform withdrawals (paginated, newest first)
    */
   async getAllWithdrawals(options?: { status?: string; limit?: number; offset?: number }) {
+    // Reconcile any stuck processing withdrawals opportunistically
+    try {
+      await withdrawalService.reconcileStuckProcessingWithdrawals();
+    } catch {
+      // Non-blocking
+    }
+
     const withs = await withdrawalRepository.findAll(options);
     const result = [];
     for (const w of withs) {

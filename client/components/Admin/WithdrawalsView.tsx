@@ -337,10 +337,29 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                         </span>
                       ) : wd.txHash ? (
                         <div className="flex flex-col items-start gap-1.5">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Completed</span>
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              wd.rawStatus === 'PROCESSING'
+                                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{wd.rawStatus === 'PROCESSING' ? 'Processing' : 'Completed'}</span>
+                            </span>
+                            {wd.rawStatus === 'PROCESSING' && (
+                              <button
+                                disabled={actionProcessing === wd.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  verifyWithdrawal(wd.id);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white border border-blue-500/20 hover:border-blue-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
+                                title="Finalize Payout & Update Ledger"
+                              >
+                                <span>Finalize</span>
+                              </button>
+                            )}
+                          </div>
                           <div
                             className="flex items-center gap-1.5 font-mono text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded border border-gray-200/60 dark:border-white/10"
                             title={wd.txHash}
