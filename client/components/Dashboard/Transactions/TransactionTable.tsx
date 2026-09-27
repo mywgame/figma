@@ -225,11 +225,21 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
 
                       {/* Column 4: Date & Time */}
                       <td className="py-3 sm:py-3.5 px-2 sm:px-4">
-                        <div className="flex items-center space-x-1 sm:space-x-1.5">
-                          <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500 shrink-0" />
-                          <span className={`font-mono text-[9px] xs:text-[10px] sm:text-[11px] font-semibold tracking-tight ${t.textSub}`}>
-                            {tx.date}
-                          </span>
+                        <div
+                          className="flex flex-col"
+                          title={tx.utcDate ? `Backend System UTC: ${tx.utcDate}` : tx.date}
+                        >
+                          <div className="flex items-center space-x-1 sm:space-x-1.5">
+                            <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500 shrink-0" />
+                            <span className={`font-mono text-[9px] xs:text-[10px] sm:text-[11px] font-semibold tracking-tight ${t.textSub}`}>
+                              {tx.date}
+                            </span>
+                          </div>
+                          {tx.utcDate && (
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono ml-4 sm:ml-5">
+                              {tx.utcDate}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -326,11 +336,21 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     </div>
 
                     {/* Line 3: Date & Time */}
-                    <div className="flex items-center space-x-1 mt-1">
-                      <Calendar className="w-2.5 h-2.5 text-gray-400 dark:text-gray-500 shrink-0" />
-                      <span className={`font-mono text-[10px] font-semibold tracking-tight text-gray-400 dark:text-gray-500 truncate`}>
-                        {tx.date}
-                      </span>
+                    <div
+                      className="flex items-center justify-between mt-1 text-[10px] font-mono text-gray-400 dark:text-gray-500"
+                      title={tx.utcDate ? `Backend System UTC: ${tx.utcDate}` : tx.date}
+                    >
+                      <div className="flex items-center space-x-1 min-w-0">
+                        <Calendar className="w-2.5 h-2.5 shrink-0" />
+                        <span className="font-semibold tracking-tight truncate">
+                          {tx.date}
+                        </span>
+                      </div>
+                      {tx.utcDate && (
+                        <span className="text-[9px] opacity-75 shrink-0 font-mono ml-2">
+                          {tx.utcDate}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </motion.div>

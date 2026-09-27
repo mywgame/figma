@@ -67,6 +67,8 @@ export interface AdminWithdrawal {
   userEmail?: string;
   userCustomId?: string;
   amount: string;
+  fee?: string;
+  netAmount?: string;
   network?: string;
   wallet: string;
   txHash?: string | null;

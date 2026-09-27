@@ -534,11 +534,12 @@ export class AdminController {
       }
 
       const { network } = req.params;
+      const syncOnChain = req.query.sync === 'true' || req.query.refresh === 'true';
       if (!network) {
         throw new ApiError(400, 'Network parameter is required.', 'BAD_REQUEST');
       }
 
-      const overview = await treasuryService.getTreasuryOverview(network);
+      const overview = await treasuryService.getTreasuryOverview(network, { syncOnChain });
       const jobs = await treasuryService.getSweepJobs(network);
 
       return sendSuccess(res, { ...overview, jobs }, 200);
@@ -784,40 +785,53 @@ export class AdminController {
       }
 
       const items = await q.orderBy(desc(sweepQueue.createdAt));
+      const syncOnChain = req.query.sync === 'true' || req.query.refresh === 'true';
 
       // Inject live native balance, required gas, and real on-chain confirmation
-      // progress for each item — never fabricated.
-      const itemsWithGas = await Promise.all(
-        items.map(async (item) => {
-          let nativeGasBalance = '0.00000000';
-          let requiredGas = '0.00000000';
-          let confirmations = 0;
-          const requiredConfirmations =
-            blockchainConfig.networks[item.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
-          try {
-            nativeGasBalance = await activeBlockchainProvider.getNativeBalance(item.network, item.depositAddress);
-            const req = await gasCalculator.getMinGasRequirement(item.network);
-            requiredGas = req.minRequiredGas;
+      // progress for each item when explicit sync is requested, otherwise return cached/default values instantly.
+      const itemsWithGas = syncOnChain
+        ? await Promise.all(
+            items.map(async (item) => {
+              let nativeGasBalance = '0.00000000';
+              let requiredGas = '0.00000000';
+              let confirmations = 0;
+              const requiredConfirmations =
+                blockchainConfig.networks[item.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
+              try {
+                nativeGasBalance = await activeBlockchainProvider.getNativeBalance(item.network, item.depositAddress);
+                const req = await gasCalculator.getMinGasRequirement(item.network);
+                requiredGas = req.minRequiredGas;
 
-            if (item.sweepTxHash) {
-              const tx = await activeBlockchainProvider.getTransaction(item.network, item.sweepTxHash);
-              if (tx) confirmations = tx.confirmations || 0;
-            } else if (item.gasTxHash) {
-              const tx = await activeBlockchainProvider.getTransaction(item.network, item.gasTxHash);
-              if (tx) confirmations = tx.confirmations || 0;
-            }
-          } catch (e) {
-            // fallback gracefully
-          }
-          return {
-            ...item,
-            nativeGasBalance,
-            requiredGas,
-            confirmations,
-            requiredConfirmations,
-          };
-        })
-      );
+                if (item.sweepTxHash) {
+                  const tx = await activeBlockchainProvider.getTransaction(item.network, item.sweepTxHash);
+                  if (tx) confirmations = tx.confirmations || 0;
+                } else if (item.gasTxHash) {
+                  const tx = await activeBlockchainProvider.getTransaction(item.network, item.gasTxHash);
+                  if (tx) confirmations = tx.confirmations || 0;
+                }
+              } catch (e) {
+                // fallback gracefully
+              }
+              return {
+                ...item,
+                nativeGasBalance,
+                requiredGas,
+                confirmations,
+                requiredConfirmations,
+              };
+            })
+          )
+        : items.map((item) => {
+            const requiredConfirmations =
+              blockchainConfig.networks[item.network]?.confirmationsRequired ?? (blockchainConfig.isTestnet ? 1 : 6);
+            return {
+              ...item,
+              nativeGasBalance: '0.00000000',
+              requiredGas: '0.00000000',
+              confirmations: 0,
+              requiredConfirmations,
+            };
+          });
 
       return sendSuccess(res, itemsWithGas, 200);
     } catch (error) {

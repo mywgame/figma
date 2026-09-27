@@ -97,6 +97,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const [jobs, setJobs] = useState<SweepJob[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [isSyncingOnChain, setIsSyncingOnChain] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -129,10 +130,10 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
   const [processingQueueId, setProcessingQueueId] = useState<string | null>(null);
   const [selectedItemDetails, setSelectedItemDetails] = useState<any | null>(null);
 
-  const fetchQueueData = async (network: string) => {
+  const fetchQueueData = async (network: string, syncOnChain = false) => {
     try {
       setQueueLoading(true);
-      const res = await api.getTreasurySweepQueue(network);
+      const res = await api.getTreasurySweepQueue(network, undefined, { sync: syncOnChain });
       if (res.success && res.data) {
         setSweepQueueItems(res.data || []);
       }
@@ -143,11 +144,15 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
     }
   };
 
-  const fetchTreasuryData = async (network: string) => {
+  const fetchTreasuryData = async (network: string, syncOnChain = false) => {
     try {
-      setLoading(true);
+      if (syncOnChain) {
+        setIsSyncingOnChain(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
-      const res = await api.getTreasuryOverview(network);
+      const res = await api.getTreasuryOverview(network, { sync: syncOnChain });
       if (!res.success) {
         throw new Error(res.error?.message || 'Failed to load treasury data');
       }
@@ -173,18 +178,23 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
       setError(err.message || 'Failed to load treasury data');
     } finally {
       setLoading(false);
+      setIsSyncingOnChain(false);
     }
   };
 
-  const refreshAll = async () => {
+  const refreshAll = async (syncOnChain = false) => {
     await Promise.all([
-      fetchTreasuryData(selectedNetwork),
-      fetchQueueData(selectedNetwork)
+      fetchTreasuryData(selectedNetwork, syncOnChain),
+      fetchQueueData(selectedNetwork, syncOnChain)
     ]);
   };
 
+  const handleSyncOnChain = () => {
+    refreshAll(true);
+  };
+
   useEffect(() => {
-    refreshAll();
+    refreshAll(false);
     setSelectedQueueIds([]);
   }, [selectedNetwork]);
 
@@ -467,14 +477,24 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
             </button>
           )}
           <button
-            onClick={refreshAll}
+            onClick={() => refreshAll(false)}
             className={`px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs ${
               isDark ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-800' : 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50'
             }`}
-            disabled={loading}
+            disabled={loading || isSyncingOnChain}
+            title="Refresh database view"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
+          </button>
+          <button
+            onClick={handleSyncOnChain}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-55"
+            disabled={loading || isSyncingOnChain}
+            title="Query latest live blockchain on-chain balances"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingOnChain ? 'animate-spin' : ''}`} />
+            {isSyncingOnChain ? 'Syncing...' : 'Sync On-Chain'}
           </button>
         </div>
       </div>
@@ -513,12 +533,20 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ t, isDark }) => {
       {loading && !config ? (
         <div className="text-center py-12">
           <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-3" />
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Querying on-chain balances and loading treasury logs...</p>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Loading Treasury Vault balances and audit logs...</p>
         </div>
       ) : error ? (
-        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 p-4 rounded-xl text-xs">
-          <p className="font-bold">Failed to fetch Treasury data for {selectedNetwork}:</p>
-          <p className="mt-1 font-medium">{error}</p>
+        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 p-5 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="font-bold">Failed to fetch Treasury data for {selectedNetwork}:</p>
+            <p className="mt-1 font-medium text-rose-500 dark:text-rose-300">{error}</p>
+          </div>
+          <button
+            onClick={() => refreshAll(false)}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold transition-all self-start sm:self-auto cursor-pointer"
+          >
+            Retry Now
+          </button>
         </div>
       ) : (
         <>

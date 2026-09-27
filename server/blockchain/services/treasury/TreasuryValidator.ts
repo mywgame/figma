@@ -6,6 +6,7 @@
 import { normalizeEvmAddress } from '../../utils/blockchainUtils.ts';
 import { blockchainConfig } from '../../config/blockchainConfig.ts';
 import { logger } from '../../../utils/logger.ts';
+import { cleanEnvOrNull } from '../../../utils/envUtils.ts';
 
 export class TreasuryValidator {
   /**
@@ -16,14 +17,14 @@ export class TreasuryValidator {
     const netShort = cleanNetwork.replace(/^USDT_/, '');
 
     let addr =
-      process.env[`USDT_${netShort}_HOT${walletNumber}_ADDRESS`] ||
-      process.env[`${cleanNetwork}_HOT${walletNumber}_ADDRESS`];
+      cleanEnvOrNull(process.env[`USDT_${netShort}_HOT${walletNumber}_ADDRESS`]) ||
+      cleanEnvOrNull(process.env[`${cleanNetwork}_HOT${walletNumber}_ADDRESS`]);
 
     if (!addr && walletNumber === 1) {
       addr =
-        process.env[`USDT_${netShort}_HOT_ADDRESS`] ||
-        process.env[`${cleanNetwork}_HOT_ADDRESS`] ||
-        process.env['HOT_WALLET_ADDRESS'] ||
+        cleanEnvOrNull(process.env[`USDT_${netShort}_HOT_ADDRESS`]) ||
+        cleanEnvOrNull(process.env[`${cleanNetwork}_HOT_ADDRESS`]) ||
+        cleanEnvOrNull(process.env['HOT_WALLET_ADDRESS']) ||
         blockchainConfig.networks[cleanNetwork]?.hotAddress;
     }
 
@@ -38,14 +39,14 @@ export class TreasuryValidator {
     const netShort = cleanNetwork.replace(/^USDT_/, '');
 
     let addr =
-      process.env[`USDT_${netShort}_COLD${walletNumber}_ADDRESS`] ||
-      process.env[`${cleanNetwork}_COLD${walletNumber}_ADDRESS`];
+      cleanEnvOrNull(process.env[`USDT_${netShort}_COLD${walletNumber}_ADDRESS`]) ||
+      cleanEnvOrNull(process.env[`${cleanNetwork}_COLD${walletNumber}_ADDRESS`]);
 
     if (!addr && walletNumber === 1) {
       addr =
-        process.env[`USDT_${netShort}_COLD_ADDRESS`] ||
-        process.env[`${cleanNetwork}_COLD_ADDRESS`] ||
-        process.env['COLD_WALLET_ADDRESS'] ||
+        cleanEnvOrNull(process.env[`USDT_${netShort}_COLD_ADDRESS`]) ||
+        cleanEnvOrNull(process.env[`${cleanNetwork}_COLD_ADDRESS`]) ||
+        cleanEnvOrNull(process.env['COLD_WALLET_ADDRESS']) ||
         blockchainConfig.networks[cleanNetwork]?.coldAddress;
     }
 

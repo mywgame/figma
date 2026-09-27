@@ -24,18 +24,22 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ transactions, on
   const { t } = useTheme();
   const { formatCurrency, formatDate, t: translate } = useLocalization();
 
-  const formatDateTime = (tx: MockTransaction): string => {
+  const formatDateTime = (tx: MockTransaction): { display: string; utcFull?: string } => {
     const rawDate = tx.createdAt || tx.timestampIso || tx.time;
-    if (!rawDate) return '';
+    if (!rawDate) return { display: '' };
     try {
       const d = new Date(rawDate);
       if (!isNaN(d.getTime())) {
-        return formatDate(d);
+        const utcFull = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}:${String(d.getUTCSeconds()).padStart(2, '0')} UTC`;
+        return {
+          display: formatDate(d),
+          utcFull,
+        };
       }
     } catch {
       // fallback
     }
-    return typeof tx.time === 'string' ? tx.time : '';
+    return { display: typeof tx.time === 'string' ? tx.time : '' };
   };
 
   return (
@@ -90,10 +94,13 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ transactions, on
                 </div>
                 <div className="min-w-0">
                   <p className={`text-sm font-semibold truncate ${t.text}`}>{displayType}</p>
-                  {formattedTime && (
-                    <p className={`text-xs flex items-center gap-1.5 mt-0.5 ${t.textMuted}`}>
+                  {formattedTime.display && (
+                    <p
+                      className={`text-xs flex items-center gap-1.5 mt-0.5 ${t.textMuted}`}
+                      title={formattedTime.utcFull ? `Backend System UTC: ${formattedTime.utcFull}` : formattedTime.display}
+                    >
                       <Calendar className="w-3 h-3 shrink-0 opacity-70" />
-                      <span>{formattedTime}</span>
+                      <span>{formattedTime.display}</span>
                     </p>
                   )}
                 </div>

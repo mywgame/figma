@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import { hdWalletEngine } from '../hd/HdWalletEngine.ts';
+import { cleanEnvOrNull } from '../../utils/envUtils.ts';
 
 /**
  * Interface representing a secret provider for future secret manager integrations.
@@ -18,7 +19,7 @@ export interface SecretProvider {
  */
 export class EnvSecretProvider implements SecretProvider {
   async getSecret(key: string): Promise<string | null> {
-    return process.env[key] || null;
+    return cleanEnvOrNull(process.env[key]);
   }
 }
 

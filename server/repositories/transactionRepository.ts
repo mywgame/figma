@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { eq, and, desc, gte, notInArray } from 'drizzle-orm';
+import { eq, and, desc, gte, notInArray, sql } from 'drizzle-orm';
 import { db } from '../../src/db/index.ts';
 import { transactions } from '../../src/db/schema.ts';
 
@@ -102,27 +102,87 @@ export class TransactionRepository {
     balanceBefore: string;
     balanceAfter: string;
     createdBy?: string;
+    createdAt?: Date;
   }) {
     try {
+      const insertValues: any = {
+        userId: data.userId,
+        walletId: data.walletId,
+        type: data.type,
+        referenceId: data.referenceId,
+        status: data.status || 'COMPLETED',
+        description: data.description,
+        amount: data.amount,
+        balanceBefore: data.balanceBefore,
+        balanceAfter: data.balanceAfter,
+        createdBy: data.createdBy || 'SYSTEM',
+      };
+      if (data.createdAt) {
+        insertValues.createdAt = data.createdAt;
+      }
+
       const result = await db
         .insert(transactions)
-        .values({
-          userId: data.userId,
-          walletId: data.walletId,
-          type: data.type,
-          referenceId: data.referenceId,
-          status: data.status || 'COMPLETED',
-          description: data.description,
-          amount: data.amount,
-          balanceBefore: data.balanceBefore,
-          balanceAfter: data.balanceAfter,
-          createdBy: data.createdBy || 'SYSTEM',
-        })
+        .values(insertValues)
         .returning();
       return result[0];
     } catch (error) {
       console.error('Database insertion (createTransaction) failed:', error);
       throw new Error('Failed to record immutable transaction ledger entry.');
+    }
+  }
+
+  /**
+   * Update transaction by its reference ID (e.g. status update or description with txHash)
+   */
+  async updateByReferenceId(
+    referenceId: string,
+    data: {
+      status?: string;
+      description?: string;
+      createdAt?: Date;
+    }
+  ) {
+    try {
+      const updateValues: any = {};
+      if (data.status) updateValues.status = data.status;
+      if (data.description) updateValues.description = data.description;
+      if (data.createdAt) updateValues.createdAt = data.createdAt;
+
+      const result = await db
+        .update(transactions)
+        .set(updateValues)
+        .where(eq(transactions.referenceId, referenceId))
+        .returning();
+      return result[0] || null;
+    } catch (error) {
+      console.error('Database update (updateByReferenceId) failed:', error);
+      throw new Error('Failed to update transaction by reference ID.');
+    }
+  }
+
+  /**
+   * Synchronize timestamps between transactions and withdrawals table
+   * so transactions reflect the backend's single source of truth (withdrawals.createdAt).
+   */
+  async syncWithdrawalTimestamps(): Promise<number> {
+    try {
+      const result = await db.execute(sql`
+        UPDATE transactions
+        SET created_at = withdrawals.created_at
+        FROM withdrawals
+        WHERE transactions.type = 'WITHDRAWAL'
+          AND (transactions.reference_id = withdrawals.reference OR transactions.reference_id = withdrawals.id::text)
+          AND transactions.created_at != withdrawals.created_at;
+      `);
+      const rowCount = (result as any)?.rowCount ?? 0;
+      if (rowCount > 0) {
+        console.log(`[TransactionRepository] Synced ${rowCount} withdrawal transaction timestamp(s) with backend withdrawals.`);
+      }
+      return rowCount;
+    } catch (error: any) {
+      console.warn('[TransactionRepository] Non-fatal: syncWithdrawalTimestamps error:', error.message);
+      return 0;
     }
   }
 

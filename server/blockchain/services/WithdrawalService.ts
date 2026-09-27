@@ -59,6 +59,8 @@ export class WithdrawalService {
     const randomDigits = Math.floor(10000000 + Math.random() * 90000000).toString();
     const reference = `WTH${randomDigits}`;
 
+    const currentAvailable = parseFloat(wallet.availableBalance);
+
     // Safely debit available balance, and transfer it to locked_balance while pending approval
     await walletRepository.incrementBalances(wallet.id, {
       availableBalance: (-amount).toFixed(8),
@@ -77,6 +79,25 @@ export class WithdrawalService {
       status: 'PENDING',
       adminApprovalStatus: 'PENDING',
     });
+
+    // Record pending transaction ledger entry immediately with true backend withdrawal.createdAt
+    try {
+      await transactionRepository.createTransaction({
+        userId,
+        walletId: wallet.id,
+        type: 'WITHDRAWAL',
+        referenceId: withdrawal.reference,
+        status: 'PENDING',
+        description: `Pending withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress} via ${withdrawal.network}.`,
+        amount: withdrawal.amount,
+        balanceBefore: currentAvailable.toFixed(8),
+        balanceAfter: (currentAvailable - amount).toFixed(8),
+        createdBy: userId,
+        createdAt: withdrawal.createdAt,
+      });
+    } catch (txErr: any) {
+      console.warn('[WithdrawalService] Non-fatal ledger pending entry error:', txErr.message);
+    }
 
     // Audit Log
     await auditRepository.createAuditLog({
@@ -241,10 +262,11 @@ export class WithdrawalService {
       totalWithdrawn: amount.toFixed(8),
     });
 
-    // 3. Record immutable ledger transaction (with deduplication check)
+    // 3. Record or update immutable ledger transaction (preserving the true backend withdrawal.createdAt)
     const balanceBefore = parseFloat(wallet.availableBalance) + amount;
     const balanceAfter = parseFloat(wallet.availableBalance);
     const finalTxHash = updatedWithdrawal.txHash || withdrawal.txHash || '';
+    const completedDescription = `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}.${finalTxHash ? ` TxHash: ${finalTxHash}` : ''}`;
 
     const existingTx = await transactionRepository.findByReferenceId(withdrawal.reference || withdrawal.id);
     if (!existingTx || existingTx.length === 0) {
@@ -254,11 +276,18 @@ export class WithdrawalService {
         type: 'WITHDRAWAL',
         referenceId: withdrawal.reference || withdrawal.id,
         status: 'COMPLETED',
-        description: `Completed withdrawal of ${withdrawal.amount} USDT (Fee: ${withdrawal.fee} USDT, Net: ${withdrawal.netAmount} USDT) to ${withdrawal.walletAddress}.${finalTxHash ? ` TxHash: ${finalTxHash}` : ''}`,
+        description: completedDescription,
         amount: withdrawal.amount,
         balanceBefore: balanceBefore.toFixed(8),
         balanceAfter: balanceAfter.toFixed(8),
         createdBy: 'SYSTEM',
+        createdAt: withdrawal.createdAt,
+      });
+    } else {
+      await transactionRepository.updateByReferenceId(withdrawal.reference || withdrawal.id, {
+        status: 'COMPLETED',
+        description: completedDescription,
+        createdAt: withdrawal.createdAt,
       });
     }
 
@@ -283,6 +312,13 @@ export class WithdrawalService {
    */
   async reconcileStuckProcessingWithdrawals(): Promise<number> {
     try {
+      // Sync any out-of-sync withdrawal transaction timestamps with backend withdrawals table
+      try {
+        await transactionRepository.syncWithdrawalTimestamps();
+      } catch (err: any) {
+        console.warn('[WithdrawalService] Non-fatal timestamp sync warning:', err.message);
+      }
+
       const processingWithdrawals = await withdrawalRepository.findAll({ status: 'PROCESSING', limit: 500 });
       const stuckWithTx = processingWithdrawals.filter((w) => !!w.txHash && w.status === 'PROCESSING');
       if (stuckWithTx.length === 0) {
@@ -343,6 +379,17 @@ export class WithdrawalService {
       availableBalance: amount.toFixed(8),
     });
 
+    // Update transaction ledger status if exists
+    try {
+      await transactionRepository.updateByReferenceId(withdrawal.reference || withdrawal.id, {
+        status: 'FAILED',
+        description: `Failed withdrawal of ${withdrawal.amount} USDT. Reason: ${reason}`,
+        createdAt: withdrawal.createdAt,
+      });
+    } catch (err: any) {
+      console.warn('[WithdrawalService] Non-fatal transaction update error on failure:', err.message);
+    }
+
     // 3. Create failure notification
     await notificationService.createStructuredNotification(userId, {
       title: 'Withdrawal Failed',
@@ -387,6 +434,17 @@ export class WithdrawalService {
       lockedBalance: (-amount).toFixed(8),
       availableBalance: amount.toFixed(8),
     });
+
+    // Update transaction ledger status if exists
+    try {
+      await transactionRepository.updateByReferenceId(withdrawal.reference || withdrawal.id, {
+        status: 'FAILED',
+        description: `Rejected withdrawal of ${withdrawal.amount} USDT. Reason: ${reason}`,
+        createdAt: withdrawal.createdAt,
+      });
+    } catch (err: any) {
+      console.warn('[WithdrawalService] Non-fatal transaction update error on rejection:', err.message);
+    }
 
     // 3. Create rejection notification
     await notificationService.createStructuredNotification(userId, {

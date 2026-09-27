@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { Coins, RefreshCw, Copy } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Coins, RefreshCw, Copy, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 import { Card } from '../../ui/index.ts';
 import { SweepQueueItem, TreasuryComponentProps } from './TreasuryTypes.ts';
 
@@ -13,6 +13,19 @@ import { SweepQueueItem, TreasuryComponentProps } from './TreasuryTypes.ts';
 const formatQueueAmount = (rawAmount: string | number | undefined): string => {
   const value = parseFloat(String(rawAmount ?? '0'));
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+// Formats timestamp into "dd-mm-year, hr:min" (e.g. 26-09-2026, 14:30)
+const formatCompletedDateTime = (rawDate: string | number | Date | null | undefined): string => {
+  if (!rawDate) return '';
+  const d = new Date(rawDate);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hr = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}-${mm}-${yyyy}, ${hr}:${min}`;
 };
 
 interface SweepQueueTableProps extends TreasuryComponentProps {
@@ -35,6 +48,10 @@ interface SweepQueueTableProps extends TreasuryComponentProps {
   handleCopy: (text: string, id: string) => void;
 }
 
+type SortOption = 'NEWEST' | 'OLDEST' | 'HIGHEST_AMOUNT' | 'LOWEST_AMOUNT';
+
+const PAGE_SIZE = 30;
+
 export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
   sweepQueueItems,
   queueLoading,
@@ -56,11 +73,19 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
   isDark,
   t,
 }) => {
+  const [sortOption, setSortOption] = useState<SortOption>('NEWEST');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Auto-reset page whenever network, queue length, or sort option changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedNetwork, sweepQueueItems.length, sortOption]);
+
   const symbol =
     selectedNetwork === 'USDT_BEP20' ? 'BNB' : selectedNetwork === 'USDT_POLYGON' ? 'POL' : 'TRX';
 
   // Group active/pending queue items by deposit address so multiple deposits from the same user are aggregated into one comprehensive total row.
-  const displayQueueItems = React.useMemo(() => {
+  const displayQueueItems = useMemo(() => {
     const activeGroups = new Map<string, any>();
     const completedOrCancelled: any[] = [];
 
@@ -109,6 +134,51 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
     return [...aggregatedActiveList, ...completedOrCancelled];
   }, [sweepQueueItems]);
 
+  // Apply sorting on the aggregated queue items
+  const sortedQueueItems = useMemo(() => {
+    const list = [...displayQueueItems];
+    switch (sortOption) {
+      case 'NEWEST':
+        return list.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA;
+        });
+      case 'OLDEST':
+        return list.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeA - timeB;
+        });
+      case 'HIGHEST_AMOUNT':
+        return list.sort((a, b) => {
+          const amtA = a.totalAmountNum ?? parseFloat(a.amount || '0');
+          const amtB = b.totalAmountNum ?? parseFloat(b.amount || '0');
+          return amtB - amtA;
+        });
+      case 'LOWEST_AMOUNT':
+        return list.sort((a, b) => {
+          const amtA = a.totalAmountNum ?? parseFloat(a.amount || '0');
+          const amtB = b.totalAmountNum ?? parseFloat(b.amount || '0');
+          return amtA - amtB;
+        });
+      default:
+        return list;
+    }
+  }, [displayQueueItems, sortOption]);
+
+  const totalEntries = sortedQueueItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedQueueItems = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+    return sortedQueueItems.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [sortedQueueItems, safeCurrentPage]);
+
+  const startIndexDisplay = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * PAGE_SIZE + 1;
+  const endIndexDisplay = Math.min(safeCurrentPage * PAGE_SIZE, totalEntries);
+
   const pendingEligibleItems = sweepQueueItems.filter(
     (i) => i.status !== 'COMPLETED' && i.status !== 'CANCELLED'
   );
@@ -129,7 +199,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
             <button
               onClick={() => fetchQueueData(selectedNetwork)}
               disabled={queueLoading}
-              className={`p-1.5 rounded-lg border transition-colors ${
+              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                 isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
               }`}
               title="Refresh Queue"
@@ -142,36 +212,60 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
           </p>
         </div>
 
-        {selectedQueueIds.length > 0 && (
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${
-            isDark ? 'bg-blue-950/50 border-blue-800' : 'bg-blue-50 border-blue-200'
-          }`}>
-            <span className="text-xs font-mono text-blue-600 dark:text-blue-300 font-bold">
-              {selectedQueueIds.length} Selected
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Sort By Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <ArrowUpDown className="w-3 h-3" />
+              Sort:
             </span>
-            <button
-              onClick={() => handleBulkQueueAction('FUND_GAS')}
-              disabled={bulkProcessing}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-50 shadow-xs"
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value as SortOption)}
+              className={`text-xs font-mono font-medium rounded-lg px-2.5 py-1.5 border transition-colors outline-hidden cursor-pointer ${
+                isDark
+                  ? 'bg-slate-900 border-slate-700 text-gray-200 hover:border-slate-600'
+                  : 'bg-white border-gray-300 text-gray-700 hover:border-gray-400 shadow-xs'
+              }`}
             >
-              Bulk Fund Gas
-            </button>
-            <button
-              onClick={() => handleBulkQueueAction('SWEEP')}
-              disabled={bulkProcessing}
-              className="bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-50 shadow-xs"
-            >
-              Bulk Sweep
-            </button>
-            <button
-              onClick={() => handleBulkQueueAction('FUND_AND_SWEEP')}
-              disabled={bulkProcessing}
-              className="bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-50 shadow-xs"
-            >
-              Bulk Fund & Sweep
-            </button>
+              <option value="NEWEST">Newest to Oldest</option>
+              <option value="OLDEST">Oldest to Newest</option>
+              <option value="HIGHEST_AMOUNT">Highest Amount</option>
+              <option value="LOWEST_AMOUNT">Lowest Amount</option>
+            </select>
           </div>
-        )}
+
+          {selectedQueueIds.length > 0 && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${
+              isDark ? 'bg-blue-950/50 border-blue-800' : 'bg-blue-50 border-blue-200'
+            }`}>
+              <span className="text-xs font-mono text-blue-600 dark:text-blue-300 font-bold">
+                {selectedQueueIds.length} Selected
+              </span>
+              <button
+                onClick={() => handleBulkQueueAction('FUND_GAS')}
+                disabled={bulkProcessing}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-50 shadow-xs cursor-pointer"
+              >
+                Bulk Fund Gas
+              </button>
+              <button
+                onClick={() => handleBulkQueueAction('SWEEP')}
+                disabled={bulkProcessing}
+                className="bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-50 shadow-xs cursor-pointer"
+              >
+                Bulk Sweep
+              </button>
+              <button
+                onClick={() => handleBulkQueueAction('FUND_AND_SWEEP')}
+                disabled={bulkProcessing}
+                className="bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-lg text-xs font-bold disabled:opacity-50 shadow-xs cursor-pointer"
+              >
+                Bulk Fund & Sweep
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -204,14 +298,14 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
           <tbody className={`divide-y text-xs font-mono ${
             isDark ? 'divide-slate-800/80' : 'divide-gray-200'
           }`}>
-            {displayQueueItems.length === 0 ? (
+            {paginatedQueueItems.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-10 text-center text-gray-500 dark:text-gray-400 text-xs font-medium font-sans">
                   No active sweep queue items found for this network.
                 </td>
               </tr>
             ) : (
-              displayQueueItems.map((item: any) => {
+              paginatedQueueItems.map((item: any) => {
                 const isFinished = item.status === 'COMPLETED' || item.status === 'CANCELLED';
                 const isAggregated = item.depositCount && item.depositCount > 1;
                 const isRowProcessing =
@@ -281,7 +375,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                         </span>
                         <button
                           onClick={() => handleCopy(item.depositAddress, item.id)}
-                          className="text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 p-0.5"
+                          className="text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 p-0.5 cursor-pointer"
                           title="Copy address"
                         >
                           {copiedText === item.id ? (
@@ -352,6 +446,14 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                         >
                           {item.status}
                         </span>
+                        {item.status === 'COMPLETED' && (item.updatedAt || item.createdAt) && (
+                          <span
+                            className="text-[10px] text-gray-500 dark:text-slate-400 font-mono font-medium whitespace-nowrap"
+                            title={`Completed at: ${new Date(item.updatedAt || item.createdAt).toLocaleString()}`}
+                          >
+                            {formatCompletedDateTime(item.updatedAt || item.createdAt)}
+                          </span>
+                        )}
                         {item.errorMessage && (
                           <span className="text-[10px] text-rose-500 dark:text-rose-400 max-w-[120px] truncate font-sans font-medium" title={item.errorMessage}>
                             Error: {item.errorMessage}
@@ -373,7 +475,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                                 item.status === 'READY_TO_SWEEP' ||
                                 item.status === 'SWEEPING'
                               }
-                              className="text-xs font-bold px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-30"
+                              className="text-xs font-bold px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-30 cursor-pointer"
                               title="Fund Gas"
                             >
                               Fund Gas
@@ -381,7 +483,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                             <button
                               onClick={() => handleQueueSweep(item.id)}
                               disabled={isRowProcessing || item.status === 'SWEEPING'}
-                              className="text-xs font-bold px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-30"
+                              className="text-xs font-bold px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-30 cursor-pointer"
                               title="Sweep"
                             >
                               Sweep
@@ -399,7 +501,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                               }
                             }}
                             disabled={isRowProcessing}
-                            className="text-xs font-bold px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-30"
+                            className="text-xs font-bold px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-30 cursor-pointer"
                             title="Retry Failed Job"
                           >
                             Retry
@@ -416,7 +518,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
                               }
                             }}
                             disabled={isRowProcessing}
-                            className={`text-xs font-bold px-2 py-1 rounded-lg border transition-colors disabled:opacity-30 ${
+                            className={`text-xs font-bold px-2 py-1 rounded-lg border transition-colors disabled:opacity-30 cursor-pointer ${
                               isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
                             }`}
                             title="Cancel Job"
@@ -427,7 +529,7 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
 
                         <button
                           onClick={() => setSelectedItemDetails(item)}
-                          className="text-xs font-bold px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 transition-colors"
+                          className="text-xs font-bold px-2 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 transition-colors cursor-pointer"
                           title="View Queue Item Details"
                         >
                           Details
@@ -441,6 +543,53 @@ export const SweepQueueTable: React.FC<SweepQueueTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Footer */}
+      {totalEntries > 0 && (
+        <div className={`px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono shrink-0 ${
+          isDark ? 'bg-slate-950/40 border-slate-800 text-gray-400' : 'bg-gray-50/80 border-gray-200 text-gray-600'
+        }`}>
+          <div>
+            Showing <span className="font-bold text-gray-900 dark:text-white">{startIndexDisplay}</span>–<span className="font-bold text-gray-900 dark:text-white">{endIndexDisplay}</span> of <span className="font-bold text-gray-900 dark:text-white">{totalEntries}</span> queue items (30/page)
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage <= 1}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md border transition-colors ${
+                safeCurrentPage <= 1
+                  ? 'opacity-40 cursor-not-allowed border-transparent'
+                  : isDark
+                    ? 'hover:bg-slate-800 border-slate-700 text-gray-200 cursor-pointer'
+                    : 'hover:bg-white border-gray-300 text-gray-700 cursor-pointer shadow-xs'
+              }`}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Prev
+            </button>
+
+            <span className="px-2 font-semibold text-gray-800 dark:text-gray-200">
+              Page {safeCurrentPage} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage >= totalPages}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md border transition-colors ${
+                safeCurrentPage >= totalPages
+                  ? 'opacity-40 cursor-not-allowed border-transparent'
+                  : isDark
+                    ? 'hover:bg-slate-800 border-slate-700 text-gray-200 cursor-pointer'
+                    : 'hover:bg-white border-gray-300 text-gray-700 cursor-pointer shadow-xs'
+              }`}
+            >
+              Next
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

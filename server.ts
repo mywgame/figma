@@ -23,24 +23,6 @@ async function bootstrap() {
   const app = express();
   const PORT = config.port;
 
-  // Initialize treasury configurations if they don't exist
-  try {
-    await treasuryService.ensureAllTreasuryWallets();
-    logger.info('[Bootstrap] Treasury wallets verified/seeded successfully.');
-  } catch (err: any) {
-    logger.error('[Bootstrap] Failed to verify/seed treasury wallets:', err.message);
-  }
-
-  // Reconcile and auto-finalize any existing stuck processing withdrawals
-  try {
-    const healedCount = await withdrawalService.reconcileStuckProcessingWithdrawals();
-    if (healedCount > 0) {
-      logger.info(`[Bootstrap] Successfully reconciled and finalized ${healedCount} stuck processing withdrawal(s).`);
-    }
-  } catch (err: any) {
-    logger.warn('[Bootstrap] Non-fatal: unable to reconcile stuck withdrawals at startup:', err.message);
-  }
-
   // Enable trust proxy so Express resolves the client's real IP behind Cloud Run reverse proxies
   app.set('trust proxy', true);
 
@@ -91,12 +73,31 @@ async function bootstrap() {
   // 6. Bind and Listen
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server successfully bound to host 0.0.0.0, listening on port ${PORT}`);
-    // Start background background routines
+    // Start background routines
     transactionMonitor.start();
     // TODO: Automatic deposit scanning is temporarily disabled to prevent continuous RPC background polling.
     // Re-enable automatic deposit scanning in a future release.
     // rpcDepositScanner.start();
     sweepQueueProcessor.start();
+
+    // Run async background bootstrapping (treasury wallet seeding & withdrawal auto-reconciliation)
+    (async () => {
+      try {
+        await treasuryService.ensureAllTreasuryWallets();
+        logger.info('[Bootstrap] Treasury wallets verified/seeded successfully.');
+      } catch (err: any) {
+        logger.warn('[Bootstrap] Non-fatal: unable to verify treasury wallets:', err.message);
+      }
+
+      try {
+        const healedCount = await withdrawalService.reconcileStuckProcessingWithdrawals();
+        if (healedCount > 0) {
+          logger.info(`[Bootstrap] Successfully reconciled and finalized ${healedCount} stuck processing withdrawal(s).`);
+        }
+      } catch (err: any) {
+        logger.warn('[Bootstrap] Non-fatal: unable to reconcile stuck withdrawals at startup:', err.message);
+      }
+    })();
   });
 
   // Graceful shutdown handling

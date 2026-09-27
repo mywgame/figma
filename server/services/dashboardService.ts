@@ -98,18 +98,72 @@ export class DashboardService {
       }
     }
 
-    // 5. Fetch recent transactions ledger (Limit 5, excluding team commission entries)
+    // 5. Fetch recent transactions ledger (excluding team commission entries)
     const rawRecentTransactions = await transactionRepository.findByUserId(userId, {
-      limit: 5,
+      limit: 10,
       excludeTypes: ['TEAM_INCOME', 'TEAM_COMMISSION'],
     });
-    const recentTransactions = rawRecentTransactions.map((tx) => {
+
+    // Also fetch user's withdrawals to guarantee withdrawals match backend's single source of truth
+    const userWithdrawals = await withdrawalRepository.findByUserId(userId, { limit: 10 });
+    const withdrawalMap = new Map<string, any>();
+    for (const w of userWithdrawals) {
+      if (w.reference) withdrawalMap.set(w.reference, w);
+      if (w.id) withdrawalMap.set(w.id, w);
+    }
+
+    const processedTransactions = (rawRecentTransactions || []).map((tx: any) => {
       let refId = tx.referenceId;
+      let txCreatedAt = tx.createdAt;
+      let txStatus = tx.status;
+      let txDesc = tx.description;
+
+      if (tx.type === 'WITHDRAWAL' && refId && withdrawalMap.has(refId)) {
+        const matchingW = withdrawalMap.get(refId);
+        txCreatedAt = matchingW.createdAt;
+        txStatus = matchingW.status;
+        if (matchingW.txHash && !txDesc.includes(matchingW.txHash)) {
+          txDesc = `${txDesc} TxHash: ${matchingW.txHash}`;
+        }
+      }
+
+      const isoDate = txCreatedAt instanceof Date ? txCreatedAt.toISOString() : new Date(txCreatedAt).toISOString();
+
       return {
         ...tx,
         referenceId: refId,
+        status: txStatus,
+        description: txDesc,
+        createdAt: isoDate,
+        rawTimestamp: txCreatedAt,
       };
     });
+
+    // Include any user withdrawal that hasn't yet been recorded in transactions table
+    const recordedRefs = new Set(processedTransactions.map((t: any) => t.referenceId));
+    for (const w of userWithdrawals) {
+      if (!recordedRefs.has(w.reference) && !recordedRefs.has(w.id)) {
+        const isoDate = w.createdAt instanceof Date ? w.createdAt.toISOString() : new Date(w.createdAt).toISOString();
+        processedTransactions.push({
+          id: `wth-${w.id}`,
+          userId: w.userId,
+          walletId: w.walletId,
+          type: 'WITHDRAWAL',
+          referenceId: w.reference || w.id,
+          status: w.status,
+          description: `Withdrawal of ${w.amount} USDT (Fee: ${w.fee} USDT, Net: ${w.netAmount} USDT) to ${w.walletAddress}.${w.txHash ? ` TxHash: ${w.txHash}` : ''}`,
+          amount: w.amount,
+          balanceBefore: '0.00000000',
+          balanceAfter: '0.00000000',
+          createdBy: 'SYSTEM',
+          createdAt: isoDate,
+          rawTimestamp: w.createdAt,
+        });
+      }
+    }
+
+    processedTransactions.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const recentTransactions = processedTransactions.slice(0, 5);
 
     // 6. Fetch recent activity security logs (Limit 5)
     const recentActivities = await activityRepository.findByUserId(userId, { limit: 5 });

@@ -28,6 +28,7 @@ export interface DepositAddress {
   network: string;
   address: string;
   onChainBalance: string;
+  createdAt?: string | Date | null;
   dsUserId?: string | null;
   userName?: string | null;
   userEmail?: string | null;

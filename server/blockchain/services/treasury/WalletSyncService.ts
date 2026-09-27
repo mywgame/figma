@@ -15,29 +15,38 @@ export class WalletSyncService {
   /**
    * Refresh and update on-chain token balance for user permanent deposit addresses
    */
-  async syncUserDepositAddressesBalance(network: string, addresses: any[]): Promise<void> {
+  async syncUserDepositAddressesBalance(network: string, addresses: any[], concurrency: number = 3): Promise<void> {
     const cleanNetwork = network.toUpperCase();
-    await Promise.all(
-      addresses.map(async (addr) => {
-        try {
-          const liveBal = await this.provider.getBalance(cleanNetwork, addr.address);
-          if (liveBal !== addr.onChainBalance) {
-            addr.onChainBalance = liveBal;
-            await db
-              .update(depositAddresses)
-              .set({
-                onChainBalance: liveBal,
-                updatedAt: new Date(),
-              })
-              .where(eq(depositAddresses.id, addr.id));
+    if (!addresses || addresses.length === 0) return;
+
+    for (let i = 0; i < addresses.length; i += concurrency) {
+      const batch = addresses.slice(i, i + concurrency);
+      await Promise.all(
+        batch.map(async (addr) => {
+          try {
+            const liveBal = await this.provider.getBalance(cleanNetwork, addr.address);
+            if (liveBal !== addr.onChainBalance) {
+              addr.onChainBalance = liveBal;
+              await db
+                .update(depositAddresses)
+                .set({
+                  onChainBalance: liveBal,
+                  updatedAt: new Date(),
+                })
+                .where(eq(depositAddresses.id, addr.id));
+            }
+          } catch (err: any) {
+            logger.warn(
+              `[WalletSyncService] Failed to fetch live token balance for address ${addr.address} on ${cleanNetwork}: ${err.message}`
+            );
           }
-        } catch (err: any) {
-          logger.warn(
-            `[WalletSyncService] Failed to fetch live token balance for address ${addr.address} on ${cleanNetwork}: ${err.message}`
-          );
-        }
-      })
-    );
+        })
+      );
+
+      if (i + concurrency < addresses.length) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    }
   }
 
   /**

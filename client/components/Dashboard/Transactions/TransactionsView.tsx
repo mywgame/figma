@@ -86,6 +86,8 @@ export const TransactionsView: React.FC = () => {
               status: mappedStatus,
               method: dbTx.description || 'USDT',
               date: formattedTime.localDate,
+              utcDate: formattedTime.utcFull,
+              rawDate: typeof dbTx.createdAt === 'string' ? dbTx.createdAt : new Date(dbTx.createdAt).toISOString(),
             };
           });
           setTransactions(mapped);

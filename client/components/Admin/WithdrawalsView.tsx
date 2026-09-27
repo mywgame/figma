@@ -23,6 +23,7 @@ import { AdminWithdrawal } from './types.ts';
 import { api } from '../../services/api.ts';
 import { formatDateTime } from '../../utils/dateFormatter.ts';
 import { UserQuickProfileModal } from './Users/UserQuickProfileModal.tsx';
+import { ApproveWithdrawalModal } from './Withdrawals/ApproveWithdrawalModal.tsx';
 
 interface WithdrawalsViewProps {
   t: ThemeTokens;
@@ -51,6 +52,9 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [actionProcessing, setActionProcessing] = useState<string | null>(null);
+
+  // Approval Payout Modal state
+  const [selectedWithdrawalForApproval, setSelectedWithdrawalForApproval] = useState<AdminWithdrawal | null>(null);
 
   // Quick View User Profile state
   const [selectedUserUid, setSelectedUserUid] = useState<string | null>(null);
@@ -243,7 +247,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
           <table className="w-full text-left text-xs">
             <thead>
               <tr className={`border-b ${t.sep} ${isDark ? 'bg-white/2' : 'bg-gray-50'}`}>
-                {['Withdrawal ID', 'User details', 'Debit Amount', 'Destination Wallet Address', 'Timestamp', 'Review State'].map((header) => (
+                {['Withdrawal ID', 'User details', 'Debit Amount', 'Transfer Amount', 'Destination Wallet Address', 'Timestamp', 'Review State'].map((header) => (
                   <th key={header} className={`px-5 py-3.5 font-bold uppercase tracking-wider ${t.textMuted}`}>
                     {header}
                   </th>
@@ -253,7 +257,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
             <tbody className="divide-y divide-gray-100/10">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center">
+                  <td colSpan={7} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-2 text-gray-400">
                       <RefreshCw className="w-5 h-5 animate-spin text-blue-500" />
                       <span className="text-xs font-medium">Fetching withdrawals from backend...</span>
@@ -264,9 +268,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                 filteredWithdrawals.map((wd) => (
                   <tr
                     key={wd.id}
-                    onClick={() => handleOpenUserProfile(wd)}
-                    className={`transition-colors cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 group/row ${t.cardInner}`}
-                    title="Click row to quick-view full member profile card"
+                    className={`transition-colors hover:bg-gray-50/50 dark:hover:bg-white/2 group/row ${t.cardInner}`}
                   >
                     <td className="px-5 py-4 font-mono font-bold">
                       <span className="text-blue-600 dark:text-blue-400 font-semibold tracking-wide">
@@ -276,16 +278,13 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                     <td className="px-5 py-4 font-semibold">
                       <div className="flex flex-col items-start gap-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-gray-900 dark:text-white group-hover/row:text-blue-500 transition-colors whitespace-nowrap">
+                          <span className="text-gray-900 dark:text-white whitespace-nowrap">
                             {wd.user}
                           </span>
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenUserProfile(wd);
-                            }}
-                            className="p-1 rounded-md text-gray-400 hover:text-blue-500 hover:bg-blue-500/10 transition-all cursor-pointer opacity-70 group-hover/row:opacity-100"
+                            onClick={() => handleOpenUserProfile(wd)}
+                            className="p-1 rounded-md text-gray-400 hover:text-blue-500 hover:bg-blue-500/10 transition-all cursor-pointer opacity-80 hover:opacity-100"
                             title="View Full Profile Card"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -298,7 +297,15 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-4 font-extrabold font-display text-rose-500">{wd.amount}</td>
+                    <td className="px-5 py-4 font-bold font-mono text-rose-500 dark:text-rose-400">{wd.amount}</td>
+                    <td className="px-5 py-4 font-bold font-mono text-emerald-500 dark:text-emerald-400">
+                      {wd.netAmount || (
+                        (() => {
+                          const parsed = parseFloat((wd.amount || '').replace(/[^0-9.]/g, '')) || 0;
+                          return `$${(parsed * 0.9).toFixed(2)}`;
+                        })()
+                      )}
+                    </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1.5 font-mono text-[10px] text-gray-500">
                         <ArrowUpCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
@@ -394,10 +401,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                             <div className="flex items-center gap-1">
                               <button
                                 disabled={actionProcessing === wd.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  approveWithdrawal(wd.id);
-                                }}
+                                onClick={() => setSelectedWithdrawalForApproval(wd)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white border border-emerald-500/20 hover:border-emerald-500 shadow-sm transition-all duration-200 cursor-pointer disabled:opacity-50"
                                 title="Confirm Outbound Payout"
                               >
@@ -425,7 +429,7 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className={`px-5 py-8 text-center font-medium ${t.textMuted}`}>
+                  <td colSpan={7} className={`px-5 py-8 text-center font-medium ${t.textMuted}`}>
                     No withdrawals match your criteria.
                   </td>
                 </tr>
@@ -445,6 +449,16 @@ export const WithdrawalsView: React.FC<WithdrawalsViewProps> = ({ t, isDark }) =
           setSelectedUserName(undefined);
         }}
         t={t}
+      />
+
+      {/* Approve Payout Modal (Manual via MetaMask / Auto Hot Wallet) */}
+      <ApproveWithdrawalModal
+        withdrawal={selectedWithdrawalForApproval}
+        isOpen={!!selectedWithdrawalForApproval}
+        onClose={() => setSelectedWithdrawalForApproval(null)}
+        onSuccess={() => fetchWithdrawals()}
+        t={t}
+        isDark={isDark}
       />
     </div>
   );

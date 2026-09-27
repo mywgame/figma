@@ -809,6 +809,10 @@ export class AdminService {
         }
       }
       const displayId = (w as any).reference || `WD${w.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
+      const gross = parseFloat(w.amount || '0');
+      const fee = w.fee ? parseFloat(w.fee) : gross * 0.10;
+      const net = w.netAmount ? parseFloat(w.netAmount) : Math.max(0, gross - fee);
+
       result.push({
         id: w.id,
         displayId,
@@ -818,7 +822,9 @@ export class AdminService {
         userUid: userUid || w.userId,
         userEmail,
         userCustomId,
-        amount: `$${parseFloat(w.amount).toFixed(2)}`,
+        amount: `$${gross.toFixed(2)}`,
+        fee: `$${fee.toFixed(2)}`,
+        netAmount: `$${net.toFixed(2)}`,
         network: w.network || 'USDT_BEP20',
         wallet: w.walletAddress,
         txHash: w.txHash || (w.adminNotes?.match(/0x[a-fA-F0-9]{64}/)?.[0]) || null,

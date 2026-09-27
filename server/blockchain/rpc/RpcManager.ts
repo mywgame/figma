@@ -65,6 +65,8 @@ export class RpcManager {
         ]
       : [
           'https://bsc-dataseed.binance.org',
+          'https://binance.llamarpc.com',
+          'https://bsc.publicnode.com',
           'https://bsc-mainnet.publicnode.com',
           'https://1rpc.io/bnb',
         ];

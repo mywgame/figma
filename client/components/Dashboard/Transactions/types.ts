@@ -28,4 +28,6 @@ export interface Transaction {
   status: TransactionStatus;
   method: string;
   date: string;
+  utcDate?: string;
+  rawDate?: string;
 }

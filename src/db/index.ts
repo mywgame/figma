@@ -14,7 +14,15 @@ const { Pool } = pg;
 
 // Function to create a new connection pool using the Object Method.
 export const createPool = () => {
-  const connectionString = process.env.DATABASE_URL;
+  let connectionString = process.env.DATABASE_URL?.trim();
+
+  // Strip wrapping quotes if present in environment secret
+  if (connectionString) {
+    if ((connectionString.startsWith('"') && connectionString.endsWith('"')) ||
+        (connectionString.startsWith("'") && connectionString.endsWith("'"))) {
+      connectionString = connectionString.slice(1, -1).trim();
+    }
+  }
 
   if (connectionString) {
     return new Pool({
@@ -28,16 +36,21 @@ export const createPool = () => {
     });
   }
 
+  const cleanHost = process.env.SQL_HOST ? process.env.SQL_HOST.replace(/^["']|["']$/g, '').trim() : undefined;
+  const cleanUser = process.env.SQL_USER ? process.env.SQL_USER.replace(/^["']|["']$/g, '').trim() : undefined;
+  const cleanPassword = process.env.SQL_PASSWORD ? process.env.SQL_PASSWORD.replace(/^["']|["']$/g, '').trim() : undefined;
+  const cleanDb = process.env.SQL_DB_NAME ? process.env.SQL_DB_NAME.replace(/^["']|["']$/g, '').trim() : undefined;
+
   // Fall back to individual SQL credentials only if DATABASE_URL is absent
   return new Pool({
-    host: process.env.SQL_HOST,
-    user: process.env.SQL_USER,
-    password: process.env.SQL_PASSWORD,
-    database: process.env.SQL_DB_NAME,
+    host: cleanHost,
+    user: cleanUser,
+    password: cleanPassword,
+    database: cleanDb,
     connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 10000,
     max: parseInt(process.env.DB_POOL_MAX || '10', 10),
-    ssl: process.env.SQL_HOST?.includes('neon.tech') ? { rejectUnauthorized: false } : undefined,
+    ssl: cleanHost?.includes('neon.tech') ? { rejectUnauthorized: false } : undefined,
   });
 };
 

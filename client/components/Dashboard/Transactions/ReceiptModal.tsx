@@ -225,13 +225,20 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             </div>
 
             {/* Settled Time */}
-            <div className={`flex items-center justify-between py-1.5 border-b border-dashed ${
+            <div className={`flex items-start justify-between py-1.5 border-b border-dashed ${
               isDark ? 'border-white/10' : 'border-gray-200'
             }`}>
-              <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Settled Time</span>
-              <div className="flex items-center space-x-1.5 font-mono">
-                <Clock className={`w-3.5 h-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                <span className={`font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{transaction.date}</span>
+              <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Recorded Time</span>
+              <div className="flex flex-col items-end space-y-0.5 font-mono text-right">
+                <div className="flex items-center space-x-1.5">
+                  <Clock className={`w-3.5 h-3.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                  <span className={`font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{transaction.date}</span>
+                </div>
+                {transaction.utcDate && (
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                    {transaction.utcDate}
+                  </span>
+                )}
               </div>
             </div>
 

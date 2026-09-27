@@ -981,7 +981,7 @@ export class UserController {
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-      const list = await transactionRepository.findByUserId(user.id, {
+      const rawList = await transactionRepository.findByUserId(user.id, {
         limit,
         offset,
         type,
@@ -989,7 +989,70 @@ export class UserController {
         startDate: threeMonthsAgo,
         excludeTypes: type ? undefined : ['TEAM_INCOME', 'TEAM_COMMISSION'],
       });
-      return sendSuccess(res, list, 200);
+
+      // Match with backend withdrawals table (the single source of truth for withdrawal timestamps)
+      const userWithdrawals = await withdrawalRepository.findByUserId(user.id, { limit: 100 });
+      const withdrawalMap = new Map<string, any>();
+      for (const w of userWithdrawals) {
+        if (w.reference) withdrawalMap.set(w.reference, w);
+        if (w.id) withdrawalMap.set(w.id, w);
+      }
+
+      const processedList = (rawList || []).map((tx: any) => {
+        let txCreatedAt = tx.createdAt;
+        let txStatus = tx.status;
+        let txDesc = tx.description;
+
+        if (tx.type === 'WITHDRAWAL' && tx.referenceId && withdrawalMap.has(tx.referenceId)) {
+          const matchingW = withdrawalMap.get(tx.referenceId);
+          // Overwrite with the single source of truth from backend withdrawals table
+          txCreatedAt = matchingW.createdAt;
+          txStatus = matchingW.status;
+          if (matchingW.txHash && !txDesc.includes(matchingW.txHash)) {
+            txDesc = `${txDesc} TxHash: ${matchingW.txHash}`;
+          }
+        }
+
+        const isoDate = txCreatedAt instanceof Date ? txCreatedAt.toISOString() : new Date(txCreatedAt).toISOString();
+
+        return {
+          ...tx,
+          status: txStatus,
+          description: txDesc,
+          createdAt: isoDate,
+          rawTimestamp: txCreatedAt,
+        };
+      });
+
+      // Include any pending or completed withdrawals that don't yet have an entry in transactions table
+      if (!type || type === 'WITHDRAWAL') {
+        const recordedRefs = new Set(processedList.map((t: any) => t.referenceId));
+        for (const w of userWithdrawals) {
+          if (!recordedRefs.has(w.reference) && !recordedRefs.has(w.id)) {
+            if (!status || w.status === status) {
+              const isoDate = w.createdAt instanceof Date ? w.createdAt.toISOString() : new Date(w.createdAt).toISOString();
+              processedList.push({
+                id: `wth-${w.id}`,
+                userId: w.userId,
+                walletId: w.walletId,
+                type: 'WITHDRAWAL',
+                referenceId: w.reference || w.id,
+                status: w.status,
+                description: `Withdrawal of ${w.amount} USDT (Fee: ${w.fee} USDT, Net: ${w.netAmount} USDT) to ${w.walletAddress}.${w.txHash ? ` TxHash: ${w.txHash}` : ''}`,
+                amount: w.amount,
+                balanceBefore: '0.00000000',
+                balanceAfter: '0.00000000',
+                createdBy: 'SYSTEM',
+                createdAt: isoDate,
+                rawTimestamp: w.createdAt,
+              });
+            }
+          }
+        }
+        processedList.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+
+      return sendSuccess(res, processedList, 200);
     } catch (error) {
       next(error);
     }

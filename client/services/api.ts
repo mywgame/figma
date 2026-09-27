@@ -743,17 +743,19 @@ class ApiService {
   /**
    * Admin: Get treasury overview for a network
    */
-  async getTreasuryOverview(network: string): Promise<ApiResponse<any>> {
-    return this.get<any>(`/admin/treasury/${network}`);
+  async getTreasuryOverview(network: string, options?: { sync?: boolean }): Promise<ApiResponse<any>> {
+    const query = options?.sync ? '?sync=true' : '';
+    return this.get<any>(`/admin/treasury/${network}${query}`);
   }
 
   /**
    * Admin: Get sweep queue items for a network
    */
-  async getTreasurySweepQueue(network?: string, status?: string): Promise<ApiResponse<any>> {
+  async getTreasurySweepQueue(network?: string, status?: string, options?: { sync?: boolean }): Promise<ApiResponse<any>> {
     const query = new URLSearchParams();
     if (network) query.append('network', network);
     if (status) query.append('status', status);
+    if (options?.sync) query.append('sync', 'true');
     return this.get<any>(`/admin/treasury/sweep-queue?${query.toString()}`);
   }
 

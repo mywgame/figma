@@ -18,6 +18,7 @@ import { gasCalculator } from './GasCalculator.ts';
 import { treasuryValidator } from './treasury/TreasuryValidator.ts';
 import { walletSyncService } from './treasury/WalletSyncService.ts';
 import { sweepExecutionService } from './treasury/SweepExecutionService.ts';
+import { cleanEnv, cleanEnvOrNull } from '../../utils/envUtils.ts';
 
 export interface TreasuryWalletRecord {
   id?: string;
@@ -289,9 +290,11 @@ export class TreasuryService {
           pk = blockchainConfig.networks[network]?.hotPrivateKey || null;
         }
 
-        if (pk && pk.trim()) {
+        pk = cleanEnv(pk);
+
+        if (pk) {
           try {
-            const derivedAddress = hdWalletEngine.deriveAddressFromPrivateKey(network, pk.trim());
+            const derivedAddress = hdWalletEngine.deriveAddressFromPrivateKey(network, pk);
             const envAddr = await this.getEnvConfiguredHotAddress(network, hw.walletNumber);
 
             if (envAddr) {
@@ -603,14 +606,14 @@ export class TreasuryService {
   /**
    * Fetch complete treasury metrics and list of deposit addresses for a network
    */
-  async getTreasuryOverview(network: string) {
+  async getTreasuryOverview(network: string, options: { syncOnChain?: boolean } = {}) {
     const cleanNetwork = network.toUpperCase();
     const config = await this.getOrCreateTreasuryWallet(cleanNetwork);
 
     const hotWallets = await this.getHotWallets(cleanNetwork);
     const coldWallets = await this.getColdWallets(cleanNetwork);
 
-    // Fetch user deposit addresses with on-chain balances
+    // Fetch user deposit addresses
     const addresses = await db
       .select({
         id: depositAddresses.id,
@@ -629,67 +632,89 @@ export class TreasuryService {
       .where(eq(depositAddresses.network, cleanNetwork))
       .orderBy(desc(depositAddresses.createdAt));
 
-    // Update live on-chain token balance for every deposit address
-    await walletSyncService.syncUserDepositAddressesBalance(cleanNetwork, addresses);
+    // If explicit on-chain sync was requested by admin
+    if (options.syncOnChain) {
+      await walletSyncService.syncUserDepositAddressesBalance(cleanNetwork, addresses, 3);
+    }
 
     let totalPendingSweep = 0;
     addresses.forEach((addr) => {
-      totalPendingSweep += parseFloat(addr.onChainBalance);
+      totalPendingSweep += parseFloat(addr.onChainBalance || '0');
     });
 
-    let liveHotBalance = config.hotBalance;
-    let liveColdBalance = config.coldBalance;
+    let liveHotBalance = config.hotBalance || '0.00000000';
+    let liveColdBalance = config.coldBalance || '0.00000000';
     let liveHotNativeGas = '0.00000000';
     let totalUserGas = '0.00000000';
 
-    try {
-      const liveHot = await this.provider.getBalance(cleanNetwork, config.hotAddress);
-      const liveCold = await this.provider.getBalance(cleanNetwork, config.coldAddress);
+    if (options.syncOnChain) {
+      try {
+        if (config.hotAddress && config.coldAddress) {
+          const liveHot = await this.provider.getBalance(cleanNetwork, config.hotAddress);
+          const liveCold = await this.provider.getBalance(cleanNetwork, config.coldAddress);
 
-      liveHotBalance = liveHot;
-      liveColdBalance = liveCold;
+          liveHotBalance = liveHot;
+          liveColdBalance = liveCold;
 
-      await db
-        .update(treasuryWallets)
-        .set({
-          hotBalance: liveHot,
-          coldBalance: liveCold,
-          balance: liveHot,
-          updatedAt: new Date(),
-        })
-        .where(eq(treasuryWallets.network, cleanNetwork));
-    } catch (err: any) {
-      logger.warn(`[TreasuryService] Failed to fetch live balances for ${cleanNetwork}: ${err.message}`);
-    }
-
-    try {
-      if (config.hotAddress) {
-        liveHotNativeGas = await this.provider.getNativeBalance(cleanNetwork, config.hotAddress);
+          await db
+            .update(treasuryWallets)
+            .set({
+              hotBalance: liveHot,
+              coldBalance: liveCold,
+              balance: liveHot,
+              updatedAt: new Date(),
+            })
+            .where(eq(treasuryWallets.network, cleanNetwork));
+        }
+      } catch (err: any) {
+        logger.warn(`[TreasuryService] Failed to fetch live balances for ${cleanNetwork}: ${err.message}`);
       }
-    } catch (err: any) {
-      logger.warn(`[TreasuryService] Failed to fetch hot wallet native gas balance: ${err.message}`);
+
+      try {
+        if (config.hotAddress) {
+          liveHotNativeGas = await this.provider.getNativeBalance(cleanNetwork, config.hotAddress);
+        }
+      } catch (err: any) {
+        logger.warn(`[TreasuryService] Failed to fetch hot wallet native gas balance: ${err.message}`);
+      }
     }
 
     let addressesWithGas: any[] = addresses;
-    try {
-      const gasBals = await Promise.all(
-        addresses.map(async (a) => {
-          try {
-            const balStr = await this.provider.getNativeBalance(cleanNetwork, a.address);
-            return balStr || '0.00000000';
-          } catch {
-            return '0.00000000';
+    if (options.syncOnChain) {
+      try {
+        const concurrency = 3;
+        const gasBals: string[] = [];
+        for (let i = 0; i < addresses.length; i += concurrency) {
+          const batch = addresses.slice(i, i + concurrency);
+          const batchRes = await Promise.all(
+            batch.map(async (a) => {
+              try {
+                const balStr = await this.provider.getNativeBalance(cleanNetwork, a.address);
+                return balStr || '0.00000000';
+              } catch {
+                return '0.00000000';
+              }
+            })
+          );
+          gasBals.push(...batchRes);
+          if (i + concurrency < addresses.length) {
+            await new Promise((r) => setTimeout(r, 100));
           }
-        })
-      );
-      addressesWithGas = addresses.map((addr, idx) => ({
+        }
+        addressesWithGas = addresses.map((addr, idx) => ({
+          ...addr,
+          nativeGasBalance: gasBals[idx] || '0.00000000',
+        }));
+        const userGasSum = gasBals.reduce((sum, val) => sum + parseFloat(val || '0'), 0);
+        totalUserGas = userGasSum.toFixed(8);
+      } catch (err: any) {
+        logger.warn(`[TreasuryService] Failed to calculate total user gas: ${err.message}`);
+      }
+    } else {
+      addressesWithGas = addresses.map((addr) => ({
         ...addr,
-        nativeGasBalance: gasBals[idx] || '0.00000000',
+        nativeGasBalance: '0.00000000',
       }));
-      const userGasSum = gasBals.reduce((sum, val) => sum + parseFloat(val || '0'), 0);
-      totalUserGas = userGasSum.toFixed(8);
-    } catch (err: any) {
-      logger.warn(`[TreasuryService] Failed to calculate total user gas: ${err.message}`);
     }
 
     return {
